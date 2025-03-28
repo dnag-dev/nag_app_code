@@ -1,46 +1,110 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Nag - The Digital Twin (Debug Mode)</title>
+    <meta charset="UTF-8">
+    <title>Nag – The Digital Extension</title>
+    <style>
+        body {
+            margin: 0;
+            background: linear-gradient(to bottom right, #1a1a2e, #16213e);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: white;
+            text-align: center;
+            padding-top: 40px;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+        }
+
+        p {
+            margin-top: 0;
+            font-size: 1.2rem;
+        }
+
+        #circle {
+            width: 200px;
+            height: 200px;
+            margin: 30px auto;
+            border-radius: 50%;
+            background: radial-gradient(circle at center, #6c5ce7, #341f97);
+            animation: pulse 2s infinite ease-in-out;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 0.8; }
+            50% { transform: scale(1.1); opacity: 1; }
+            100% { transform: scale(1); opacity: 0.8; }
+        }
+
+        button {
+            padding: 12px 24px;
+            font-size: 16px;
+            margin-top: 20px;
+            background-color: #00b894;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        audio {
+            margin-top: 30px;
+        }
+    </style>
 </head>
 <body>
-  <h1>Welcome to Nag (Debug Mode)</h1>
-  <p>The digital extension of Dinakara’s mind — therapist, companion, unfiltered mirror.</p>
-  <input type="text" id="userInput" placeholder="Ask Nag something..." />
-  <button onclick="sendMessage()">Send</button>
-  <p id="nagText"></p>
-  <pre id="debugLog" style="background: #eee; padding: 10px; max-width: 600px;"></pre>
-  <audio id="nagAudio" controls style="display:none;"></audio>
+    <h1>Nag</h1>
+    <p>The digital extension of Dinakara’s mind — therapist, companion, unfiltered mirror.</p>
 
-  <script>
-    async function sendMessage() {
-      const input = document.getElementById("userInput").value;
-      const response = await fetch("/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: input })
-      });
+    <div id="circle"></div>
 
-      const result = await response.json();
-      const debugLog = document.getElementById("debugLog");
+    <button onclick="startRecording()">Talk to Nag</button>
+    <p id="statusText">Click the button and start speaking</p>
+    <audio id="nagAudio" controls></audio>
 
-      if (result.debug) {
-        debugLog.textContent = JSON.stringify(result.debug, null, 2);
-      } else if (result.error) {
-        debugLog.textContent = "Error: " + result.error;
-      }
+    <script>
+        let mediaRecorder, audioChunks = [];
 
-      if (response.ok) {
-        document.getElementById("nagText").textContent = result.response;
-        const audio = document.getElementById("nagAudio");
-        audio.src = result.audio_url;
-        audio.style.display = "block";
-        audio.play();
-      } else {
-        alert(result.error || "Something went wrong");
-      }
-    }
-  </script>
+        async function startRecording() {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream);
+            audioChunks = [];
+
+            mediaRecorder.ondataavailable = event => {
+                audioChunks.push(event.data);
+            };
+
+            mediaRecorder.onstop = async () => {
+                const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                const text = await transcribeAudio(audioBlob);
+                if (text) {
+                    document.getElementById("statusText").innerText = "Nag is thinking...";
+                    const response = await fetch('/chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ message: text })
+                    });
+
+                    const data = await response.json();
+                    if (data.audio_url) {
+                        document.getElementById("nagAudio").src = data.audio_url;
+                        document.getElementById("statusText").innerText = "Nag replied!";
+                        document.getElementById("nagAudio").play();
+                    }
+                }
+            };
+
+            mediaRecorder.start();
+            setTimeout(() => mediaRecorder.stop(), 5000); // Record for 5 seconds
+            document.getElementById("statusText").innerText = "Listening...";
+        }
+
+        async function transcribeAudio(audioBlob) {
+            // Dummy placeholder: Replace with Whisper API or your transcription logic
+            alert("⚠️ Transcription not implemented. Please add Whisper API call.");
+            return "This is a test question to Nag";
+        }
+    </script>
 </body>
 </html>
