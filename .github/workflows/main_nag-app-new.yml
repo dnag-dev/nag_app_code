@@ -34,11 +34,6 @@ jobs:
         
       # Optional: Add step to run tests here (PyTest, Django test suites, etc.)
 
-      - name: Create startup command file
-        run: |
-          echo "gunicorn --bind=0.0.0.0 --timeout 600 main:app" > startup.sh
-          chmod +x startup.sh
-
       - name: Zip artifact for deployment
         run: zip release.zip ./* -r
 
