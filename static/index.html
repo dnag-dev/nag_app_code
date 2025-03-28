@@ -70,7 +70,7 @@
 
     #debug {
       width: 90%;
-      max-height: 200px;
+      max-height: 250px;
       overflow-y: auto;
       background: #111;
       border: 1px solid #333;
@@ -86,13 +86,16 @@
   <h1>Welcome to Nag</h1>
   <p>The digital extension of Dinakara’s mind — therapist, companion, unfiltered mirror.</p>
   <div id="orb" class="idle"></div>
-  <audio id="audio" src="" hidden></audio>
+  <audio id="audio" hidden></audio>
   <div id="debug"><strong>Debug Log:</strong></div>
 
   <script>
     const orb = document.getElementById('orb');
     const audio = document.getElementById('audio');
     const debugBox = document.getElementById('debug');
+
+    let mediaRecorder;
+    let audioChunks = [];
 
     function logDebug(msg) {
       const p = document.createElement('p');
@@ -101,43 +104,78 @@
       debugBox.scrollTop = debugBox.scrollHeight;
     }
 
-    function startNagConversation(message) {
+    async function recordAndSend() {
+      orb.classList.remove('speaking');
       orb.classList.add('listening');
-      logDebug("🎤 You: " + message);
+      logDebug("🎙️ Listening...");
 
-      fetch('/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message })
-      })
-      .then(res => res.json())
-      .then(data => {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorder = new MediaRecorder(stream);
+      audioChunks = [];
+
+      mediaRecorder.ondataavailable = event => audioChunks.push(event.data);
+
+      mediaRecorder.onstop = async () => {
         orb.classList.remove('listening');
-        orb.classList.add('speaking');
+        logDebug("📤 Uploading voice...");
+
+        const blob = new Blob(audioChunks, { type: 'audio/mp3' });
+        const formData = new FormData();
+        formData.append('file', blob, 'input.mp3');
+
+        try {
+          const transcriptionResponse = await fetch('/transcribe', { method: 'POST', body: formData });
+          const transcriptionData = await transcriptionResponse.json();
+          const message = transcriptionData.transcription;
+          logDebug("📝 Transcribed: " + message);
+          await sendToChat(message);
+        } catch (error) {
+          logDebug("❌ Transcription error: " + error.message);
+        }
+      };
+
+      mediaRecorder.start();
+      setTimeout(() => mediaRecorder.stop(), 4000); // Listen for 4 seconds
+    }
+
+    async function sendToChat(message) {
+      logDebug("💬 Sending to Nag...");
+      orb.classList.add('thinking');
+
+      try {
+        const chatResponse = await fetch('/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message })
+        });
+
+        const data = await chatResponse.json();
         logDebug("🧠 Nag: " + data.response);
         if (data.audio_url) {
           audio.src = data.audio_url;
-          logDebug("🔊 Playing audio: " + data.audio_url);
-          audio.onloadeddata = () => audio.play();
+          audio.onloadeddata = () => {
+            orb.classList.remove('thinking');
+            orb.classList.add('speaking');
+            logDebug("🔊 Playing response...");
+            audio.play();
+          };
           audio.onended = () => {
             orb.classList.remove('speaking');
             orb.classList.add('idle');
+            setTimeout(recordAndSend, 2000); // Wait 2s and re-listen
           };
         } else {
-          logDebug("⚠️ No audio returned.");
+          logDebug("⚠️ No audio URL returned.");
         }
-      })
-      .catch(err => {
-        orb.classList.remove('listening');
-        orb.classList.remove('speaking');
+      } catch (err) {
+        orb.classList.remove('thinking');
         orb.classList.add('idle');
-        logDebug("❌ Error: " + err.message);
-      });
+        logDebug("❌ Chat error: " + err.message);
+      }
     }
 
-    // Simple trigger for testing
     window.addEventListener('DOMContentLoaded', () => {
-      startNagConversation("Hello Nag, are you ready?");
+      recordAndSend();
     });
   </script>
 </body>
