@@ -1,110 +1,121 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Nag – The Digital Extension</title>
-    <style>
-        body {
-            margin: 0;
-            background: linear-gradient(to bottom right, #1a1a2e, #16213e);
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            color: white;
-            text-align: center;
-            padding-top: 40px;
-        }
+  <meta charset="UTF-8" />
+  <title>Nag – The Digital Twin</title>
+  <style>
+    body {
+      background: linear-gradient(to bottom right, #1a1a2e, #0f2027);
+      font-family: 'Segoe UI', sans-serif;
+      color: white;
+      margin: 0;
+      padding: 40px;
+      text-align: center;
+    }
 
-        h1 {
-            font-size: 2.5rem;
-        }
+    h1 {
+      font-size: 2.5rem;
+      margin-bottom: 0;
+    }
 
-        p {
-            margin-top: 0;
-            font-size: 1.2rem;
-        }
+    p {
+      font-size: 1.2rem;
+      margin-top: 0;
+    }
 
-        #circle {
-            width: 200px;
-            height: 200px;
-            margin: 30px auto;
-            border-radius: 50%;
-            background: radial-gradient(circle at center, #6c5ce7, #341f97);
-            animation: pulse 2s infinite ease-in-out;
-        }
+    #circle {
+      width: 220px;
+      height: 220px;
+      margin: 40px auto;
+      border-radius: 50%;
+      background: radial-gradient(circle, #6a11cb, #2575fc);
+      animation: pulse 3s infinite ease-in-out;
+      box-shadow: 0 0 40px #6a11cb88;
+    }
 
-        @keyframes pulse {
-            0% { transform: scale(1); opacity: 0.8; }
-            50% { transform: scale(1.1); opacity: 1; }
-            100% { transform: scale(1); opacity: 0.8; }
-        }
+    @keyframes pulse {
+      0% { transform: scale(1); filter: hue-rotate(0deg); }
+      50% { transform: scale(1.1); filter: hue-rotate(90deg); }
+      100% { transform: scale(1); filter: hue-rotate(180deg); }
+    }
 
-        button {
-            padding: 12px 24px;
-            font-size: 16px;
-            margin-top: 20px;
-            background-color: #00b894;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-        }
+    #status {
+      font-size: 1rem;
+      margin-top: 20px;
+      color: #ccc;
+    }
 
-        audio {
-            margin-top: 30px;
-        }
-    </style>
+    audio {
+      margin-top: 20px;
+    }
+  </style>
 </head>
 <body>
-    <h1>Nag</h1>
-    <p>The digital extension of Dinakara’s mind — therapist, companion, unfiltered mirror.</p>
+  <h1>Nag</h1>
+  <p>The digital extension of Dinakara’s mind — therapist, companion, unfiltered mirror.</p>
 
-    <div id="circle"></div>
+  <div id="circle"></div>
+  <div id="status">Initializing Nag...</div>
+  <audio id="nagAudio" controls></audio>
 
-    <button onclick="startRecording()">Talk to Nag</button>
-    <p id="statusText">Click the button and start speaking</p>
-    <audio id="nagAudio" controls></audio>
+  <script>
+    const statusText = document.getElementById("status");
+    const nagAudio = document.getElementById("nagAudio");
 
-    <script>
-        let mediaRecorder, audioChunks = [];
+    async function initConversation() {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      let audioChunks = [];
 
-        async function startRecording() {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            mediaRecorder = new MediaRecorder(stream);
-            audioChunks = [];
+      mediaRecorder.ondataavailable = event => {
+        audioChunks.push(event.data);
+      };
 
-            mediaRecorder.ondataavailable = event => {
-                audioChunks.push(event.data);
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+
+        // Transcription placeholder
+        const text = await transcribeAudio(audioBlob);
+
+        if (text) {
+          statusText.innerText = `You: ${text}`;
+          const response = await fetch('/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: text })
+          });
+
+          const data = await response.json();
+          if (data.audio_url) {
+            nagAudio.src = data.audio_url;
+            nagAudio.play();
+            statusText.innerText = "Nag is responding...";
+            nagAudio.onended = () => {
+              setTimeout(startRecording, 1000);
             };
-
-            mediaRecorder.onstop = async () => {
-                const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-                const text = await transcribeAudio(audioBlob);
-                if (text) {
-                    document.getElementById("statusText").innerText = "Nag is thinking...";
-                    const response = await fetch('/chat', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ message: text })
-                    });
-
-                    const data = await response.json();
-                    if (data.audio_url) {
-                        document.getElementById("nagAudio").src = data.audio_url;
-                        document.getElementById("statusText").innerText = "Nag replied!";
-                        document.getElementById("nagAudio").play();
-                    }
-                }
-            };
-
-            mediaRecorder.start();
-            setTimeout(() => mediaRecorder.stop(), 5000); // Record for 5 seconds
-            document.getElementById("statusText").innerText = "Listening...";
+          } else {
+            statusText.innerText = "Nag had trouble understanding.";
+          }
         }
+      };
 
-        async function transcribeAudio(audioBlob) {
-            // Dummy placeholder: Replace with Whisper API or your transcription logic
-            alert("⚠️ Transcription not implemented. Please add Whisper API call.");
-            return "This is a test question to Nag";
-        }
-    </script>
+      function startRecording() {
+        audioChunks = [];
+        mediaRecorder.start();
+        statusText.innerText = "Listening to you...";
+        setTimeout(() => mediaRecorder.stop(), 5000);
+      }
+
+      startRecording();
+    }
+
+    async function transcribeAudio(blob) {
+      // Replace with Whisper API call
+      alert("⚠️ Transcription not implemented yet — plug in Whisper API here.");
+      return "What’s on your mind, Nag?";
+    }
+
+    window.onload = initConversation;
+  </script>
 </body>
 </html>
