@@ -64,17 +64,19 @@ def main():
         
         # Get configuration from environment or use defaults
         host = os.getenv("HOST", "0.0.0.0")
-        port = int(os.getenv("PORT", "9000"))
+        port = int(os.getenv("PORT", os.getenv("WEBSITES_PORT", "9000")))
         log_level = os.getenv("LOG_LEVEL", "info")
         reload = os.getenv("RELOAD", "false").lower() == "true"
         workers = int(os.getenv("WORKERS", "1"))
+        environment = os.getenv("ENVIRONMENT", "development")
         
         # Find available port if default is in use
         if is_port_in_use(port):
             port = find_available_port()
             logger.warning(f"Default port {os.getenv('PORT', '9000')} is in use. Using port {port} instead.")
         
-        logger.info(f"Starting server on http://{host}:{port}")
+        logger.info(f"Starting server in {environment} environment")
+        logger.info(f"Server will run on http://{host}:{port}")
         logger.info(f"Log level: {log_level}")
         logger.info(f"Auto-reload: {reload}")
         logger.info(f"Workers: {workers}")
@@ -85,7 +87,7 @@ def main():
             host=host,
             port=port,
             log_level=log_level,
-            reload=reload,
+            reload=reload and environment == "development",
             workers=workers,
             access_log=True,
             proxy_headers=True,
