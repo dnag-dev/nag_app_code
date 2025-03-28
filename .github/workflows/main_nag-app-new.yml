@@ -79,7 +79,6 @@ jobs:
           slot-name: 'Production'
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
           package: release.zip
-          startup-command: 'python run.py'
           clean: true
           restart: true
           
