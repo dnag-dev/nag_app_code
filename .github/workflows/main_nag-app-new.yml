@@ -77,6 +77,7 @@ jobs:
         with:
           app-name: 'nag-app-new'
           slot-name: 'Production'
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
           app-settings: |
             -WEBSITES_PORT=8000
             -ENVIRONMENT=production
@@ -85,4 +86,10 @@ jobs:
             -WEBSITE_NODE_DEFAULT_VERSION=~18
             -SCM_DO_BUILD_DURING_DEPLOYMENT=true
             -WEBSITE_RUN_FROM_PACKAGE=1
+            -WEBSITE_WEBDEPLOY_USE_SCM=true
+            -WEBSITE_HTTPLOGGING_RETENTION_DAYS=7
+            -WEBSITE_ENABLE_SYNC_UPDATE_SITE=true
+            -WEBSITE_WEBDEPLOY_USE_SCM=true
+            -WEBSITE_HTTPLOGGING_RETENTION_DAYS=7
+            -WEBSITE_ENABLE_SYNC_UPDATE_SITE=true
           
