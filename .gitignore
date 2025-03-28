@@ -35,4 +35,9 @@ wheels/
 
 # OS
 .DS_Store
-Thumbs.db 
+Thumbs.db
+
+# Application specific
+static/audio_*.mp3
+cache/
+*.log 
