@@ -28,16 +28,12 @@ async def chat(request: Request):
     user_input = body.get("message")
 
     try:
-        # Step 1: Get GPT-4 Response
         response = openai.ChatCompletion.create(
             model="gpt-4",
             messages=[{"role": "user", "content": user_input}]
         )
         message = response["choices"][0]["message"]["content"]
-
-        # Step 2: Convert to speech with ElevenLabs
         audio_url = await text_to_speech(message)
-
         return {"response": message, "audio_url": audio_url}
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
@@ -45,12 +41,10 @@ async def chat(request: Request):
 async def text_to_speech(text):
     output_path = f"static/audio_{uuid.uuid4().hex}.mp3"
     endpoint = f"https://api.elevenlabs.io/v1/text-to-speech/{dinakara_voice_id}"
-
     headers = {
         "xi-api-key": elevenlabs_api_key,
         "Content-Type": "application/json"
     }
-
     payload = {
         "text": text,
         "voice_settings": {
@@ -58,7 +52,6 @@ async def text_to_speech(text):
             "similarity_boost": 0.85
         }
     }
-
     response = requests.post(endpoint, json=payload, headers=headers)
     if response.status_code == 200:
         with open(output_path, "wb") as f:
