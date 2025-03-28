@@ -64,7 +64,6 @@ jobs:
       - name: Unzip artifact for deployment
         run: unzip release.zip
 
-      
       - name: Login to Azure
         uses: azure/login@v2
         with:
@@ -78,4 +77,12 @@ jobs:
         with:
           app-name: 'nag-app-new'
           slot-name: 'Production'
+          app-settings: |
+            -WEBSITES_PORT=8000
+            -ENVIRONMENT=production
+            -CACHE_DURATION=3600
+            -MAX_AUDIO_AGE=86400
+            -WEBSITE_NODE_DEFAULT_VERSION=~18
+            -SCM_DO_BUILD_DURING_DEPLOYMENT=true
+            -WEBSITE_RUN_FROM_PACKAGE=1
           
