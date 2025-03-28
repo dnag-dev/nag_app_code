@@ -15,7 +15,6 @@ elevenlabs_api_key = os.getenv("ELEVENLABS_API_KEY")
 dinakara_voice_id = os.getenv("DINAKARA_VOICE_ID")
 
 app = FastAPI()
-
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.get("/")
@@ -29,7 +28,7 @@ async def chat(request: Request):
     debug_output = {}
 
     try:
-        # GPT response
+        # GPT-4 response
         client = openai.OpenAI()
         completion = client.chat.completions.create(
             model="gpt-4",
@@ -38,7 +37,7 @@ async def chat(request: Request):
         message = completion.choices[0].message.content
         debug_output["gpt_response"] = message
 
-        # ElevenLabs voice generation
+        # Text to speech
         audio_url = await text_to_speech(message, debug_output)
         return {"response": message, "audio_url": audio_url, "debug": debug_output}
 
@@ -50,7 +49,6 @@ async def chat(request: Request):
 async def transcribe(file: UploadFile = File(...)):
     debug_output = {}
     try:
-        # Save the uploaded audio file temporarily
         temp_file_path = f"temp_{uuid.uuid4().hex}.mp3"
         async with aiofiles.open(temp_file_path, 'wb') as out_file:
             content = await file.read()
@@ -64,14 +62,18 @@ async def transcribe(file: UploadFile = File(...)):
             )
 
         os.remove(temp_file_path)
-        return {"transcription": transcript.text}
+        if transcript.text:
+            return {"transcription": transcript.text}
+        else:
+            return JSONResponse(status_code=400, content={"error": "No transcription result"})
 
     except Exception as e:
         debug_output["error"] = str(e)
         return JSONResponse(status_code=500, content=debug_output)
 
 async def text_to_speech(text, debug_output):
-    output_path = f"static/audio_{uuid.uuid4().hex}.mp3"
+    filename = f"audio_{uuid.uuid4().hex}.mp3"
+    output_path = f"static/{filename}"
     endpoint = f"https://api.elevenlabs.io/v1/text-to-speech/{dinakara_voice_id}"
 
     headers = {
@@ -94,7 +96,7 @@ async def text_to_speech(text, debug_output):
         with open(output_path, "wb") as f:
             f.write(response.content)
         debug_output["audio_file"] = output_path
-        return f"/{output_path}"
+        return f"/static/{filename}"
     else:
         debug_output["voice_error"] = response.text
         raise Exception(f"Voice generation failed: {response.text}")
