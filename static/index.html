@@ -3,13 +3,15 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Nag - The Digital Twin</title>
+  <title>Nag - The Digital Twin (Debug Mode)</title>
 </head>
 <body>
-  <h1>Welcome to Nag</h1>
+  <h1>Welcome to Nag (Debug Mode)</h1>
   <p>The digital extension of Dinakara’s mind — therapist, companion, unfiltered mirror.</p>
   <input type="text" id="userInput" placeholder="Ask Nag something..." />
   <button onclick="sendMessage()">Send</button>
+  <p id="nagText"></p>
+  <pre id="debugLog" style="background: #eee; padding: 10px;"></pre>
   <audio id="nagAudio" controls style="display:none;"></audio>
 
   <script>
@@ -21,17 +23,19 @@
         body: JSON.stringify({ message: input })
       });
 
-      if (!response.ok) {
-        alert("Nag had trouble responding.");
-        return;
-      }
+      const result = await response.json();
+      const debugLog = document.getElementById("debugLog");
+      debugLog.textContent = JSON.stringify(result.debug || result.error || {}, null, 2);
 
-      const audioBlob = await response.blob();
-      const audioUrl = URL.createObjectURL(audioBlob);
-      const audioElement = document.getElementById("nagAudio");
-      audioElement.src = audioUrl;
-      audioElement.style.display = "block";
-      audioElement.play();
+      if (response.ok) {
+        document.getElementById("nagText").textContent = result.response;
+        const audio = document.getElementById("nagAudio");
+        audio.src = result.audio_url;
+        audio.style.display = "block";
+        audio.play();
+      } else {
+        alert(result.error || "Something went wrong");
+      }
     }
   </script>
 </body>

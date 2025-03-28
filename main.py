@@ -15,7 +15,6 @@ dinakara_voice_id = os.getenv("DINAKARA_VOICE_ID")
 
 app = FastAPI()
 
-# Serve static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.get("/")
@@ -26,6 +25,8 @@ async def get_index():
 async def chat(request: Request):
     body = await request.json()
     user_input = body.get("message")
+    
+    debug_output = {}
 
     try:
         response = openai.ChatCompletion.create(
@@ -33,12 +34,15 @@ async def chat(request: Request):
             messages=[{"role": "user", "content": user_input}]
         )
         message = response["choices"][0]["message"]["content"]
-        audio_url = await text_to_speech(message)
-        return {"response": message, "audio_url": audio_url}
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        debug_output["gpt_response"] = message
 
-async def text_to_speech(text):
+        audio_url = await text_to_speech(message, debug_output)
+        return {"response": message, "audio_url": audio_url, "debug": debug_output}
+    except Exception as e:
+        debug_output["error"] = str(e)
+        return JSONResponse(status_code=500, content=debug_output)
+
+async def text_to_speech(text, debug_output):
     output_path = f"static/audio_{uuid.uuid4().hex}.mp3"
     endpoint = f"https://api.elevenlabs.io/v1/text-to-speech/{dinakara_voice_id}"
     headers = {
@@ -53,9 +57,12 @@ async def text_to_speech(text):
         }
     }
     response = requests.post(endpoint, json=payload, headers=headers)
+    debug_output["voice_status_code"] = response.status_code
     if response.status_code == 200:
         with open(output_path, "wb") as f:
             f.write(response.content)
+        debug_output["audio_file"] = output_path
         return f"/{output_path}"
     else:
+        debug_output["voice_error"] = response.text
         raise Exception(f"Voice generation failed: {response.text}")
