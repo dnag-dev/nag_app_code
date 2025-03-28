@@ -1,98 +1,252 @@
-from fastapi import FastAPI, Request, UploadFile, File
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi import FastAPI, Request, UploadFile, File, HTTPException, BackgroundTasks
+from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 import openai
 import os
 from dotenv import load_dotenv
 import requests
 import uuid
 import aiofiles
+import logging
+from datetime import datetime
+import shutil
+from typing import Optional, Dict
+import hashlib
+import json
+from pathlib import Path
+import asyncio
+from functools import lru_cache
+import time
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
+# Environment variables
 openai.api_key = os.getenv("OPENAI_API_KEY")
 elevenlabs_api_key = os.getenv("ELEVENLABS_API_KEY")
 dinakara_voice_id = os.getenv("DINAKARA_VOICE_ID")
+CACHE_DURATION = int(os.getenv("CACHE_DURATION", "3600"))  # 1 hour default
+MAX_AUDIO_AGE = int(os.getenv("MAX_AUDIO_AGE", "86400"))  # 24 hours default
 
-app = FastAPI()
+# Validate required environment variables
+if not all([openai.api_key, elevenlabs_api_key, dinakara_voice_id]):
+    raise ValueError("Missing required environment variables")
 
+app = FastAPI(
+    title="Nag - Digital Therapist",
+    description="A digital extension of Dinakara's mind — therapist, companion, unfiltered mirror.",
+    version="1.0.0"
+)
+
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, replace with specific origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Add GZip compression
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+# Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Ensure static directory exists
+os.makedirs("static", exist_ok=True)
+
+# Cache for GPT responses
+@lru_cache(maxsize=1000)
+def get_cached_gpt_response(message_hash: str) -> Optional[str]:
+    """Get cached GPT response if available."""
+    cache_file = Path("cache/gpt_responses.json")
+    if cache_file.exists():
+        try:
+            with open(cache_file, "r") as f:
+                cache = json.load(f)
+                if message_hash in cache:
+                    return cache[message_hash]
+        except Exception as e:
+            logger.error(f"Error reading cache: {str(e)}")
+    return None
+
+def cache_gpt_response(message_hash: str, response: str):
+    """Cache GPT response."""
+    cache_file = Path("cache/gpt_responses.json")
+    cache_file.parent.mkdir(exist_ok=True)
+    try:
+        cache = {}
+        if cache_file.exists():
+            with open(cache_file, "r") as f:
+                cache = json.load(f)
+        cache[message_hash] = response
+        with open(cache_file, "w") as f:
+            json.dump(cache, f)
+    except Exception as e:
+        logger.error(f"Error writing to cache: {str(e)}")
+
+def cleanup_old_audio_files(max_age_seconds: int = MAX_AUDIO_AGE):
+    """Clean up audio files older than max_age_seconds."""
+    try:
+        current_time = time.time()
+        for filename in os.listdir("static"):
+            if filename.startswith("audio_"):
+                filepath = os.path.join("static", filename)
+                file_time = os.path.getctime(filepath)
+                if current_time - file_time > max_age_seconds:
+                    os.remove(filepath)
+                    logger.info(f"Cleaned up old audio file: {filename}")
+    except Exception as e:
+        logger.error(f"Error cleaning up audio files: {str(e)}")
+
+async def cleanup_background(background_tasks: BackgroundTasks):
+    """Schedule cleanup tasks."""
+    background_tasks.add_task(cleanup_old_audio_files)
 
 @app.get("/")
 async def get_index():
+    """Serve the main application page."""
     return FileResponse("static/index.html")
 
+@app.get("/health")
+async def health_check():
+    """Health check endpoint."""
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "version": "1.0.0",
+        "environment": os.getenv("ENVIRONMENT", "development")
+    }
+
 @app.post("/chat")
-async def chat(request: Request):
-    body = await request.json()
-    user_input = body.get("message")
-    debug_output = {}
-
+async def chat(request: Request, background_tasks: BackgroundTasks):
+    """Handle chat messages and generate responses with audio."""
+    request_id = str(uuid.uuid4())
+    logger.info(f"Received chat request {request_id}")
+    
     try:
-        client = openai.OpenAI()
-        completion = client.chat.completions.create(
-            model="gpt-4",
-            messages=[{"role": "user", "content": user_input}]
-        )
-        message = completion.choices[0].message.content
-        debug_output["gpt_response"] = message
+        body = await request.json()
+        user_input = body.get("message")
+        
+        if not user_input or not isinstance(user_input, str):
+            raise HTTPException(status_code=400, detail="Invalid message format")
 
-        audio_url = await text_to_speech(message, debug_output)
-        return {"response": message, "audio_url": audio_url, "debug": debug_output}
+        # Generate message hash for caching
+        message_hash = hashlib.md5(user_input.encode()).hexdigest()
+        
+        # Check cache first
+        cached_response = get_cached_gpt_response(message_hash)
+        if cached_response:
+            logger.info(f"Using cached response for message hash: {message_hash}")
+            message = cached_response
+        else:
+            # Get GPT response
+            client = openai.OpenAI()
+            completion = client.chat.completions.create(
+                model="gpt-4",
+                messages=[{"role": "user", "content": user_input}]
+            )
+            message = completion.choices[0].message.content
+            cache_gpt_response(message_hash, message)
+
+        # Generate audio
+        audio_url = await text_to_speech(message, request_id)
+        
+        # Schedule cleanup
+        await cleanup_background(background_tasks)
+        
+        return {
+            "response": message,
+            "audio_url": audio_url,
+            "request_id": request_id,
+            "cached": bool(cached_response)
+        }
 
     except Exception as e:
-        debug_output["error"] = str(e)
-        return JSONResponse(status_code=500, content=debug_output)
+        logger.error(f"Error processing chat request {request_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.post("/transcribe")
 async def transcribe(file: UploadFile = File(...)):
-    debug_output = {}
+    """Transcribe audio file to text."""
+    request_id = str(uuid.uuid4())
+    logger.info(f"Received transcription request {request_id}")
+    
     try:
-        temp_file_path = f"temp_{uuid.uuid4().hex}.mp3"
+        if not file.filename.endswith(('.mp3', '.wav', '.m4a')):
+            raise HTTPException(status_code=400, detail="Unsupported file format")
+
+        temp_file_path = f"temp_{request_id}.mp3"
         async with aiofiles.open(temp_file_path, 'wb') as out_file:
             content = await file.read()
             await out_file.write(content)
 
-        client = openai.OpenAI()
-        with open(temp_file_path, "rb") as f:
-            transcript = client.audio.transcriptions.create(
-                model="whisper-1",
-                file=f
-            )
-
-        os.remove(temp_file_path)
-        return {"transcription": transcript.text}
+        try:
+            client = openai.OpenAI()
+            with open(temp_file_path, "rb") as f:
+                transcript = client.audio.transcriptions.create(
+                    model="whisper-1",
+                    file=f
+                )
+            return {"transcription": transcript.text, "request_id": request_id}
+        finally:
+            # Clean up temp file
+            if os.path.exists(temp_file_path):
+                os.remove(temp_file_path)
 
     except Exception as e:
-        debug_output["error"] = str(e)
-        return JSONResponse(status_code=500, content=debug_output)
+        logger.error(f"Error processing transcription request {request_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
-async def text_to_speech(text, debug_output):
-    unique_id = uuid.uuid4().hex
-    output_path = f"static/audio_{unique_id}.mp3"
-    endpoint = f"https://api.elevenlabs.io/v1/text-to-speech/{dinakara_voice_id}"
+async def text_to_speech(text: str, request_id: str) -> str:
+    """Convert text to speech using ElevenLabs API."""
+    try:
+        output_path = f"static/audio_{request_id}.mp3"
+        endpoint = f"https://api.elevenlabs.io/v1/text-to-speech/{dinakara_voice_id}"
 
-    headers = {
-        "xi-api-key": elevenlabs_api_key,
-        "Content-Type": "application/json"
-    }
-
-    payload = {
-        "text": text,
-        "voice_settings": {
-            "stability": 0.45,
-            "similarity_boost": 0.85
+        headers = {
+            "xi-api-key": elevenlabs_api_key,
+            "Content-Type": "application/json"
         }
-    }
 
-    response = requests.post(endpoint, json=payload, headers=headers)
-    debug_output["voice_status_code"] = response.status_code
+        payload = {
+            "text": text,
+            "voice_settings": {
+                "stability": 0.45,
+                "similarity_boost": 0.85
+            }
+        }
 
-    if response.status_code == 200:
+        # Add retry logic for ElevenLabs API
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                response = requests.post(endpoint, json=payload, headers=headers)
+                response.raise_for_status()
+                break
+            except requests.exceptions.RequestException as e:
+                if attempt == max_retries - 1:
+                    raise
+                logger.warning(f"ElevenLabs API attempt {attempt + 1} failed: {str(e)}")
+                await asyncio.sleep(1)  # Wait before retrying
+
         with open(output_path, "wb") as f:
             f.write(response.content)
-        debug_output["audio_file"] = output_path
-        return f"/{output_path}?v={unique_id}"
-    else:
-        debug_output["voice_error"] = response.text
-        raise Exception(f"Voice generation failed: {response.text}")
+            
+        logger.info(f"Generated audio file: {output_path}")
+        
+        # Return the URL without the leading slash to avoid double slashes
+        return f"static/audio_{request_id}.mp3"
+
+    except Exception as e:
+        logger.error(f"Error in text_to_speech: {str(e)}")
+        raise HTTPException(status_code=500, detail="Voice generation failed")
