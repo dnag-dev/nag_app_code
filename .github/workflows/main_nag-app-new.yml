@@ -80,6 +80,9 @@ jobs:
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
           package: release.zip
           startup-command: 'python run.py'
+          type: 'zip'
+          clean: true
+          restart: true
           configuration-file: |
             WEBSITES_PORT=8000
             ENVIRONMENT=production
@@ -88,6 +91,10 @@ jobs:
             WEBSITE_NODE_DEFAULT_VERSION=~18
             SCM_DO_BUILD_DURING_DEPLOYMENT=true
             WEBSITE_RUN_FROM_PACKAGE=1
+            WEBSITE_WEBDEPLOY_USE_SCM=true
+            WEBSITE_HTTPLOGGING_RETENTION_DAYS=7
+            WEBSITE_ENABLE_SYNC_UPDATE_SITE=true
+            SCM_DO_BUILD_DURING_DEPLOYMENT=true
             WEBSITE_WEBDEPLOY_USE_SCM=true
             WEBSITE_HTTPLOGGING_RETENTION_DAYS=7
             WEBSITE_ENABLE_SYNC_UPDATE_SITE=true
