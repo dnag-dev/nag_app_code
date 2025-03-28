@@ -1,11 +1,38 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Nag - The Digital Twin</title>
+  <meta charset="UTF-8">
+  <title>Nag - The Digital Twin</title>
 </head>
 <body>
-    <h1>Welcome to Nag</h1>
-    <p>The digital extension of Dinakara’s mind — therapist, companion, unfiltered mirror.</p>
+  <h1>Welcome to Nag</h1>
+  <p>The digital extension of Dinakara’s mind — therapist, companion, unfiltered mirror.</p>
+  <input type="text" id="userInput" placeholder="Ask Nag something..." />
+  <button onclick="sendMessage()">Send</button>
+  <audio id="nagAudio" controls style="display:none;"></audio>
+
+  <script>
+    async function sendMessage() {
+      const input = document.getElementById("userInput").value;
+      const response = await fetch("/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: input })
+      });
+
+      if (!response.ok) {
+        alert("Nag had trouble responding.");
+        return;
+      }
+
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audioElement = document.getElementById("nagAudio");
+      audioElement.src = audioUrl;
+      audioElement.style.display = "block";
+      audioElement.play();
+    }
+  </script>
 </body>
 </html>
