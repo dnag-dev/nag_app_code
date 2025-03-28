@@ -22,9 +22,19 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+
+      - name: Create startup command file
+        run: |
+          echo "gunicorn --bind=0.0.0.0 --timeout 600 main:app" > startup.sh
+          chmod +x startup.sh
+
+      - name: Create deployment package
+        run: |
+          zip -r deploy.zip . -x "*.git*" -x "*.venv*" -x "*.env*" -x "*.pyc" -x "__pycache__/*"
+
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v2
         with:
           app-name: nag-app-new
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-          package: . 
+          package: deploy.zip 
