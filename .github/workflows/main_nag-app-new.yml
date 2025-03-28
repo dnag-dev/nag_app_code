@@ -69,21 +69,23 @@ jobs:
       - name: Unzip artifact for deployment
         run: unzip release.zip
 
-      - name: Login to Azure
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_E79C689F268A4F3384C9E42A4BBD5246 }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_97DC1EB913AC4A85B50BCD1DD753EE10 }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_5D0DB426F131402CA7EE19487C0F6D9E }}
-
       - name: 'Deploy to Azure Web App'
         uses: azure/webapps-deploy@v3
         id: deploy-to-webapp
         with:
           app-name: 'nag-app-new'
           slot-name: 'Production'
-          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          publish-profile: |
+            <publishData>
+              <publishProfile profileName="nag-app-new - Web Deploy" publishMethod="MSDeploy" publishUrl="nag-app-new.scm.azurewebsites.net:443" msdeploySite="nag-app-new" userName="$nag-app-new" userPWD="uogHXTq6nWthyEXbCCaDuqgBffXMv3CD7bHNoDaBWQNtkSu8QrWsWurY6wRC" destinationAppUrl="http://nag-app-new.azurewebsites.net" SQLServerDBConnectionString="" mySQLDBConnectionString="" hostingProviderForumLink="" controlPanelLink="https://portal.azure.com" webSystem="WebSites">
+                <databases />
+              </publishProfile>
+              <publishProfile profileName="nag-app-new - FTP" publishMethod="FTP" publishUrl="ftps://waws-prod-blu-401.ftp.azurewebsites.windows.net/site/wwwroot" ftpPassiveMode="True" userName="nag-app-new\$nag-app-new" userPWD="uogHXTq6nWthyEXbCCaDuqgBffXMv3CD7bHNoDaBWQNtkSu8QrWsWurY6wRC" destinationAppUrl="http://nag-app-new.azurewebsites.net" SQLServerDBConnectionString="" mySQLDBConnectionString="" hostingProviderForumLink="" controlPanelLink="https://portal.azure.com" webSystem="WebSites">
+                <databases />
+              </publishProfile>
+              <publishProfile profileName="nag-app-new - Zip Deploy" publishMethod="ZipDeploy" publishUrl="nag-app-new.scm.azurewebsites.net:443" userName="$nag-app-new" userPWD="uogHXTq6nWthyEXbCCaDuqgBffXMv3CD7bHNoDaBWQNtkSu8QrWsWurY6wRC" destinationAppUrl="http://nag-app-new.azurewebsites.net" SQLServerDBConnectionString="" mySQLDBConnectionString="" hostingProviderForumLink="" controlPanelLink="https://portal.azure.com" webSystem="WebSites">
+                <databases />
+              </publishProfile>
+            </publishData>
           package: release.zip
-          clean: true
-          restart: true
           
