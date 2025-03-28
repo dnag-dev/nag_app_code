@@ -4,6 +4,7 @@ import os
 import sys
 import signal
 import socket
+import psutil
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -19,6 +20,23 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
+def kill_process_on_port(port):
+    """Kill any process using the specified port."""
+    try:
+        for proc in psutil.process_iter(['pid', 'name', 'connections']):
+            try:
+                connections = proc.connections()
+                for conn in connections:
+                    if conn.laddr.port == port:
+                        logger.info(f"Killing process {proc.pid} using port {port}")
+                        psutil.Process(proc.pid).terminate()
+                        return True
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                pass
+    except Exception as e:
+        logger.error(f"Error killing process on port {port}: {str(e)}")
+    return False
 
 def is_port_in_use(port: int) -> bool:
     """Check if a port is in use."""
@@ -70,10 +88,15 @@ def main():
         workers = int(os.getenv("WORKERS", "1"))
         environment = os.getenv("ENVIRONMENT", "development")
         
-        # Find available port if default is in use
+        # Kill any existing process using the port
         if is_port_in_use(port):
-            port = find_available_port()
-            logger.warning(f"Default port {os.getenv('PORT', '9000')} is in use. Using port {port} instead.")
+            if kill_process_on_port(port):
+                logger.info(f"Killed existing process using port {port}")
+            else:
+                # If we couldn't kill the process, find another port
+                old_port = port
+                port = find_available_port()
+                logger.warning(f"Port {old_port} is in use. Using port {port} instead.")
         
         logger.info(f"Starting server in {environment} environment")
         logger.info(f"Server will run on http://{host}:{port}")
@@ -88,10 +111,11 @@ def main():
             port=port,
             log_level=log_level,
             reload=reload and environment == "development",
-            workers=workers,
+            workers=workers if not reload else 1,  # Use single worker with reload
             access_log=True,
             proxy_headers=True,
-            forwarded_allow_ips="*"
+            forwarded_allow_ips="*",
+            timeout_keep_alive=30
         )
         
     except Exception as e:
