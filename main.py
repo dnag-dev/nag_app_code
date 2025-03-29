@@ -186,11 +186,24 @@ async def transcribe(file: UploadFile = File(...)):
 
         text = getattr(transcript, "text", None) or "undefined"
         
-        # Additional safety check to filter out known misidentifications
-        if "MBC 뉴스" in text or "이덕영입니다" in text:
-            logger.warning(f"Filtered out Korean misidentification: {text}")
+        # Filter out common false positives and known misidentifications
+        common_false_positives = [
+            "thank you.", "thank you", "you", "the", "ok", "ok.", 
+            "i", "hi", "hey", "yes", "no", "um", "uh", "is", "it", "a", "an", "and"
+        ]
+        korean_phrases = ["mbc", "뉴스", "이덕영입니다", "워싱턴에서"]
+        
+        if text.lower() in common_false_positives:
+            logger.warning(f"Filtered out common false positive: {text}")
             text = "undefined"
-            
+        
+        # Check for Korean phrases
+        for phrase in korean_phrases:
+            if phrase.lower() in text.lower():
+                logger.warning(f"Filtered out Korean phrase in: {text}")
+                text = "undefined"
+                break
+                
         return {"transcription": text.strip(), "request_id": request_id}
 
     except Exception as e:
