@@ -17,18 +17,15 @@
       height: 100vh;
       overflow: hidden;
     }
-
     h1 {
       font-size: 2rem;
       margin-bottom: 0.2rem;
     }
-
     p {
       margin-top: 0;
       font-style: italic;
       opacity: 0.8;
     }
-
     #orb {
       width: 120px;
       height: 120px;
@@ -39,35 +36,29 @@
       transition: all 0.4s ease-in-out;
       animation: pulseIdle 2s infinite;
     }
-
     #orb.listening {
       background: radial-gradient(circle, #ff7300, #a62c00);
       animation: pulseListening 1s infinite;
     }
-
     #orb.speaking {
       background: radial-gradient(circle, #00ff8c, #004d33);
       animation: pulseSpeaking 1s infinite;
     }
-
     @keyframes pulseIdle {
       0% { transform: scale(1); box-shadow: 0 0 20px rgba(0,255,255,0.2); }
       50% { transform: scale(1.05); box-shadow: 0 0 30px rgba(0,255,255,0.4); }
       100% { transform: scale(1); box-shadow: 0 0 20px rgba(0,255,255,0.2); }
     }
-
     @keyframes pulseListening {
       0% { transform: scale(1); box-shadow: 0 0 30px rgba(255,115,0,0.3); }
       50% { transform: scale(1.1); box-shadow: 0 0 40px rgba(255,115,0,0.5); }
       100% { transform: scale(1); box-shadow: 0 0 30px rgba(255,115,0,0.3); }
     }
-
     @keyframes pulseSpeaking {
       0% { transform: scale(1); box-shadow: 0 0 30px rgba(0,255,140,0.4); }
       50% { transform: scale(1.1); box-shadow: 0 0 40px rgba(0,255,140,0.6); }
       100% { transform: scale(1); box-shadow: 0 0 30px rgba(0,255,140,0.4); }
     }
-
     #debug {
       width: 90%;
       max-height: 250px;
@@ -80,20 +71,31 @@
       color: #0f0;
       margin-top: 2rem;
     }
+    #startButton {
+      padding: 10px 20px;
+      font-size: 1rem;
+      margin-top: 1rem;
+      border: none;
+      background-color: #00f2ff;
+      color: #000;
+      border-radius: 10px;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
-  <h1>Welcome to Nag< 99/h1>
+  <h1>Welcome to Nag</h1>
   <p>The digital extension of Dinakara’s mind — therapist, companion, unfiltered mirror.</p>
   <div id="orb" class="idle"></div>
   <audio id="audio" hidden></audio>
+  <button id="startButton">Start Conversation</button>
   <div id="debug"><strong>Debug Log:</strong></div>
 
   <script>
     const orb = document.getElementById('orb');
     const audio = document.getElementById('audio');
     const debugBox = document.getElementById('debug');
-
+    const startButton = document.getElementById('startButton');
     let mediaRecorder;
     let audioChunks = [];
 
@@ -124,10 +126,9 @@
         formData.append('file', blob, 'input.mp3');
 
         try {
-          const transcriptionResponse = await fetch('/transcribe', { method: 'POST', body: formData });
-          const transcriptionData = await transcriptionResponse.json();
-          console.log("Transcription full response:", transcriptionData);
-          const message = transcriptionData.transcription;
+          const res = await fetch('/transcribe', { method: 'POST', body: formData });
+          const data = await res.json();
+          const message = data.transcription;
           logDebug("📝 Transcribed: " + (message || "undefined"));
           if (!message || message === "undefined") {
             logDebug("⚠️ Transcription failed or returned empty message.");
@@ -148,13 +149,13 @@
       orb.classList.add('thinking');
 
       try {
-        const chatResponse = await fetch('/chat', {
+        const chatRes = await fetch('/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ message })
         });
 
-        const data = await chatResponse.json();
+        const data = await chatRes.json();
         logDebug("🧠 Nag: " + data.response);
         if (data.audio_url) {
           audio.src = data.audio_url;
@@ -167,7 +168,7 @@
           audio.onended = () => {
             orb.classList.remove('speaking');
             orb.classList.add('idle');
-            setTimeout(recordAndSend, 2000); // Wait 2s and re-listen
+            setTimeout(recordAndSend, 2000);
           };
         } else {
           logDebug("⚠️ No audio URL returned.");
@@ -179,7 +180,8 @@
       }
     }
 
-    window.addEventListener('DOMContentLoaded', () => {
+    startButton.addEventListener('click', () => {
+      startButton.style.display = 'none';
       recordAndSend();
     });
   </script>
