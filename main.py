@@ -72,8 +72,7 @@ def get_cached_gpt_response(message_hash: str) -> Optional[str]:
         try:
             with open(cache_file, "r") as f:
                 cache = json.load(f)
-                if message_hash in cache:
-                    return cache[message_hash]
+                return cache.get(message_hash)
         except Exception as e:
             logger.error(f"Error reading cache: {str(e)}")
     return None
@@ -140,7 +139,7 @@ async def chat(request: Request, background_tasks: BackgroundTasks):
             logger.info(f"Using cached response for message hash: {message_hash}")
             message = cached_response
         else:
-            completion = openai.chat.completions.create(
+            completion = openai.ChatCompletion.create(
                 model="gpt-4",
                 messages=[{"role": "user", "content": user_input}]
             )
@@ -182,14 +181,14 @@ async def transcribe(file: UploadFile = File(...)):
         try:
             with open(temp_file_path, "rb") as f:
                 logger.info(f"Sending file to Whisper for transcription: {temp_file_path}")
-                transcript = openai.audio.transcriptions.create(
+                transcript = openai.Audio.transcribe(
                     model="whisper-1",
                     file=f,
                     response_format="json"
                 )
 
             logger.info(f"Transcription result for {request_id}: {transcript}")
-            transcript_text = getattr(transcript, 'text', None) or transcript.get('text') or "undefined"
+            transcript_text = transcript.get('text') or getattr(transcript, 'text', None) or "undefined"
 
             if not transcript_text or transcript_text.strip() == "":
                 logger.warning(f"Whisper transcription returned empty for {request_id}")
