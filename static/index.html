@@ -1,231 +1,195 @@
-from fastapi import FastAPI, Request, UploadFile, File, HTTPException, BackgroundTasks
-from fastapi.responses import JSONResponse, FileResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.gzip import GZipMiddleware
-import openai
-import os
-from dotenv import load_dotenv
-import requests
-import uuid
-import aiofiles
-import logging
-from datetime import datetime
-from typing import Optional
-import hashlib
-import json
-from pathlib import Path
-import asyncio
-from functools import lru_cache
-import time
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Nag - The Digital Twin</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(to bottom right, #000000, #1a1a1a);
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      overflow: hidden;
+    }
+    h1 {
+      font-size: 2rem;
+      margin-bottom: 0.2rem;
+    }
+    p {
+      margin-top: 0;
+      font-style: italic;
+      opacity: 0.8;
+    }
+    #orb {
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      margin: 2rem auto;
+      background: radial-gradient(circle, #00f2ff, #001f3f);
+      box-shadow: 0 0 25px rgba(0,255,255,0.6);
+      transition: all 0.4s ease-in-out;
+      animation: pulseIdle 2s infinite;
+    }
+    #orb.listening {
+      background: radial-gradient(circle, #ff7300, #a62c00);
+      animation: pulseListening 1s infinite;
+    }
+    #orb.speaking {
+      background: radial-gradient(circle, #00ff8c, #004d33);
+      animation: pulseSpeaking 1s infinite;
+    }
+    @keyframes pulseIdle {
+      0% { transform: scale(1); box-shadow: 0 0 20px rgba(0,255,255,0.2); }
+      50% { transform: scale(1.05); box-shadow: 0 0 30px rgba(0,255,255,0.4); }
+      100% { transform: scale(1); box-shadow: 0 0 20px rgba(0,255,255,0.2); }
+    }
+    @keyframes pulseListening {
+      0% { transform: scale(1); box-shadow: 0 0 30px rgba(255,115,0,0.3); }
+      50% { transform: scale(1.1); box-shadow: 0 0 40px rgba(255,115,0,0.5); }
+      100% { transform: scale(1); box-shadow: 0 0 30px rgba(255,115,0,0.3); }
+    }
+    @keyframes pulseSpeaking {
+      0% { transform: scale(1); box-shadow: 0 0 30px rgba(0,255,140,0.4); }
+      50% { transform: scale(1.1); box-shadow: 0 0 40px rgba(0,255,140,0.6); }
+      100% { transform: scale(1); box-shadow: 0 0 30px rgba(0,255,140,0.4); }
+    }
+    #debug {
+      width: 90%;
+      max-height: 250px;
+      overflow-y: auto;
+      background: #111;
+      border: 1px solid #333;
+      padding: 10px;
+      font-family: monospace;
+      font-size: 0.85rem;
+      color: #0f0;
+      margin-top: 2rem;
+    }
+    #toggleButton {
+      padding: 10px 20px;
+      font-size: 1rem;
+      margin-top: 1rem;
+      border: none;
+      background-color: #00f2ff;
+      color: #000;
+      border-radius: 10px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h1>Welcome to Nag</h1>
+  <p>The digital extension of Dinakara’s mind — therapist, companion, unfiltered mirror.</p>
+  <div id="orb" class="idle"></div>
+  <audio id="audio" hidden></audio>
+  <button id="toggleButton">Start Conversation</button>
+  <div id="debug"><strong>Debug Log:</strong></div>
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+  <script>
+    const orb = document.getElementById('orb');
+    const audio = document.getElementById('audio');
+    const debugBox = document.getElementById('debug');
+    const toggleButton = document.getElementById('toggleButton');
+    let mediaRecorder;
+    let audioChunks = [];
+    let isListening = false;
+    let stopRequested = false;
 
-load_dotenv()
-
-# Environment variables
-openai.api_key = os.getenv("OPENAI_API_KEY")
-elevenlabs_api_key = os.getenv("ELEVENLABS_API_KEY")
-dinakara_voice_id = os.getenv("DINAKARA_VOICE_ID")
-CACHE_DURATION = int(os.getenv("CACHE_DURATION", "3600"))
-MAX_AUDIO_AGE = int(os.getenv("MAX_AUDIO_AGE", "86400"))
-
-if not all([openai.api_key, elevenlabs_api_key, dinakara_voice_id]):
-    raise ValueError("Missing required environment variables")
-
-app = FastAPI(
-    title="Nag - Digital Therapist",
-    description="A digital extension of Dinakara's mind — therapist, companion, unfiltered mirror.",
-    version="1.0.0"
-)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-app.add_middleware(GZipMiddleware, minimum_size=1000)
-app.mount("/static", StaticFiles(directory="static"), name="static")
-os.makedirs("static", exist_ok=True)
-
-@lru_cache(maxsize=1000)
-def get_cached_gpt_response(message_hash: str) -> Optional[str]:
-    cache_file = Path("cache/gpt_responses.json")
-    if cache_file.exists():
-        try:
-            with open(cache_file, "r") as f:
-                cache = json.load(f)
-                return cache.get(message_hash)
-        except Exception as e:
-            logger.error(f"Error reading cache: {str(e)}")
-    return None
-
-def cache_gpt_response(message_hash: str, response: str):
-    cache_file = Path("cache/gpt_responses.json")
-    cache_file.parent.mkdir(exist_ok=True)
-    try:
-        cache = {}
-        if cache_file.exists():
-            with open(cache_file, "r") as f:
-                cache = json.load(f)
-        cache[message_hash] = response
-        with open(cache_file, "w") as f:
-            json.dump(cache, f)
-    except Exception as e:
-        logger.error(f"Error writing to cache: {str(e)}")
-
-def cleanup_old_audio_files(max_age_seconds: int = MAX_AUDIO_AGE):
-    try:
-        current_time = time.time()
-        for filename in os.listdir("static"):
-            if filename.startswith("audio_"):
-                filepath = os.path.join("static", filename)
-                file_time = os.path.getctime(filepath)
-                if current_time - file_time > max_age_seconds:
-                    os.remove(filepath)
-                    logger.info(f"Cleaned up old audio file: {filename}")
-    except Exception as e:
-        logger.error(f"Error cleaning up audio files: {str(e)}")
-
-async def cleanup_background(background_tasks: BackgroundTasks):
-    background_tasks.add_task(cleanup_old_audio_files)
-
-@app.get("/")
-async def get_index():
-    return FileResponse("static/index.html")
-
-@app.get("/health")
-async def health_check():
-    return {
-        "status": "healthy",
-        "timestamp": datetime.now().isoformat(),
-        "version": "1.0.0",
-        "environment": os.getenv("ENVIRONMENT", "development")
+    function logDebug(msg) {
+      const p = document.createElement('p');
+      p.textContent = msg;
+      debugBox.appendChild(p);
+      debugBox.scrollTop = debugBox.scrollHeight;
     }
 
-@app.post("/chat")
-async def chat(request: Request, background_tasks: BackgroundTasks):
-    request_id = str(uuid.uuid4())
-    logger.info(f"Received chat request {request_id}")
+    async function recordAndSend() {
+      if (stopRequested) return;
+      orb.classList.remove('speaking');
+      orb.classList.add('listening');
+      logDebug("🎙️ Listening...");
 
-    try:
-        body = await request.json()
-        user_input = body.get("message")
-        if not user_input or not isinstance(user_input, str):
-            raise HTTPException(status_code=400, detail="Invalid message format")
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorder = new MediaRecorder(stream);
+      audioChunks = [];
 
-        message_hash = hashlib.md5(user_input.encode()).hexdigest()
-        cached_response = get_cached_gpt_response(message_hash)
+      mediaRecorder.ondataavailable = event => audioChunks.push(event.data);
 
-        if cached_response:
-            logger.info(f"Using cached response for message hash: {message_hash}")
-            message = cached_response
-        else:
-            completion = openai.chat.completions.create(
-                model="gpt-4",
-                messages=[
-                    {"role": "system", "content": "You are Nag, the digital twin of Dinakara Nagalla, a bold, raw, soulful South Indian immigrant to the USA. Your tone is brutally honest, emotionally intelligent, wise, yet unfiltered. You are a therapist, a coach, and a mirror to the user's mind. You speak like a real person, with lived experience and South Indian grit."},
-                    {"role": "user", "content": user_input}
-                ]
-            )
-            message = completion.choices[0].message.content
-            cache_gpt_response(message_hash, message)
+      mediaRecorder.onstop = async () => {
+        orb.classList.remove('listening');
+        logDebug("📤 Uploading voice...");
 
-        audio_url = await text_to_speech(message, request_id)
-        await cleanup_background(background_tasks)
+        const blob = new Blob(audioChunks, { type: 'audio/mp3' });
+        const formData = new FormData();
+        formData.append('file', blob, 'input.mp3');
 
-        return {
-            "response": message,
-            "audio_url": audio_url,
-            "request_id": request_id,
-            "cached": bool(cached_response)
+        try {
+          const res = await fetch('/transcribe', { method: 'POST', body: formData });
+          const data = await res.json();
+          const message = data.transcription;
+          logDebug("📝 Transcribed: " + (message || "undefined"));
+          if (!message || message === "undefined") {
+            logDebug("⚠️ Transcription failed or returned empty message.");
+            return setTimeout(recordAndSend, 1000);
+          }
+          await sendToChat(message);
+        } catch (error) {
+          logDebug("❌ Transcription error: " + error.message);
         }
+      };
 
-    except Exception as e:
-        logger.error(f"Error processing chat request {request_id}: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+      mediaRecorder.start();
+      setTimeout(() => mediaRecorder.stop(), 4000);
+    }
 
-@app.post("/transcribe")
-async def transcribe(file: UploadFile = File(...)):
-    request_id = str(uuid.uuid4())
-    logger.info(f"Received transcription request {request_id}")
+    async function sendToChat(message) {
+      logDebug("💬 Sending to Nag...");
+      orb.classList.add('thinking');
 
-    try:
-        if not file.filename.endswith((".mp3", ".wav", ".m4a", ".webm")):
-            return JSONResponse(status_code=200, content={
-                "transcription": "undefined",
-                "error": "Unsupported file format",
-                "request_id": request_id
-            })
+      try {
+        const chatRes = await fetch('/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message })
+        });
 
-        temp_file_path = f"temp_{request_id}.mp3"
-        async with aiofiles.open(temp_file_path, 'wb') as out_file:
-            content = await file.read()
-            await out_file.write(content)
-
-        try:
-            with open(temp_file_path, "rb") as f:
-                transcript = openai.audio.transcribe("whisper-1", f)
-            transcript_text = transcript.get("text") or "undefined"
-            if not transcript_text.strip():
-                return JSONResponse(status_code=200, content={
-                    "transcription": "undefined",
-                    "request_id": request_id,
-                    "warning": "Whisper returned no text"
-                })
-            return {
-                "transcription": transcript_text,
-                "request_id": request_id,
-                "raw": transcript
-            }
-        finally:
-            if os.path.exists(temp_file_path):
-                os.remove(temp_file_path)
-
-    except Exception as e:
-        logger.error(f"Transcription error {request_id}: {str(e)}")
-        return JSONResponse(status_code=200, content={
-            "transcription": "undefined",
-            "error": str(e),
-            "request_id": request_id
-        })
-
-async def text_to_speech(text: str, request_id: str) -> str:
-    try:
-        output_path = f"static/audio_{request_id}.mp3"
-        endpoint = f"https://api.elevenlabs.io/v1/text-to-speech/{dinakara_voice_id}"
-        headers = {
-            "xi-api-key": elevenlabs_api_key,
-            "Content-Type": "application/json"
+        const data = await chatRes.json();
+        logDebug("🧠 Nag: " + data.response);
+        if (data.audio_url) {
+          audio.src = data.audio_url;
+          audio.onloadeddata = () => {
+            orb.classList.remove('thinking');
+            orb.classList.add('speaking');
+            logDebug("🔊 Playing response...");
+            audio.play();
+          };
+          audio.onended = () => {
+            orb.classList.remove('speaking');
+            orb.classList.add('idle');
+            if (!stopRequested) setTimeout(recordAndSend, 1500);
+          };
+        } else {
+          logDebug("⚠️ No audio URL returned.");
         }
-        payload = {
-            "text": text,
-            "voice_settings": {
-                "stability": 0.45,
-                "similarity_boost": 0.85
-            }
-        }
-        for attempt in range(3):
-            try:
-                response = requests.post(endpoint, json=payload, headers=headers)
-                response.raise_for_status()
-                break
-            except requests.exceptions.RequestException as e:
-                if attempt == 2:
-                    raise
-                await asyncio.sleep(1)
-        with open(output_path, "wb") as f:
-            f.write(response.content)
-        logger.info(f"Audio generated at {output_path}")
-        return f"static/audio_{request_id}.mp3"
-    except Exception as e:
-        logger.error(f"TTS error {request_id}: {str(e)}")
-        raise HTTPException(status_code=500, detail="Voice generation failed")
+      } catch (err) {
+        orb.classList.remove('thinking');
+        orb.classList.add('idle');
+        logDebug("❌ Chat error: " + err.message);
+      }
+    }
+
+    toggleButton.addEventListener('click', () => {
+      stopRequested = !stopRequested;
+      toggleButton.textContent = stopRequested ? 'Resume Conversation' : 'Stop Conversation';
+      if (!stopRequested) {
+        recordAndSend();
+      }
+    });
+  </script>
+</body>
+</html>
