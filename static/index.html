@@ -81,6 +81,17 @@
       background-color: #555;
       cursor: not-allowed;
     }
+    .play-button {
+      padding: 8px 16px;
+      margin: 10px auto;
+      display: block;
+      background-color: #00ff8c;
+      color: #000;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+    }
   </style>
 </head>
 <body>
@@ -102,6 +113,15 @@
     let stream;
     let listening = false;
     let interrupted = false;
+    let currentPlayButton = null;
+
+    // Remove play button if exists
+    function removePlayButton() {
+      if (currentPlayButton) {
+        currentPlayButton.remove();
+        currentPlayButton = null;
+      }
+    }
 
     // Check if MediaRecorder is supported
     if (!window.MediaRecorder) {
@@ -119,6 +139,9 @@
 
     async function startListening() {
       try {
+        // Clean up any existing play button
+        removePlayButton();
+        
         orb.classList.remove("idle", "speaking", "thinking");
         orb.classList.add("listening");
         logDebug("🎙️ Listening...");
@@ -222,9 +245,11 @@
         audio.pause();
         audio.currentTime = 0;
       }
+      removePlayButton();
     }
 
     async function sendToChat(message) {
+      removePlayButton();
       orb.classList.remove("listening", "idle", "speaking");
       orb.classList.add("thinking");
       logDebug("💬 Sending to Nag...");
@@ -256,18 +281,45 @@
           
           try {
             await audio.play();
+            audio.onended = () => {
+              orb.classList.remove("speaking");
+              orb.classList.add("idle");
+              if (!interrupted) startListening();
+            };
           } catch (e) {
             logDebug("🔇 Audio play failed: " + e.message);
+            
+            // Add a play button when autoplay fails
+            removePlayButton(); // Remove any existing play button first
+            
+            let playButton = document.createElement("button");
+            playButton.innerText = "▶️ Play Response";
+            playButton.className = "play-button";
+            currentPlayButton = playButton;
+            
+            // Insert before debug box
+            document.body.insertBefore(playButton, debugBox);
+            
+            playButton.onclick = () => {
+              audio.play()
+                .then(() => {
+                  removePlayButton();
+                  orb.classList.add("speaking");
+                  
+                  audio.onended = () => {
+                    orb.classList.remove("speaking");
+                    orb.classList.add("idle");
+                    if (!interrupted) startListening();
+                  };
+                })
+                .catch(err => {
+                  logDebug("🔇 Manual play failed: " + err.message);
+                });
+            };
+            
             orb.classList.remove("speaking");
             orb.classList.add("idle");
-            return;
           }
-
-          audio.onended = () => {
-            orb.classList.remove("speaking");
-            orb.classList.add("idle");
-            if (!interrupted) startListening();
-          };
         } else {
           logDebug("⚠️ No audio returned.");
           orb.classList.add("idle");
