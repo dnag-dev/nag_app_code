@@ -155,7 +155,12 @@ async def chat(request: Request, background_tasks: BackgroundTasks):
 
     except Exception as e:
         logger.error(f"Error processing chat request {request_id}: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        return JSONResponse(status_code=500, content={
+            "response": "",
+            "audio_url": "",
+            "request_id": request_id,
+            "error": str(e)
+        })
 
 @app.post("/transcribe")
 async def transcribe(file: UploadFile = File(...)):
