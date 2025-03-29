@@ -17,19 +17,10 @@
       height: 100vh;
       overflow: hidden;
     }
-    h1 {
-      font-size: 2rem;
-      margin-bottom: 0.2rem;
-    }
-    p {
-      margin-top: 0;
-      font-style: italic;
-      opacity: 0.8;
-    }
+    h1 { font-size: 2rem; margin-bottom: 0.2rem; }
+    p { margin-top: 0; font-style: italic; opacity: 0.8; }
     #orb {
-      width: 120px;
-      height: 120px;
-      border-radius: 50%;
+      width: 120px; height: 120px; border-radius: 50%;
       margin: 2rem auto;
       background: radial-gradient(circle, #00f2ff, #001f3f);
       box-shadow: 0 0 25px rgba(0,255,255,0.6);
@@ -57,16 +48,10 @@
       50% { transform: scale(1.1); box-shadow: 0 0 40px rgba(0,255,140,0.6); }
     }
     #debug {
-      width: 90%;
-      max-height: 250px;
-      overflow-y: auto;
-      background: #111;
-      border: 1px solid #333;
-      padding: 10px;
-      font-family: monospace;
-      font-size: 0.85rem;
-      color: #0f0;
-      margin-top: 2rem;
+      width: 90%; max-height: 250px; overflow-y: auto;
+      background: #111; border: 1px solid #333;
+      padding: 10px; font-family: monospace;
+      font-size: 0.85rem; color: #0f0; margin-top: 2rem;
     }
     #toggleButton {
       padding: 10px 20px;
@@ -94,11 +79,8 @@
     const debugBox = document.getElementById("debug");
     const toggleButton = document.getElementById("toggleButton");
 
-    let mediaRecorder;
-    let audioChunks = [];
-    let stream;
-    let listening = false;
-    let interrupted = false;
+    let mediaRecorder, audioChunks = [], stream;
+    let listening = false, interrupted = false;
 
     function logDebug(msg) {
       const p = document.createElement("p");
@@ -113,16 +95,16 @@
         orb.classList.add("listening");
         logDebug("🎙️ Listening...");
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaRecorder = new MediaRecorder(stream);
+        mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
         audioChunks = [];
 
         mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
         mediaRecorder.onstop = async () => {
           if (interrupted) return;
           orb.classList.remove("listening");
-          const blob = new Blob(audioChunks, { type: "audio/mp3" });
+          const blob = new Blob(audioChunks, { type: "audio/webm" });
           const formData = new FormData();
-          formData.append("file", blob, "input.mp3");
+          formData.append("file", blob, "input.webm");
 
           try {
             logDebug("📤 Uploading voice...");
@@ -130,12 +112,7 @@
             const data = await res.json();
             const message = (data.transcription || "").trim();
             logDebug("📝 Transcribed: " + message);
-
-            if (!message) {
-              logDebug("⚠️ Empty message. Skipping...");
-              return;
-            }
-
+            if (!message) return logDebug("⚠️ Empty transcription. Skipping.");
             await sendToChat(message);
           } catch (e) {
             logDebug("❌ Transcription error: " + e.message);
@@ -143,13 +120,9 @@
         };
 
         mediaRecorder.start();
-        setTimeout(() => {
-          if (mediaRecorder.state !== "inactive") {
-            mediaRecorder.stop();
-          }
-        }, 4000);
+        setTimeout(() => mediaRecorder?.state === "recording" && mediaRecorder.stop(), 4000);
       } catch (e) {
-        logDebug("🚫 Mic access failed: " + e.message);
+        logDebug("🚫 Microphone access error: " + e.message);
         orb.classList.remove("listening");
         orb.classList.add("idle");
       }
@@ -157,12 +130,8 @@
 
     async function stopListening() {
       interrupted = true;
-      if (mediaRecorder && mediaRecorder.state !== "inactive") {
-        mediaRecorder.stop();
-      }
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-      }
+      if (mediaRecorder?.state !== "inactive") mediaRecorder.stop();
+      stream?.getTracks().forEach(t => t.stop());
       if (!audio.paused) {
         audio.pause();
         audio.currentTime = 0;
@@ -170,10 +139,9 @@
     }
 
     async function sendToChat(message) {
-      orb.classList.add("thinking");
-      logDebug("💬 Sending to Nag...");
-
       try {
+        orb.classList.add("thinking");
+        logDebug("💬 Sending to Nag...");
         const res = await fetch("/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -181,23 +149,19 @@
         });
 
         const data = await res.json();
-        logDebug("🧠 Nag: " + data.response);
         orb.classList.remove("thinking");
+        logDebug("🧠 Nag: " + data.response);
+        if (!data.audio_url) return logDebug("⚠️ No audio returned.");
 
-        if (data.audio_url) {
-          orb.classList.add("speaking");
-          audio.src = data.audio_url;
-          audio.load(); // Safari fix
-          audio.play().catch(e => logDebug("🔇 Audio play failed: " + e.message));
-
-          audio.onended = () => {
-            orb.classList.remove("speaking");
-            orb.classList.add("idle");
-            if (!interrupted) startListening();
-          };
-        } else {
-          logDebug("⚠️ No audio returned.");
-        }
+        orb.classList.add("speaking");
+        audio.src = data.audio_url;
+        audio.load();
+        audio.play().catch(e => logDebug("🔇 Playback failed: " + e.message));
+        audio.onended = () => {
+          orb.classList.remove("speaking");
+          orb.classList.add("idle");
+          if (!interrupted) startListening();
+        };
       } catch (e) {
         logDebug("❌ Chat error: " + e.message);
         orb.classList.remove("thinking");
