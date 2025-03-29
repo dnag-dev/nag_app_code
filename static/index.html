@@ -17,15 +17,18 @@
       height: 100vh;
       overflow: hidden;
     }
+
     h1 {
       font-size: 2rem;
       margin-bottom: 0.2rem;
     }
+
     p {
       margin-top: 0;
       font-style: italic;
       opacity: 0.8;
     }
+
     #orb {
       width: 120px;
       height: 120px;
@@ -36,29 +39,35 @@
       transition: all 0.4s ease-in-out;
       animation: pulseIdle 2s infinite;
     }
+
     #orb.listening {
       background: radial-gradient(circle, #ff7300, #a62c00);
       animation: pulseListening 1s infinite;
     }
+
     #orb.speaking {
       background: radial-gradient(circle, #00ff8c, #004d33);
       animation: pulseSpeaking 1s infinite;
     }
+
     @keyframes pulseIdle {
       0% { transform: scale(1); box-shadow: 0 0 20px rgba(0,255,255,0.2); }
       50% { transform: scale(1.05); box-shadow: 0 0 30px rgba(0,255,255,0.4); }
       100% { transform: scale(1); box-shadow: 0 0 20px rgba(0,255,255,0.2); }
     }
+
     @keyframes pulseListening {
       0% { transform: scale(1); box-shadow: 0 0 30px rgba(255,115,0,0.3); }
       50% { transform: scale(1.1); box-shadow: 0 0 40px rgba(255,115,0,0.5); }
       100% { transform: scale(1); box-shadow: 0 0 30px rgba(255,115,0,0.3); }
     }
+
     @keyframes pulseSpeaking {
       0% { transform: scale(1); box-shadow: 0 0 30px rgba(0,255,140,0.4); }
       50% { transform: scale(1.1); box-shadow: 0 0 40px rgba(0,255,140,0.6); }
       100% { transform: scale(1); box-shadow: 0 0 30px rgba(0,255,140,0.4); }
     }
+
     #debug {
       width: 90%;
       max-height: 250px;
@@ -74,7 +83,7 @@
   </style>
 </head>
 <body>
-  <h1>Welcome to Nag</h1>
+  <h1>Welcome to Nag< 99/h1>
   <p>The digital extension of Dinakara’s mind — therapist, companion, unfiltered mirror.</p>
   <div id="orb" class="idle"></div>
   <audio id="audio" hidden></audio>
@@ -100,50 +109,38 @@
       orb.classList.add('listening');
       logDebug("🎙️ Listening...");
 
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaRecorder = new MediaRecorder(stream);
-        audioChunks = [];
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorder = new MediaRecorder(stream);
+      audioChunks = [];
 
-        mediaRecorder.ondataavailable = event => audioChunks.push(event.data);
+      mediaRecorder.ondataavailable = event => audioChunks.push(event.data);
 
-        mediaRecorder.onstop = async () => {
-          orb.classList.remove('listening');
-          logDebug("📤 Uploading voice...");
+      mediaRecorder.onstop = async () => {
+        orb.classList.remove('listening');
+        logDebug("📤 Uploading voice...");
 
-          const blob = new Blob(audioChunks, { type: 'audio/webm' });
-          const formData = new FormData();
-          formData.append('file', blob, 'input.webm');
+        const blob = new Blob(audioChunks, { type: 'audio/mp3' });
+        const formData = new FormData();
+        formData.append('file', blob, 'input.mp3');
 
-          try {
-            const transcriptionResponse = await fetch('/transcribe', {
-              method: 'POST',
-              body: formData
-            });
-            const transcriptionData = await transcriptionResponse.json();
-            const message = transcriptionData.transcription;
-            logDebug("📝 Transcribed: " + message);
-            if (message && message.trim() !== "undefined") {
-              await sendToChat(message);
-            } else {
-              logDebug("⚠️ Transcription failed or returned empty message.");
-              orb.classList.add('idle');
-              setTimeout(recordAndSend, 2000);
-            }
-          } catch (error) {
-            logDebug("❌ Transcription error: " + error.message);
-            orb.classList.add('idle');
-            setTimeout(recordAndSend, 2000);
+        try {
+          const transcriptionResponse = await fetch('/transcribe', { method: 'POST', body: formData });
+          const transcriptionData = await transcriptionResponse.json();
+          console.log("Transcription full response:", transcriptionData);
+          const message = transcriptionData.transcription;
+          logDebug("📝 Transcribed: " + (message || "undefined"));
+          if (!message || message === "undefined") {
+            logDebug("⚠️ Transcription failed or returned empty message.");
+            return setTimeout(recordAndSend, 1000);
           }
-        };
+          await sendToChat(message);
+        } catch (error) {
+          logDebug("❌ Transcription error: " + error.message);
+        }
+      };
 
-        mediaRecorder.start();
-        setTimeout(() => mediaRecorder.stop(), 4000); // Listen for 4 seconds
-
-      } catch (err) {
-        logDebug("❌ Microphone error: " + err.message);
-        orb.classList.add('idle');
-      }
+      mediaRecorder.start();
+      setTimeout(() => mediaRecorder.stop(), 4000); // Listen for 4 seconds
     }
 
     async function sendToChat(message) {
@@ -159,7 +156,6 @@
 
         const data = await chatResponse.json();
         logDebug("🧠 Nag: " + data.response);
-
         if (data.audio_url) {
           audio.src = data.audio_url;
           audio.onloadeddata = () => {
@@ -171,19 +167,15 @@
           audio.onended = () => {
             orb.classList.remove('speaking');
             orb.classList.add('idle');
-            setTimeout(recordAndSend, 2000);
+            setTimeout(recordAndSend, 2000); // Wait 2s and re-listen
           };
         } else {
           logDebug("⚠️ No audio URL returned.");
-          orb.classList.remove('thinking');
-          orb.classList.add('idle');
-          setTimeout(recordAndSend, 2000);
         }
       } catch (err) {
         orb.classList.remove('thinking');
         orb.classList.add('idle');
         logDebug("❌ Chat error: " + err.message);
-        setTimeout(recordAndSend, 2000);
       }
     }
 
