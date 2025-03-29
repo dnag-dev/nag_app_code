@@ -175,11 +175,22 @@ async def transcribe(file: UploadFile = File(...)):
             await out.write(await file.read())
 
         with open(temp, "rb") as f:
-            transcript = client.audio.transcriptions.create(model="whisper-1", file=f)
+            # Force English language transcription
+            transcript = client.audio.transcriptions.create(
+                model="whisper-1", 
+                file=f,
+                language="en"  # Force English language detection
+            )
 
         os.remove(temp)
 
         text = getattr(transcript, "text", None) or "undefined"
+        
+        # Additional safety check to filter out known misidentifications
+        if "MBC 뉴스" in text or "이덕영입니다" in text:
+            logger.warning(f"Filtered out Korean misidentification: {text}")
+            text = "undefined"
+            
         return {"transcription": text.strip(), "request_id": request_id}
 
     except Exception as e:
