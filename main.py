@@ -1,9 +1,8 @@
 from fastapi import FastAPI, Request, UploadFile, File, HTTPException, BackgroundTasks
-from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
+from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-import openai
 import os
 from dotenv import load_dotenv
 import requests
@@ -11,14 +10,14 @@ import uuid
 import aiofiles
 import logging
 from datetime import datetime
-import shutil
-from typing import Optional, Dict
+from typing import Optional
 import hashlib
 import json
 from pathlib import Path
 import asyncio
 from functools import lru_cache
 import time
+import openai
 
 # Configure logging
 logging.basicConfig(
@@ -30,15 +29,18 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 # Environment variables
-openai.api_key = os.getenv("OPENAI_API_KEY")
+openai_api_key = os.getenv("OPENAI_API_KEY")
 elevenlabs_api_key = os.getenv("ELEVENLABS_API_KEY")
 dinakara_voice_id = os.getenv("DINAKARA_VOICE_ID")
-CACHE_DURATION = int(os.getenv("CACHE_DURATION", "3600"))  # 1 hour default
-MAX_AUDIO_AGE = int(os.getenv("MAX_AUDIO_AGE", "86400"))  # 24 hours default
+CACHE_DURATION = int(os.getenv("CACHE_DURATION", "3600"))
+MAX_AUDIO_AGE = int(os.getenv("MAX_AUDIO_AGE", "86400"))
 
 # Validate required environment variables
-if not all([openai.api_key, elevenlabs_api_key, dinakara_voice_id]):
+if not all([openai_api_key, elevenlabs_api_key, dinakara_voice_id]):
     raise ValueError("Missing required environment variables")
+
+# Initialize OpenAI client
+openai_client = openai.OpenAI(api_key=openai_api_key)
 
 app = FastAPI(
     title="Nag - Digital Therapist",
@@ -46,7 +48,6 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Configure CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -55,16 +56,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Add GZip compression
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
-# Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
-
-# Ensure static directory exists
 os.makedirs("static", exist_ok=True)
 
-# Cache for GPT responses
 @lru_cache(maxsize=1000)
 def get_cached_gpt_response(message_hash: str) -> Optional[str]:
     cache_file = Path("cache/gpt_responses.json")
@@ -97,8 +93,7 @@ def cleanup_old_audio_files(max_age_seconds: int = MAX_AUDIO_AGE):
         for filename in os.listdir("static"):
             if filename.startswith("audio_"):
                 filepath = os.path.join("static", filename)
-                file_time = os.path.getctime(filepath)
-                if current_time - file_time > max_age_seconds:
+                if current_time - os.path.getctime(filepath) > max_age_seconds:
                     os.remove(filepath)
                     logger.info(f"Cleaned up old audio file: {filename}")
     except Exception as e:
@@ -124,7 +119,6 @@ async def health_check():
 async def chat(request: Request, background_tasks: BackgroundTasks):
     request_id = str(uuid.uuid4())
     logger.info(f"Received chat request {request_id}")
-
     try:
         body = await request.json()
         user_input = body.get("message")
@@ -139,7 +133,7 @@ async def chat(request: Request, background_tasks: BackgroundTasks):
             logger.info(f"Using cached response for message hash: {message_hash}")
             message = cached_response
         else:
-            completion = openai.ChatCompletion.create(
+            completion = openai_client.chat.completions.create(
                 model="gpt-4",
                 messages=[{"role": "user", "content": user_input}]
             )
@@ -164,7 +158,6 @@ async def chat(request: Request, background_tasks: BackgroundTasks):
 async def transcribe(file: UploadFile = File(...)):
     request_id = str(uuid.uuid4())
     logger.info(f"Received transcription request {request_id}")
-
     try:
         if not file.filename.endswith((".mp3", ".wav", ".m4a", ".webm")):
             return JSONResponse(status_code=200, content={
@@ -180,15 +173,13 @@ async def transcribe(file: UploadFile = File(...)):
 
         try:
             with open(temp_file_path, "rb") as f:
-                logger.info(f"Sending file to Whisper for transcription: {temp_file_path}")
-                transcript = openai.Audio.transcribe(
+                transcript = openai_client.audio.transcriptions.create(
                     model="whisper-1",
                     file=f,
                     response_format="json"
                 )
 
-            logger.info(f"Transcription result for {request_id}: {transcript}")
-            transcript_text = transcript.get('text') or getattr(transcript, 'text', None) or "undefined"
+            transcript_text = getattr(transcript, 'text', None) or transcript.get('text') or "undefined"
 
             if not transcript_text or transcript_text.strip() == "":
                 logger.warning(f"Whisper transcription returned empty for {request_id}")
@@ -234,14 +225,13 @@ async def text_to_speech(text: str, request_id: str) -> str:
             }
         }
 
-        max_retries = 3
-        for attempt in range(max_retries):
+        for attempt in range(3):
             try:
                 response = requests.post(endpoint, json=payload, headers=headers)
                 response.raise_for_status()
                 break
             except requests.exceptions.RequestException as e:
-                if attempt == max_retries - 1:
+                if attempt == 2:
                     raise
                 logger.warning(f"ElevenLabs API attempt {attempt + 1} failed: {str(e)}")
                 await asyncio.sleep(1)
