@@ -35,6 +35,10 @@
       background: radial-gradient(circle, #00ff8c, #004d33);
       animation: pulseSpeaking 1s infinite;
     }
+    #orb.thinking {
+      background: radial-gradient(circle, #ffcc00, #cc7700);
+      animation: pulseThinking 1.5s infinite;
+    }
     @keyframes pulseIdle {
       0%, 100% { transform: scale(1); box-shadow: 0 0 20px rgba(0,255,255,0.2); }
       50% { transform: scale(1.05); box-shadow: 0 0 30px rgba(0,255,255,0.4); }
@@ -47,11 +51,21 @@
       0%, 100% { transform: scale(1); box-shadow: 0 0 30px rgba(0,255,140,0.4); }
       50% { transform: scale(1.1); box-shadow: 0 0 40px rgba(0,255,140,0.6); }
     }
+    @keyframes pulseThinking {
+      0%, 100% { transform: scale(1); box-shadow: 0 0 30px rgba(255,204,0,0.3); }
+      50% { transform: scale(1.08); box-shadow: 0 0 40px rgba(255,204,0,0.5); }
+    }
     #debug {
-      width: 90%; max-height: 250px; overflow-y: auto;
-      background: #111; border: 1px solid #333;
-      padding: 10px; font-family: monospace;
-      font-size: 0.85rem; color: #0f0; margin-top: 2rem;
+      width: 90%;
+      max-height: 250px;
+      overflow-y: auto;
+      background: #111;
+      border: 1px solid #333;
+      padding: 10px;
+      font-family: monospace;
+      font-size: 0.85rem;
+      color: #0f0;
+      margin-top: 2rem;
     }
     #toggleButton {
       padding: 10px 20px;
@@ -63,11 +77,15 @@
       border-radius: 10px;
       cursor: pointer;
     }
+    #toggleButton:disabled {
+      background-color: #555;
+      cursor: not-allowed;
+    }
   </style>
 </head>
 <body>
   <h1>Welcome to Nag</h1>
-  <p>The digital extension of Dinakara’s mind — therapist, companion, unfiltered mirror.</p>
+  <p>The digital extension of Dinakara's mind — therapist, companion, unfiltered mirror.</p>
   <div id="orb" class="idle"></div>
   <audio id="audio" hidden></audio>
   <button id="toggleButton">Start Conversation</button>
@@ -79,8 +97,18 @@
     const debugBox = document.getElementById("debug");
     const toggleButton = document.getElementById("toggleButton");
 
-    let mediaRecorder, audioChunks = [], stream;
-    let listening = false, interrupted = false;
+    let mediaRecorder;
+    let audioChunks = [];
+    let stream;
+    let listening = false;
+    let interrupted = false;
+
+    // Check if MediaRecorder is supported
+    if (!window.MediaRecorder) {
+      logDebug("⚠️ Your browser doesn't support MediaRecorder API!");
+      toggleButton.disabled = true;
+      toggleButton.textContent = "Not supported in this browser";
+    }
 
     function logDebug(msg) {
       const p = document.createElement("p");
@@ -91,38 +119,92 @@
 
     async function startListening() {
       try {
-        orb.classList.remove("idle", "speaking");
+        orb.classList.remove("idle", "speaking", "thinking");
         orb.classList.add("listening");
         logDebug("🎙️ Listening...");
+
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+
+        // Try different MIME types in order of preference
+        let mimeType = "";
+        const supportedTypes = [
+          "audio/webm",
+          "audio/mp4",
+          "audio/mpeg",
+          "audio/ogg;codecs=opus",
+          ""  // Empty string as last resort (browser default)
+        ];
+        
+        for (const type of supportedTypes) {
+          if (MediaRecorder.isTypeSupported(type)) {
+            mimeType = type;
+            logDebug(`Using audio format: ${mimeType || "browser default"}`);
+            break;
+          }
+        }
+        
+        // Create MediaRecorder with the supported type (or browser default if none found)
+        mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
         audioChunks = [];
 
         mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+
         mediaRecorder.onstop = async () => {
           if (interrupted) return;
           orb.classList.remove("listening");
-          const blob = new Blob(audioChunks, { type: "audio/webm" });
+          
+          // Use the same MIME type for the blob
+          const blob = new Blob(audioChunks, mimeType ? { type: mimeType } : {});
           const formData = new FormData();
-          formData.append("file", blob, "input.webm");
+          
+          // Determine appropriate file extension based on MIME type
+          let fileExt = "audio";
+          if (mimeType.includes("webm")) fileExt = "webm";
+          else if (mimeType.includes("mp4") || mimeType.includes("mpeg")) fileExt = "mp3";
+          else if (mimeType.includes("ogg")) fileExt = "ogg";
+          
+          formData.append("file", blob, `input.${fileExt}`);
 
           try {
             logDebug("📤 Uploading voice...");
-            const res = await fetch("/transcribe", { method: "POST", body: formData });
-            const data = await res.json();
+            const res = await fetch("/transcribe", { 
+              method: "POST", 
+              body: formData 
+            });
+
+            let data;
+            try {
+              data = await res.json();
+            } catch (jsonErr) {
+              logDebug("❌ JSON parse failed: " + jsonErr.message);
+              orb.classList.add("idle");
+              return;
+            }
+
             const message = (data.transcription || "").trim();
             logDebug("📝 Transcribed: " + message);
-            if (!message) return logDebug("⚠️ Empty transcription. Skipping.");
+
+            if (!message || message === "undefined") {
+              logDebug("⚠️ Empty message. Skipping...");
+              orb.classList.add("idle");
+              return;
+            }
+
             await sendToChat(message);
           } catch (e) {
             logDebug("❌ Transcription error: " + e.message);
+            orb.classList.add("idle");
           }
         };
 
         mediaRecorder.start();
-        setTimeout(() => mediaRecorder?.state === "recording" && mediaRecorder.stop(), 4000);
+        setTimeout(() => {
+          if (mediaRecorder && mediaRecorder.state !== "inactive") {
+            mediaRecorder.stop();
+          }
+        }, 4000);
       } catch (e) {
-        logDebug("🚫 Microphone access error: " + e.message);
+        logDebug("🚫 Mic access failed: " + e.message);
         orb.classList.remove("listening");
         orb.classList.add("idle");
       }
@@ -130,8 +212,12 @@
 
     async function stopListening() {
       interrupted = true;
-      if (mediaRecorder?.state !== "inactive") mediaRecorder.stop();
-      stream?.getTracks().forEach(t => t.stop());
+      if (mediaRecorder && mediaRecorder.state !== "inactive") {
+        mediaRecorder.stop();
+      }
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
       if (!audio.paused) {
         audio.pause();
         audio.currentTime = 0;
@@ -139,29 +225,53 @@
     }
 
     async function sendToChat(message) {
+      orb.classList.remove("listening", "idle", "speaking");
+      orb.classList.add("thinking");
+      logDebug("💬 Sending to Nag...");
+
       try {
-        orb.classList.add("thinking");
-        logDebug("💬 Sending to Nag...");
         const res = await fetch("/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ message })
         });
 
-        const data = await res.json();
-        orb.classList.remove("thinking");
-        logDebug("🧠 Nag: " + data.response);
-        if (!data.audio_url) return logDebug("⚠️ No audio returned.");
-
-        orb.classList.add("speaking");
-        audio.src = data.audio_url;
-        audio.load();
-        audio.play().catch(e => logDebug("🔇 Playback failed: " + e.message));
-        audio.onended = () => {
-          orb.classList.remove("speaking");
+        let data;
+        try {
+          data = await res.json();
+        } catch (jsonErr) {
+          logDebug("❌ Chat response JSON parse failed: " + jsonErr.message);
+          orb.classList.remove("thinking");
           orb.classList.add("idle");
-          if (!interrupted) startListening();
-        };
+          return;
+        }
+
+        logDebug("🧠 Nag: " + data.response);
+        orb.classList.remove("thinking");
+
+        if (data.audio_url) {
+          orb.classList.add("speaking");
+          audio.src = data.audio_url;
+          audio.load();
+          
+          try {
+            await audio.play();
+          } catch (e) {
+            logDebug("🔇 Audio play failed: " + e.message);
+            orb.classList.remove("speaking");
+            orb.classList.add("idle");
+            return;
+          }
+
+          audio.onended = () => {
+            orb.classList.remove("speaking");
+            orb.classList.add("idle");
+            if (!interrupted) startListening();
+          };
+        } else {
+          logDebug("⚠️ No audio returned.");
+          orb.classList.add("idle");
+        }
       } catch (e) {
         logDebug("❌ Chat error: " + e.message);
         orb.classList.remove("thinking");
@@ -174,7 +284,7 @@
         logDebug("⏹️ Stopping conversation...");
         toggleButton.textContent = "Resume Conversation";
         await stopListening();
-        orb.classList.remove("listening", "speaking");
+        orb.classList.remove("listening", "speaking", "thinking");
         orb.classList.add("idle");
       } else {
         logDebug("▶️ Starting conversation...");
@@ -184,6 +294,20 @@
       }
       listening = !listening;
     });
+
+    // Log initial browser capabilities
+    if (window.MediaRecorder) {
+      logDebug("✅ MediaRecorder is supported in this browser");
+      const supportedTypes = [
+        "audio/webm", 
+        "audio/mp4", 
+        "audio/mpeg", 
+        "audio/ogg;codecs=opus"
+      ];
+      for (const type of supportedTypes) {
+        logDebug(`${type}: ${MediaRecorder.isTypeSupported(type) ? '✅' : '❌'}`);
+      }
+    }
   </script>
 </body>
 </html>

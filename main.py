@@ -82,10 +82,23 @@ def cleanup_old_audio_files(max_age=86400):
 async def startup_event():
     logger.info("App startup.")
     logger.info(f"Static exists: {os.path.exists('static')}, cache exists: {os.path.exists('cache')}")
+    
+    # Create initial cache file if it doesn't exist
+    if not os.path.exists("cache/gpt_responses.json"):
+        with open("cache/gpt_responses.json", "w") as f:
+            f.write("{}")
+            logger.info("Created empty cache file")
 
 @app.get("/")
 async def index():
-    return FileResponse("static/index.html")
+    if os.path.exists("static/index.html"):
+        return FileResponse("static/index.html")
+    else:
+        logger.error("index.html not found in static directory")
+        return JSONResponse(
+            status_code=500, 
+            content={"error": "index.html not found. Please check your deployment."}
+        )
 
 @app.get("/health")
 async def health():
@@ -138,7 +151,26 @@ async def chat(request: Request, background_tasks: BackgroundTasks):
 async def transcribe(file: UploadFile = File(...)):
     request_id = str(uuid.uuid4())
     try:
-        temp = f"temp_{request_id}.mp3"
+        # Determine file extension based on content-type or filename
+        file_ext = os.path.splitext(file.filename)[1].lower() if file.filename else ""
+        
+        if not file_ext and file.content_type:
+            # Map MIME types to extensions
+            content_type_map = {
+                "audio/webm": ".webm",
+                "audio/mp4": ".mp4",
+                "audio/mpeg": ".mp3",
+                "audio/ogg": ".ogg"
+            }
+            file_ext = content_type_map.get(file.content_type, ".audio")
+        
+        # Default to .audio if we still don't have an extension
+        if not file_ext:
+            file_ext = ".audio"
+            
+        temp = f"temp_{request_id}{file_ext}"
+        logger.info(f"Processing audio file with type: {file.content_type}, extension: {file_ext}")
+        
         async with aiofiles.open(temp, "wb") as out:
             await out.write(await file.read())
 
@@ -151,7 +183,14 @@ async def transcribe(file: UploadFile = File(...)):
         return {"transcription": text.strip(), "request_id": request_id}
 
     except Exception as e:
-        logger.exception("Transcription failed")
+        logger.exception(f"Transcription failed: {str(e)}")
+        # Clean up temp file if it exists
+        if 'temp' in locals() and os.path.exists(temp):
+            try:
+                os.remove(temp)
+            except:
+                pass
+                
         return JSONResponse(status_code=500, content={
             "transcription": "undefined", "error": str(e), "request_id": request_id
         })
