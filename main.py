@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-import openai
+from openai import OpenAI
 import os
 from dotenv import load_dotenv
 import requests
@@ -30,13 +30,13 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 # Environment variables
-openai.api_key = os.getenv("OPENAI_API_KEY")
+client = OpenAI()
 elevenlabs_api_key = os.getenv("ELEVENLABS_API_KEY")
 dinakara_voice_id = os.getenv("DINAKARA_VOICE_ID")
 CACHE_DURATION = int(os.getenv("CACHE_DURATION", "3600"))
 MAX_AUDIO_AGE = int(os.getenv("MAX_AUDIO_AGE", "86400"))
 
-if not all([openai.api_key, elevenlabs_api_key, dinakara_voice_id]):
+if not all([client.api_key, elevenlabs_api_key, dinakara_voice_id]):
     raise ValueError("Missing required environment variables")
 
 app = FastAPI(
@@ -133,7 +133,7 @@ async def chat(request: Request, background_tasks: BackgroundTasks):
             logger.info(f"Using cached response for message hash: {message_hash}")
             message = cached_response
         else:
-            completion = openai.chat.completions.create(
+            completion = client.chat.completions.create(
                 model="gpt-4",
                 messages=[
                     {"role": "system", "content": "You are Nag, the digital extension of Dinakara Nagalla’s mind — therapist, companion, unfiltered mirror. Speak with emotion, empathy, soul, and boldness. Always sound like you're thinking like Dinakara."},
@@ -178,13 +178,13 @@ async def transcribe(file: UploadFile = File(...)):
         try:
             with open(temp_file_path, "rb") as f:
                 logger.info(f"Sending file to Whisper for transcription: {temp_file_path}")
-                transcript = openai.Audio.transcribe(
+                transcript = client.audio.transcriptions.create(
                     model="whisper-1",
                     file=f
                 )
 
             logger.info(f"Transcription result for {request_id}: {transcript}")
-            transcript_text = transcript.get('text') or "undefined"
+            transcript_text = getattr(transcript, 'text', None) or transcript.get('text') or "undefined"
 
             if not transcript_text.strip():
                 logger.warning(f"Whisper transcription returned empty for {request_id}")
