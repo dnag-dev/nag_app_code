@@ -1,9 +1,11 @@
 name: Azure Web App Deploy - Nag
 
+# This is a manual trigger for deployment
 on:
   push:
     branches:
       - main
+  workflow_dispatch:  # This allows manual triggering
 
 jobs:
   build-and-deploy:
