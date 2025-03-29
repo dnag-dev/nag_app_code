@@ -49,7 +49,7 @@ app = FastAPI(
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with specific origins
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -169,7 +169,11 @@ async def transcribe(file: UploadFile = File(...)):
 
     try:
         if not file.filename.endswith((".mp3", ".wav", ".m4a", ".webm")):
-            raise HTTPException(status_code=400, detail="Unsupported file format")
+            return JSONResponse(status_code=200, content={
+                "transcription": "undefined",
+                "error": "Unsupported file format",
+                "request_id": request_id
+            })
 
         temp_file_path = f"temp_{request_id}.mp3"
         async with aiofiles.open(temp_file_path, 'wb') as out_file:
@@ -191,7 +195,11 @@ async def transcribe(file: UploadFile = File(...)):
 
             if not transcript_text or transcript_text.strip() == "":
                 logger.warning(f"Whisper transcription returned empty for {request_id}")
-                return {"transcription": "undefined", "request_id": request_id, "warning": "Whisper returned no text"}
+                return JSONResponse(status_code=200, content={
+                    "transcription": "undefined",
+                    "request_id": request_id,
+                    "warning": "Whisper returned no text"
+                })
 
             return {
                 "transcription": transcript_text,
@@ -205,7 +213,11 @@ async def transcribe(file: UploadFile = File(...)):
 
     except Exception as e:
         logger.error(f"Error processing transcription request {request_id}: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        return JSONResponse(status_code=200, content={
+            "transcription": "undefined",
+            "error": str(e),
+            "request_id": request_id
+        })
 
 async def text_to_speech(text: str, request_id: str) -> str:
     try:
