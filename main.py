@@ -140,8 +140,7 @@ async def chat(request: Request, background_tasks: BackgroundTasks):
             logger.info(f"Using cached response for message hash: {message_hash}")
             message = cached_response
         else:
-            client = openai.OpenAI()
-            completion = client.chat.completions.create(
+            completion = openai.chat.completions.create(
                 model="gpt-4",
                 messages=[{"role": "user", "content": user_input}]
             )
@@ -181,10 +180,9 @@ async def transcribe(file: UploadFile = File(...)):
             await out_file.write(content)
 
         try:
-            client = openai.OpenAI()
             with open(temp_file_path, "rb") as f:
                 logger.info(f"Sending file to Whisper for transcription: {temp_file_path}")
-                transcript = client.audio.transcriptions.create(
+                transcript = openai.audio.transcriptions.create(
                     model="whisper-1",
                     file=f,
                     response_format="json"
