@@ -67,7 +67,6 @@ os.makedirs("static", exist_ok=True)
 # Cache for GPT responses
 @lru_cache(maxsize=1000)
 def get_cached_gpt_response(message_hash: str) -> Optional[str]:
-    """Get cached GPT response if available."""
     cache_file = Path("cache/gpt_responses.json")
     if cache_file.exists():
         try:
@@ -80,7 +79,6 @@ def get_cached_gpt_response(message_hash: str) -> Optional[str]:
     return None
 
 def cache_gpt_response(message_hash: str, response: str):
-    """Cache GPT response."""
     cache_file = Path("cache/gpt_responses.json")
     cache_file.parent.mkdir(exist_ok=True)
     try:
@@ -95,7 +93,6 @@ def cache_gpt_response(message_hash: str, response: str):
         logger.error(f"Error writing to cache: {str(e)}")
 
 def cleanup_old_audio_files(max_age_seconds: int = MAX_AUDIO_AGE):
-    """Clean up audio files older than max_age_seconds."""
     try:
         current_time = time.time()
         for filename in os.listdir("static"):
@@ -109,17 +106,14 @@ def cleanup_old_audio_files(max_age_seconds: int = MAX_AUDIO_AGE):
         logger.error(f"Error cleaning up audio files: {str(e)}")
 
 async def cleanup_background(background_tasks: BackgroundTasks):
-    """Schedule cleanup tasks."""
     background_tasks.add_task(cleanup_old_audio_files)
 
 @app.get("/")
 async def get_index():
-    """Serve the main application page."""
     return FileResponse("static/index.html")
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint."""
     return {
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
@@ -129,27 +123,23 @@ async def health_check():
 
 @app.post("/chat")
 async def chat(request: Request, background_tasks: BackgroundTasks):
-    """Handle chat messages and generate responses with audio."""
     request_id = str(uuid.uuid4())
     logger.info(f"Received chat request {request_id}")
-    
+
     try:
         body = await request.json()
         user_input = body.get("message")
-        
+
         if not user_input or not isinstance(user_input, str):
             raise HTTPException(status_code=400, detail="Invalid message format")
 
-        # Generate message hash for caching
         message_hash = hashlib.md5(user_input.encode()).hexdigest()
-        
-        # Check cache first
         cached_response = get_cached_gpt_response(message_hash)
+
         if cached_response:
             logger.info(f"Using cached response for message hash: {message_hash}")
             message = cached_response
         else:
-            # Get GPT response
             client = openai.OpenAI()
             completion = client.chat.completions.create(
                 model="gpt-4",
@@ -158,12 +148,9 @@ async def chat(request: Request, background_tasks: BackgroundTasks):
             message = completion.choices[0].message.content
             cache_gpt_response(message_hash, message)
 
-        # Generate audio
         audio_url = await text_to_speech(message, request_id)
-        
-        # Schedule cleanup
         await cleanup_background(background_tasks)
-        
+
         return {
             "response": message,
             "audio_url": audio_url,
@@ -177,12 +164,11 @@ async def chat(request: Request, background_tasks: BackgroundTasks):
 
 @app.post("/transcribe")
 async def transcribe(file: UploadFile = File(...)):
-    """Transcribe audio file to text."""
     request_id = str(uuid.uuid4())
     logger.info(f"Received transcription request {request_id}")
-    
+
     try:
-        if not file.filename.endswith(('.mp3', '.wav', '.m4a')):
+        if not file.filename.endswith((".mp3", ".wav", ".m4a", ".webm")):
             raise HTTPException(status_code=400, detail="Unsupported file format")
 
         temp_file_path = f"temp_{request_id}.mp3"
@@ -193,13 +179,27 @@ async def transcribe(file: UploadFile = File(...)):
         try:
             client = openai.OpenAI()
             with open(temp_file_path, "rb") as f:
+                logger.info(f"Sending file to Whisper for transcription: {temp_file_path}")
                 transcript = client.audio.transcriptions.create(
                     model="whisper-1",
-                    file=f
+                    file=f,
+                    response_format="json"
                 )
-            return {"transcription": transcript.text, "request_id": request_id}
+
+            logger.info(f"Transcription result for {request_id}: {transcript}")
+            transcript_text = getattr(transcript, 'text', None) or transcript.get('text') or "undefined"
+
+            if not transcript_text or transcript_text.strip() == "":
+                logger.warning(f"Whisper transcription returned empty for {request_id}")
+                return {"transcription": "undefined", "request_id": request_id, "warning": "Whisper returned no text"}
+
+            return {
+                "transcription": transcript_text,
+                "request_id": request_id,
+                "raw": transcript
+            }
+
         finally:
-            # Clean up temp file
             if os.path.exists(temp_file_path):
                 os.remove(temp_file_path)
 
@@ -208,7 +208,6 @@ async def transcribe(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 async def text_to_speech(text: str, request_id: str) -> str:
-    """Convert text to speech using ElevenLabs API."""
     try:
         output_path = f"static/audio_{request_id}.mp3"
         endpoint = f"https://api.elevenlabs.io/v1/text-to-speech/{dinakara_voice_id}"
@@ -226,7 +225,6 @@ async def text_to_speech(text: str, request_id: str) -> str:
             }
         }
 
-        # Add retry logic for ElevenLabs API
         max_retries = 3
         for attempt in range(max_retries):
             try:
@@ -237,14 +235,12 @@ async def text_to_speech(text: str, request_id: str) -> str:
                 if attempt == max_retries - 1:
                     raise
                 logger.warning(f"ElevenLabs API attempt {attempt + 1} failed: {str(e)}")
-                await asyncio.sleep(1)  # Wait before retrying
+                await asyncio.sleep(1)
 
         with open(output_path, "wb") as f:
             f.write(response.content)
-            
+
         logger.info(f"Generated audio file: {output_path}")
-        
-        # Return the URL without the leading slash to avoid double slashes
         return f"static/audio_{request_id}.mp3"
 
     except Exception as e:
