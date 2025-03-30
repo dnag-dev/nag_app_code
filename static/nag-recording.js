@@ -1,260 +1,349 @@
-// Nag Digital Twin v1.6.0 - Recording Functions
+// Nag Digital Twin v2.0.0 - Recording Functions
 
 // Setup volume visualization for the orb
 function setupVolumeVisualization(stream) {
-  try {
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    window.nagState.analyserNode = audioContext.createAnalyser();
-    const microphone = audioContext.createMediaStreamSource(stream);
-    
-    window.nagState.analyserNode.fftSize = 256;
-    window.nagState.analyserNode.smoothingTimeConstant = 0.8;
-    microphone.connect(window.nagState.analyserNode);
-    
-    const bufferLength = window.nagState.analyserNode.frequencyBinCount;
-    const dataArray = new Uint8Array(bufferLength);
-    
-    function updateVolume() {
-      if (!window.nagState.analyserNode || !window.nagState.listening) return;
+    try {
+      const volumeBar = window.nagElements.volumeBar;
       
-      window.nagState.analyserNode.getByteFrequencyData(dataArray);
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      window.nagState.analyserNode = audioContext.createAnalyser();
+      const microphone = audioContext.createMediaStreamSource(stream);
       
-      let sum = 0;
-      for (let i = 0; i < bufferLength; i++) {
-        sum += dataArray[i];
-      }
+      window.nagState.analyserNode.fftSize = 256;
+      window.nagState.analyserNode.smoothingTimeConstant = 0.8;
+      microphone.connect(window.nagState.analyserNode);
       
-      const average = sum / bufferLength;
-      const volume = Math.min(100, Math.max(0, average * 2.5));
+      const bufferLength = window.nagState.analyserNode.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
       
-      document.querySelector(".volume-bar").style.height = `${volume}%`;
-      
-      if (window.nagState.isWalkieTalkieMode && !window.nagState.walkieTalkieActive) {
-        requestAnimationFrame(updateVolume);
-        return;
-      }
-      
-      // Speech threshold - use higher threshold to avoid false activations
-      const SPEECH_THRESHOLD = window.nagState.isSafari ? 15 : 10; // Higher for Safari
-      const SILENCE_DELAY = window.nagState.isSafari ? 2000 : 1500; // Longer for Safari
-      
-      if (!window.nagState.isWalkieTalkieMode && volume < SPEECH_THRESHOLD) {
-        if (!window.nagState.silenceTimer) {
-          window.nagState.silenceTimer = setTimeout(() => {
-            // Only stop if we detected actual speech before
-            if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state === "recording" && window.nagState.speechDetected) {
-              logDebug("🔇 Silence detected, stopping recording");
-              stopRecording();
-            } else if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state === "recording") {
-              // If no speech was detected, restart recording
-              logDebug("🔇 No speech detected, restarting recording");
-              stopRecording();
+      function updateVolume() {
+        if (!window.nagState.analyserNode || !window.nagState.listening) return;
+        
+        window.nagState.analyserNode.getByteFrequencyData(dataArray);
+        
+        let sum = 0;
+        for (let i = 0; i < bufferLength; i++) {
+          sum += dataArray[i];
+        }
+        
+        const average = sum / bufferLength;
+        // Amplify the volume display for better visual feedback
+        const volume = Math.min(100, Math.max(0, average * 2.5));
+        
+        volumeBar.style.height = `${volume}%`;
+        
+        // Skip voice activity detection in walkie-talkie mode when not active
+        if (window.nagState.isWalkieTalkieMode && !window.nagState.walkieTalkieActive) {
+          requestAnimationFrame(updateVolume);
+          return;
+        }
+        
+        // Voice activity detection for continuous mode
+        if (!window.nagState.isWalkieTalkieMode) {
+          // Speech threshold - use higher threshold for Safari to avoid false activations
+          const SPEECH_THRESHOLD = window.nagState.isSafari ? 15 : 10;
+          // Silence duration before stopping - longer for Safari
+          const SILENCE_DELAY = window.nagState.isSafari ? 2000 : 1500;
+          
+          if (volume < SPEECH_THRESHOLD) {
+            if (!window.nagState.silenceTimer) {
+              window.nagState.silenceTimer = setTimeout(() => {
+                // Only stop if we detected actual speech before
+                if (window.nagState.mediaRecorder && 
+                    window.nagState.mediaRecorder.state === "recording" && 
+                    window.nagState.speechDetected) {
+                  logDebug("🔇 Silence detected, stopping recording");
+                  stopRecording();
+                } else if (window.nagState.mediaRecorder && 
+                           window.nagState.mediaRecorder.state === "recording") {
+                  // If no speech was detected at all, restart recording
+                  logDebug("🔇 No speech detected, restarting recording");
+                  stopRecording();
+                  // Give a short break before restarting
+                  setTimeout(() => {
+                    if (!window.nagState.interrupted && !window.nagState.isPaused) {
+                      startListening();
+                    }
+                  }, 500);
+                }
+                window.nagState.silenceTimer = null;
+              }, SILENCE_DELAY);
             }
-            window.nagState.silenceTimer = null;
-          }, SILENCE_DELAY);
+          } else {
+            // Reset the silence timer if we hear something
+            if (volume > SPEECH_THRESHOLD) {
+              window.nagState.speechDetected = true;
+            }
+            if (window.nagState.silenceTimer) {
+              clearTimeout(window.nagState.silenceTimer);
+              window.nagState.silenceTimer = null;
+            }
+          }
         }
-      } else {
-        // Reset the silence timer if we hear something
-        if (volume > SPEECH_THRESHOLD) {
-          window.nagState.speechDetected = true;
+        
+        requestAnimationFrame(updateVolume);
+      }
+      
+      requestAnimationFrame(updateVolume);
+    } catch (e) {
+      logDebug("⚠️ Volume visualization not available: " + e.message);
+    }
+  }
+  
+  // Setup walkie-talkie mode controls
+  function setupWalkieTalkieMode() {
+    const orb = window.nagElements.orb;
+    
+    // Mouse events for desktop
+    orb.addEventListener("mousedown", function(e) {
+      if (!window.nagState.isWalkieTalkieMode || !window.nagState.listening || 
+          window.nagState.isUploading || window.nagState.isPaused) return;
+      
+      window.nagState.walkieTalkieActive = true;
+      logDebug("🔊 Walkie-talkie active - speak now");
+      orb.classList.add("listening");
+      
+      if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state !== "recording") {
+        startRecording();
+      }
+    });
+    
+    // Touch events for mobile
+    orb.addEventListener("touchstart", function(e) {
+      if (!window.nagState.isWalkieTalkieMode || !window.nagState.listening || 
+          window.nagState.isUploading || window.nagState.isPaused) return;
+      e.preventDefault(); // Prevent default touch behavior
+      
+      window.nagState.walkieTalkieActive = true;
+      logDebug("🔊 Walkie-talkie active (touch) - speak now");
+      orb.classList.add("listening");
+      
+      if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state !== "recording") {
+        startRecording();
+      }
+    });
+    
+    // Handler for ending walkie-talkie mode
+    const endWalkieTalkie = function() {
+      if (!window.nagState.walkieTalkieActive) return;
+      
+      window.nagState.walkieTalkieActive = false;
+      logDebug("🔊 Walkie-talkie released");
+      
+      if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state === "recording") {
+        stopRecording();
+      }
+    };
+    
+    // Add all mouse/touch end events
+    orb.addEventListener("mouseup", endWalkieTalkie);
+    orb.addEventListener("mouseleave", endWalkieTalkie);
+    orb.addEventListener("touchend", function(e) {
+      e.preventDefault();
+      endWalkieTalkie();
+    });
+    orb.addEventListener("touchcancel", function(e) {
+      e.preventDefault();
+      endWalkieTalkie();
+    });
+  }
+  
+  // Start recording audio
+  function startRecording() {
+    if (!window.nagState.mediaRecorder || window.nagState.mediaRecorder.state === "recording") return;
+    
+    logDebug("🎙️ Starting recording...");
+    window.nagState.audioChunks = [];
+    window.nagState.speechDetected = false;
+    
+    try {
+      window.nagState.mediaRecorder.start();
+      
+      // Use different recording durations based on browser
+      // Safari needs shorter recordings for reliability
+      const maxRecordingTime = window.nagState.isSafari ? 10000 : 20000;
+      
+      // Set a maximum recording time to prevent hanging
+      window.nagState.longRecordingTimer = setTimeout(() => {
+        if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state === "recording") {
+          logDebug("⏱️ Maximum recording time reached");
+          stopRecording();
         }
+      }, maxRecordingTime);
+    } catch (e) {
+      logDebug("❌ Error starting recording: " + e.message);
+    }
+  }
+  
+  // Stop recording audio
+  function stopRecording() {
+    if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state === "recording") {
+      try {
+        window.nagState.mediaRecorder.stop();
+        logDebug("🎙️ Recording stopped");
+      } catch (e) {
+        logDebug("❌ Error stopping recording: " + e.message);
+        
+        // Force cleanup in case of error
+        if (window.nagState.stream) {
+          window.nagState.stream.getTracks().forEach(track => track.stop());
+        }
+        
+        // Restart process after error
+        if (!window.nagState.isWalkieTalkieMode && !window.nagState.isPaused && !window.nagState.interrupted) {
+          setTimeout(() => startListening(), 1000);
+        }
+      }
+    }
+  }
+  
+  // Start listening for audio
+  async function startListening() {
+    const orb = window.nagElements.orb;
+    const pauseBtn = window.nagElements.pauseBtn;
+    
+    if (window.nagState.isUploading || window.nagState.isPaused) return;
+    
+    try {
+      removePlayButton();
+      window.nagState.emptyTranscriptionCount = 0;
+      window.nagState.speechDetected = false;
+      
+      orb.classList.remove("idle", "speaking", "thinking");
+      orb.classList.add("listening");
+      
+      // Log detailed mode info
+      logDebug("🎙️ Listening... (" + 
+        (window.nagState.isWalkieTalkieMode ? "walkie-talkie mode" : "continuous mode") + 
+        (window.nagState.isSafari ? ", Safari optimized)" : ")"));
+  
+      // Get microphone access with optimal constraints for Safari
+      window.nagState.stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          // For Safari, specify these explicitly:
+          sampleRate: 44100,
+          channelCount: 1
+        },
+        video: false
+      });
+      
+      // Setup volume visualization
+      setupVolumeVisualization(window.nagState.stream);
+  
+      // Get the best MIME type for this browser
+      const mimeType = getBestAudioMimeType();
+      logDebug(`Using audio format: ${mimeType || "browser default"}`);
+      
+      // Create MediaRecorder with optimized settings
+      const recorderOptions = {
+        mimeType: mimeType || undefined,
+        audioBitsPerSecond: 128000  // Consistent bitrate
+      };
+      
+      // Create new recorder
+      try {
+        window.nagState.mediaRecorder = new MediaRecorder(window.nagState.stream, mimeType ? recorderOptions : {});
+      } catch (e) {
+        // If specified MIME type fails, try with default options
+        logDebug(`❌ MediaRecorder error with mime type: ${e.message}, trying default`);
+        window.nagState.mediaRecorder = new MediaRecorder(window.nagState.stream);
+      }
+      
+      window.nagState.audioChunks = [];
+  
+      // Handle data from recorder
+      window.nagState.mediaRecorder.ondataavailable = e => {
+        if (e.data && e.data.size > 0) {
+          window.nagState.audioChunks.push(e.data);
+        }
+      };
+  
+      // Handle recording stopped
+      window.nagState.mediaRecorder.onstop = async () => {
+        if (window.nagState.interrupted) return;
+        orb.classList.remove("listening");
+        
+        // Clear timers
+        if (window.nagState.longRecordingTimer) {
+          clearTimeout(window.nagState.longRecordingTimer);
+          window.nagState.longRecordingTimer = null;
+        }
+        
         if (window.nagState.silenceTimer) {
           clearTimeout(window.nagState.silenceTimer);
           window.nagState.silenceTimer = null;
         }
-      }
-      
-      requestAnimationFrame(updateVolume);
-    }
-    
-    requestAnimationFrame(updateVolume);
-  } catch (e) {
-    logDebug("⚠️ Volume visualization not available: " + e.message);
-  }
-}
-
-// Setup walkie-talkie mode
-function setupWalkieTalkieMode() {
-  const orb = document.getElementById("orb");
-  
-  orb.addEventListener("mousedown", function(e) {
-    if (!window.nagState.isWalkieTalkieMode || !window.nagState.listening || window.nagState.isUploading || window.nagState.isPaused) return;
-    
-    window.nagState.walkieTalkieActive = true;
-    logDebug("🔊 Walkie-talkie active - speak now");
-    orb.classList.add("listening");
-    
-    if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state !== "recording") {
-      startRecording();
-    }
-  });
-  
-  orb.addEventListener("touchstart", function(e) {
-    if (!window.nagState.isWalkieTalkieMode || !window.nagState.listening || window.nagState.isUploading || window.nagState.isPaused) return;
-    e.preventDefault();
-    
-    window.nagState.walkieTalkieActive = true;
-    logDebug("🔊 Walkie-talkie active - speak now");
-    orb.classList.add("listening");
-    
-    if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state !== "recording") {
-      startRecording();
-    }
-  });
-  
-  const endWalkieTalkie = function() {
-    if (!window.nagState.walkieTalkieActive) return;
-    
-    window.nagState.walkieTalkieActive = false;
-    logDebug("🔊 Walkie-talkie released");
-    
-    if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state === "recording") {
-      stopRecording();
-    }
-  };
-  
-  orb.addEventListener("mouseup", endWalkieTalkie);
-  orb.addEventListener("mouseleave", endWalkieTalkie);
-  orb.addEventListener("touchend", function(e) {
-    e.preventDefault();
-    endWalkieTalkie();
-  });
-  orb.addEventListener("touchcancel", function(e) {
-    e.preventDefault();
-    endWalkieTalkie();
-  });
-}
-
-// Start recording
-function startRecording() {
-  if (!window.nagState.mediaRecorder || window.nagState.mediaRecorder.state === "recording") return;
-  
-  window.nagState.audioChunks = [];
-  window.nagState.mediaRecorder.start();
-  
-  // Use different recording durations based on browser
-  const maxRecordingTime = window.nagState.isSafari ? 8000 : 20000; // Longer for Chrome
-  
-  window.nagState.longRecordingTimer = setTimeout(() => {
-    if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state === "recording") {
-      logDebug("⏱️ Maximum recording time reached");
-      stopRecording();
-    }
-  }, maxRecordingTime);
-}
-
-// Stop recording
-function stopRecording() {
-  if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state === "recording") {
-    window.nagState.mediaRecorder.stop();
-  }
-}
-
-// Start listening for audio
-async function startListening() {
-  if (window.nagState.isUploading || window.nagState.isPaused) return;
-  
-  try {
-    removePlayButton();
-    window.nagState.emptyTranscriptionCount = 0;
-    window.nagState.speechDetected = false;
-    
-    document.getElementById("orb").classList.remove("idle", "speaking", "thinking");
-    document.getElementById("orb").classList.add("listening");
-    logDebug("🎙️ Listening... (v1.6.0 - " + (window.nagState.isWalkieTalkieMode ? "walkie-talkie mode" : "continuous mode") + ")");
-
-    window.nagState.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    setupVolumeVisualization(window.nagState.stream);
-
-    let mimeType = "";
-    const supportedTypes = (window.nagState.isiOS || window.nagState.isSafari) 
-      ? ["audio/mp4", "audio/mpeg", "audio/webm", "audio/ogg;codecs=opus", ""]
-      : ["audio/webm", "audio/mp4", "audio/mpeg", "audio/ogg;codecs=opus", ""];
-    
-    for (const type of supportedTypes) {
-      if (MediaRecorder.isTypeSupported(type)) {
-        mimeType = type;
-        logDebug(`Using audio format: ${mimeType || "browser default"}`);
-        break;
-      }
-    }
-    
-    // Create MediaRecorder with optimized settings for Safari
-    const recorderOptions = {
-      mimeType: mimeType || undefined,
-      audioBitsPerSecond: 128000  // Consistent bitrate
-    };
-    
-    window.nagState.mediaRecorder = new MediaRecorder(window.nagState.stream, mimeType ? recorderOptions : {});
-    window.nagState.audioChunks = [];
-
-    window.nagState.mediaRecorder.ondataavailable = e => window.nagState.audioChunks.push(e.data);
-
-    window.nagState.mediaRecorder.onstop = async () => {
-      if (window.nagState.interrupted) return;
-      document.getElementById("orb").classList.remove("listening");
-      
-      if (window.nagState.longRecordingTimer) {
-        clearTimeout(window.nagState.longRecordingTimer);
-        window.nagState.longRecordingTimer = null;
-      }
-      
-      if (window.nagState.silenceTimer) {
-        clearTimeout(window.nagState.silenceTimer);
-        window.nagState.silenceTimer = null;
-      }
-      
-      if (window.nagState.audioChunks.length === 0) {
-        logDebug("⚠️ No audio recorded. Please try again.");
-        document.getElementById("orb").classList.add("idle");
-        if (!window.nagState.isWalkieTalkieMode && !window.nagState.isPaused) {
-          setTimeout(() => {
-            if (!window.nagState.interrupted && !window.nagState.isPaused) startListening();
-          }, 1000);
+        
+        // Check if we got any audio
+        if (window.nagState.audioChunks.length === 0) {
+          logDebug("⚠️ No audio recorded. Please try again.");
+          orb.classList.add("idle");
+          if (!window.nagState.isWalkieTalkieMode && !window.nagState.isPaused) {
+            setTimeout(() => {
+              if (!window.nagState.interrupted && !window.nagState.isPaused) startListening();
+            }, 1000);
+          }
+          return;
         }
-        return;
+        
+        // Process the recorded audio
+        await processAudioAndTranscribe();
+      };
+  
+      // Start recording immediately in continuous mode
+      if (!window.nagState.isWalkieTalkieMode) {
+        startRecording();
       }
       
-      await processAudioAndTranscribe();
-    };
-
-    if (!window.nagState.isWalkieTalkieMode) {
-      startRecording();
+      pauseBtn.disabled = false;
+      window.nagState.listening = true;
+    } catch (e) {
+      logDebug("🚫 Mic access failed: " + e.message);
+      orb.classList.remove("listening");
+      orb.classList.add("idle");
+      
+      // If permissions were denied, provide guidance
+      if (e.name === 'NotAllowedError') {
+        logDebug("🎤 Microphone access was denied. Please allow microphone access in your browser settings.");
+      }
+    }
+  }
+  
+  // Stop listening
+  async function stopListening() {
+    const orb = window.nagElements.orb;
+    const audio = window.nagElements.audio;
+    const volumeBar = window.nagElements.volumeBar;
+    const pauseBtn = window.nagElements.pauseBtn;
+    
+    window.nagState.interrupted = true;
+    
+    if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state === "recording") {
+      try {
+        window.nagState.mediaRecorder.stop();
+      } catch (e) {
+        logDebug(`Stop recording error: ${e.message}`);
+      }
     }
     
-    document.getElementById("pause-btn").disabled = false;
-  } catch (e) {
-    logDebug("🚫 Mic access failed: " + e.message);
-    document.getElementById("orb").classList.remove("listening");
-    document.getElementById("orb").classList.add("idle");
+    if (window.nagState.stream) {
+      window.nagState.stream.getTracks().forEach(track => track.stop());
+    }
+    
+    if (!audio.paused) {
+      audio.pause();
+      audio.currentTime = 0;
+    }
+    
+    if (window.nagState.analyserNode) {
+      window.nagState.analyserNode = null;
+    }
+    
+    volumeBar.style.height = "0%";
+    removePlayButton();
+    pauseBtn.disabled = true;
+    window.nagState.listening = false;
   }
-}
-
-// Stop listening
-async function stopListening() {
-  window.nagState.interrupted = true;
-  
-  if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state === "recording") {
-    window.nagState.mediaRecorder.stop();
-  }
-  
-  if (window.nagState.stream) {
-    window.nagState.stream.getTracks().forEach(track => track.stop());
-  }
-  
-  if (!document.getElementById("audio").paused) {
-    document.getElementById("audio").pause();
-    document.getElementById("audio").currentTime = 0;
-  }
-  
-  if (window.nagState.analyserNode) {
-    window.nagState.analyserNode = null;
-  }
-  
-  document.querySelector(".volume-bar").style.height = "0%";
-  removePlayButton();
-  document.getElementById("pause-btn").disabled = true;
-}
-
-// Load the transcription module
-loadScript('/static/nag-transcription.js');

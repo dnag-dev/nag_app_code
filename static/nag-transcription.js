@@ -1,195 +1,188 @@
-// Nag Digital Twin v1.6.0 - Core
-console.log("Nag Digital Twin v1.6.0 loaded");
+// Nag Digital Twin v2.0.0 - Transcription and Chat Functions
 
-// Import other modules
-document.addEventListener('DOMContentLoaded', function() {
-  // Load additional script files
-  loadScript('/static/nag-audio.js', function() {
-    loadScript('/static/nag-ui.js', function() {
-      loadScript('/static/nag-recording.js', function() {
-        loadScript('/static/nag-transcription.js', function() {
-          // Initialize after all scripts are loaded
-          initializeApp();
-        });
+// Process recorded audio and get transcription
+async function processAudioAndTranscribe() {
+    const orb = window.nagElements.orb;
+    
+    try {
+      // Get the appropriate MIME type for the blob
+      let mimeType = "";
+      if (window.nagState.mediaRecorder) {
+        mimeType = window.nagState.mediaRecorder.mimeType || "";
+      }
+      
+      // If we don't have a MIME type from the recorder, try to get it from the chunks
+      if (!mimeType && window.nagState.audioChunks.length > 0 && window.nagState.audioChunks[0].type) {
+        mimeType = window.nagState.audioChunks[0].type;
+      }
+      
+      // Create blob with appropriate type
+      const blob = new Blob(window.nagState.audioChunks, mimeType ? { type: mimeType } : {});
+      const formData = new FormData();
+      
+      // Determine file extension based on MIME type
+      let fileExt = "audio";
+      if (mimeType.includes("webm")) fileExt = "webm";
+      else if (mimeType.includes("mp4") || mimeType.includes("mpeg")) fileExt = "mp3";
+      else if (mimeType.includes("ogg")) fileExt = "ogg";
+      
+      // Add file to form data
+      formData.append("file", blob, `input.${fileExt}`);
+  
+      // Show uploading state
+      window.nagState.isUploading = true;
+      orb.classList.remove("listening");
+      orb.classList.add("thinking");
+      logDebug("📤 Uploading voice...");
+      
+      // Send to server for transcription
+      const res = await fetch("/transcribe", { 
+        method: "POST", 
+        body: formData 
       });
-    });
-  });
-});
-
-// Helper to load scripts sequentially
-function loadScript(url, callback) {
-  const script = document.createElement('script');
-  script.src = url;
-  script.onload = callback;
-  document.head.appendChild(script);
-}
-
-// Global state for sharing between modules
-window.nagState = {
-  mediaRecorder: null,
-  audioChunks: [],
-  stream: null,
-  listening: false,
-  interrupted: false,
-  currentPlayButton: null,
-  emptyTranscriptionCount: 0,
-  isUploading: false,
-  isPaused: false,
-  isWalkieTalkieMode: true,
-  analyserNode: null,
-  walkieTalkieActive: false,
-  silenceTimer: null,
-  longRecordingTimer: null,
-  lastTranscription: "",
-  consecutiveIdenticalTranscriptions: 0,
-  speechDetected: false,
-  audioUnlocked: false,
+      
+      window.nagState.isUploading = false;
   
-  // Browser detection
-  isiOS: /iPad|iPhone|iPod/.test(navigator.userAgent) || 
-    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1),
-  isSafari: /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
-};
-
-// Main initialization function (called after all scripts load)
-function initializeApp() {
-  setupUI();
-  setupWalkieTalkieMode();
-  setupInterruptionHandling();
+      // Process response
+      const rawText = await res.text();
+      let data;
+      try {
+        data = JSON.parse(rawText);
+      } catch (jsonErr) {
+        logDebug("❌ JSON parse failed: " + jsonErr.message);
+        logDebug("Raw response: " + rawText.substring(0, 100) + "...");
+        handleTranscriptionError();
+        return;
+      }
   
-  // Set up event listeners
-  setupEventListeners();
+      // Get transcribed message
+      const message = (data.transcription || "").trim();
+      logDebug("📝 Transcribed: " + (message || "No speech detected"));
   
-  // Log browser capabilities
-  logInfo();
-}
-
-// Setup interruption handling
-function setupInterruptionHandling() {
-  document.addEventListener('click', function(e) {
-    if (e.target === document.getElementById("toggle-btn") || 
-        e.target === document.getElementById("pause-btn") ||
-        e.target === document.getElementById("mode-toggle") ||
-        e.target === document.getElementById("orb") ||
-        (window.nagState.currentPlayButton && 
-         (e.target === window.nagState.currentPlayButton || 
-          window.nagState.currentPlayButton.contains(e.target)))) {
+      // Check for repeated identical transcriptions to avoid loops
+      if (message === window.nagState.lastTranscription) {
+        window.nagState.consecutiveIdenticalTranscriptions++;
+        
+        if (window.nagState.consecutiveIdenticalTranscriptions >= 2) {
+          logDebug("⚠️ Multiple identical transcriptions detected. Skipping to avoid loop.");
+          handleTranscriptionError();
+          
+          // Reset and wait longer before trying again
+          window.nagState.consecutiveIdenticalTranscriptions = 0;
+          window.nagState.lastTranscription = "";
+          return;
+        }
+      } else {
+        // Different transcription, reset counter
+        window.nagState.consecutiveIdenticalTranscriptions = 0;
+        window.nagState.lastTranscription = message;
+      }
+  
+      // Check for empty or short messages
+      const wordCount = message.split(/\s+/).filter(Boolean).length;
+      if (!message || message === "undefined" || wordCount <= 1) {
+        logDebug("⚠️ Too short or empty message. Continuing to listen...");
+        window.nagState.emptyTranscriptionCount++;
+        
+        if (window.nagState.emptyTranscriptionCount >= 3) {
+          window.nagState.emptyTranscriptionCount = 0;
+          await sendToChat("I didn't hear enough. Please try speaking a complete sentence.");
+        } else {
+          handleTranscriptionError();
+        }
+        return;
+      }
+  
+      // Reset empty count and send message to chat
+      window.nagState.emptyTranscriptionCount = 0;
+      await sendToChat(message);
+    } catch (e) {
+      window.nagState.isUploading = false;
+      logDebug("❌ Transcription error: " + e.message);
+      handleTranscriptionError();
+    }
+  }
+  
+  // Handle error when transcription fails
+  function handleTranscriptionError() {
+    const orb = window.nagElements.orb;
+    
+    orb.classList.remove("thinking");
+    orb.classList.add("idle");
+    if (!window.nagState.isWalkieTalkieMode && !window.nagState.isPaused) {
+      setTimeout(() => {
+        if (!window.nagState.interrupted && !window.nagState.isPaused) startListening();
+      }, 1000);
+    }
+  }
+  
+  // Send message to chat endpoint
+  async function sendToChat(message) {
+    const orb = window.nagElements.orb;
+    
+    if (window.nagState.isUploading || window.nagState.isPaused) {
+      logDebug("⏳ Still processing or paused, please wait...");
       return;
     }
     
-    if (document.getElementById("orb").classList.contains("speaking")) {
-      logDebug("🔄 Interrupting AI response...");
-      const audio = document.getElementById("audio");
-      audio.pause();
-      audio.currentTime = 0;
-      document.getElementById("orb").classList.remove("speaking");
-      document.getElementById("orb").classList.add("idle");
-      
-      if (!window.nagState.isWalkieTalkieMode && !window.nagState.isPaused) {
-        setTimeout(() => {
-          if (!window.nagState.interrupted && !window.nagState.isPaused) startListening();
-        }, 500);
-      }
-    }
-  });
-}
-
-// Setup all event listeners
-function setupEventListeners() {
-  // Toggle button
-  document.getElementById("toggle-btn").addEventListener("click", async () => {
-    await unlockAudio();
-    
-    if (window.nagState.listening) {
-      logDebug("⏹️ Stopping conversation...");
-      document.getElementById("toggle-btn").textContent = "Resume Conversation";
-      await stopListening();
-      document.getElementById("orb").classList.remove("listening", "speaking", "thinking");
-      document.getElementById("orb").classList.add("idle");
-      window.nagState.listening = false;
-      window.nagState.walkieTalkieActive = false;
-    } else {
-      logDebug("▶️ Starting conversation...");
-      document.getElementById("toggle-btn").textContent = "Stop Conversation";
-      window.nagState.interrupted = false;
-      window.nagState.isPaused = false;
-      document.getElementById("pause-btn").textContent = "Pause";
-      document.getElementById("pause-btn").classList.remove("paused");
-      await startListening();
-      window.nagState.listening = true;
-    }
-  });
+    removePlayButton();
+    orb.classList.remove("listening", "idle", "speaking");
+    orb.classList.add("thinking");
+    logDebug("💬 Sending to Nag...");
   
-  // Pause button
-  document.getElementById("pause-btn").addEventListener("click", function() {
-    if (!window.nagState.listening) return;
-    
-    if (window.nagState.isPaused) {
-      // Resume conversation
-      window.nagState.isPaused = false;
-      document.getElementById("pause-btn").textContent = "Pause";
-      document.getElementById("pause-btn").classList.remove("paused");
-      logDebug("▶️ Conversation resumed");
-      
-      if (!window.nagState.isWalkieTalkieMode) {
-        startListening();
-      }
-    } else {
-      // Pause conversation
-      window.nagState.isPaused = true;
-      document.getElementById("pause-btn").textContent = "Resume";
-      document.getElementById("pause-btn").classList.add("paused");
-      logDebug("⏸️ Conversation paused");
-      
-      if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state === "recording") {
-        window.nagState.mediaRecorder.stop();
-      }
-    }
-  });
+    try {
+      window.nagState.isUploading = true;
+      const res = await fetch("/chat", {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json; charset=utf-8",
+          "Accept": "application/json"
+        },
+        body: JSON.stringify({ message })
+      });
+      window.nagState.isUploading = false;
   
-  // Mode toggle
-  document.getElementById("mode-toggle").addEventListener("click", function() {
-    window.nagState.isWalkieTalkieMode = !window.nagState.isWalkieTalkieMode;
-    
-    if (window.nagState.isWalkieTalkieMode) {
-      document.getElementById("mode-toggle").textContent = "Switch to continuous mode";
-      document.getElementById("mode-hint").textContent = "Click & hold the orb to use walkie-talkie mode";
-      logDebug("🎤 Switched to walkie-talkie mode");
-      
-      if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state === "recording") {
-        window.nagState.mediaRecorder.stop();
+      if (!res.ok) {
+        throw new Error(`Server error: ${res.status} ${res.statusText}`);
       }
-    } else {
-      document.getElementById("mode-toggle").textContent = "Switch to walkie-talkie mode";
-      document.getElementById("mode-hint").textContent = "Nag will listen continuously for your voice";
-      logDebug("🎤 Switched to continuous mode");
+  
+      const rawText = await res.text();
       
-      if (window.nagState.listening && !window.nagState.isPaused) {
-        startListening();
+      let data;
+      try {
+        data = JSON.parse(rawText);
+      } catch (jsonErr) {
+        logDebug("❌ Chat response JSON parse failed: " + jsonErr.message);
+        logDebug("Raw response: " + rawText.substring(0, 150) + "...");
+        handleChatError();
+        return;
       }
+  
+      logDebug("🧠 Nag: " + data.response);
+      orb.classList.remove("thinking");
+  
+      if (data.audio_url) {
+        await playAudioResponse(data.audio_url);
+      } else {
+        logDebug("⚠️ No audio returned.");
+        handleChatError();
+      }
+    } catch (e) {
+      window.nagState.isUploading = false;
+      logDebug("❌ Chat error: " + e.message);
+      handleChatError();
     }
-  });
-}
-
-// Log browser capabilities
-function logInfo() {
-  if (window.MediaRecorder) {
-    logDebug("✅ MediaRecorder is supported in this browser");
-    logDebug(window.nagState.isiOS ? "📱 iOS device detected" : "💻 Desktop browser detected");
-    logDebug(window.nagState.isSafari ? "🧭 Safari browser detected" : "🌐 Non-Safari browser detected");
-    
-    const supportedTypes = [
-      "audio/webm", 
-      "audio/mp4", 
-      "audio/mpeg", 
-      "audio/ogg;codecs=opus"
-    ];
-    for (const type of supportedTypes) {
-      logDebug(`${type}: ${MediaRecorder.isTypeSupported(type) ? '✅' : '❌'}`);
-    }
-  } else {
-    logDebug("⚠️ MediaRecorder API not supported in this browser");
-    document.getElementById("toggle-btn").disabled = true;
-    document.getElementById("toggle-btn").textContent = "Not supported in this browser";
   }
-}
+  
+  // Handle error when chat fails
+  function handleChatError() {
+    const orb = window.nagElements.orb;
+    
+    orb.classList.remove("thinking");
+    orb.classList.add("idle");
+    if (!window.nagState.isWalkieTalkieMode && !window.nagState.isPaused) {
+      setTimeout(() => {
+        if (!window.nagState.interrupted && !window.nagState.isPaused) startListening();
+      }, 1000);
+    }
+  }
