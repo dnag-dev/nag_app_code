@@ -41,7 +41,7 @@ app = FastAPI(title="Nag - Digital Twin", version="2.0.0")
 app.add_middleware(
     CORSMiddleware, 
     allow_origins=["*"], 
-    allow_credentials=false, 
+    allow_credentials=True, 
     allow_methods=["*"], 
     allow_headers=["*"]
 )
@@ -295,8 +295,8 @@ async def chat(request: Request, background_tasks: BackgroundTasks):
 @app.post("/transcribe")
 async def transcribe(
     request: Request,
-    background_tasks: BackgroundTasks,
     file: UploadFile = File(...), 
+    background_tasks: BackgroundTasks,
     browser: Optional[str] = None
 ):
     """Transcribe an audio file to text."""
