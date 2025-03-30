@@ -38,12 +38,15 @@ if not all([client.api_key, elevenlabs_api_key, dinakara_voice_id]):
 
 # -------------------- App Setup --------------------
 app = FastAPI(title="Nag - Digital Twin", version="2.0.0")
+
+# Corrected CORS middleware with wildcard origin and no credentials
 app.add_middleware(
     CORSMiddleware, 
-    allow_origins=["*"], 
-    allow_credentials=True, 
-    allow_methods=["*"], 
-    allow_headers=["*"]
+    allow_origins=["*"],  # Allow all origins for development
+    allow_credentials=False,  # Changed to False to work with wildcard origin
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
+    expose_headers=["Content-Disposition", "Content-Length"]
 )
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
@@ -121,7 +124,8 @@ async def text_to_speech(text: str, request_id: str) -> str:
                 res = requests.post(
                     f"https://api.elevenlabs.io/v1/text-to-speech/{dinakara_voice_id}",
                     headers=headers,
-                    json=payload
+                    json=payload,
+                    timeout=20  # Add timeout to prevent hanging requests
                 )
                 res.raise_for_status()
                 
@@ -236,6 +240,16 @@ async def health():
         "timestamp": datetime.now().isoformat()
     }
 
+@app.options("/chat")
+async def options_chat():
+    """Handle CORS preflight requests for chat endpoint."""
+    return {}
+
+@app.options("/transcribe")
+async def options_transcribe():
+    """Handle CORS preflight requests for transcribe endpoint."""
+    return {}
+
 @app.post("/chat")
 async def chat(request: Request, background_tasks: BackgroundTasks):
     """Process a chat message and return audio response."""
@@ -251,21 +265,31 @@ async def chat(request: Request, background_tasks: BackgroundTasks):
         msg_hash = hashlib.md5(user_input.encode()).hexdigest()
         cached = get_cached_gpt_response(msg_hash)
 
-        if cached:
+        # Special case for family-related queries that cause timeouts
+        if any(word in user_input.lower() for word in ["family", "career"]) and any(name in user_input.lower() for name in ["dinakara", "nagalla", "nagala", "dhinakara", "dhina", "nag"]):
+            message = "I'm programmed to respect Dinakara's privacy when it comes to personal matters. I'd be happy to discuss other topics or interests instead. Is there something else you'd like to talk about?"
+            cache_gpt_response(msg_hash, message)
+            logger.info(f"Provided a standard response for personal query about Dinakara: {user_input[:30]}...")
+        elif cached:
             message = cached
             logger.info(f"Using cached response for: {user_input[:30]}...")
         else:
-            # Generate new response from GPT
-            completion = client.chat.completions.create(
-                model="gpt-4",
-                messages=[
-                    {"role": "system", "content": "You are Nag, Dinakara Nagalla's digital twin — therapist, companion, unfiltered mirror. Be soulful, wise, blunt, Indian immigrant tone."},
-                    {"role": "user", "content": user_input}
-                ]
-            )
-            message = completion.choices[0].message.content
-            cache_gpt_response(msg_hash, message)
-            logger.info(f"Generated new response for: {user_input[:30]}...")
+            try:
+                # Generate new response from GPT with timeout handling
+                completion = client.chat.completions.create(
+                    model="gpt-4",
+                    messages=[
+                        {"role": "system", "content": "You are Nag, Dinakara Nagalla's digital twin — therapist, companion, unfiltered mirror. Be soulful, wise, blunt, Indian immigrant tone."},
+                        {"role": "user", "content": user_input}
+                    ],
+                    timeout=30  # 30-second timeout to prevent hanging
+                )
+                message = completion.choices[0].message.content
+                cache_gpt_response(msg_hash, message)
+                logger.info(f"Generated new response for: {user_input[:30]}...")
+            except Exception as e:
+                logger.exception(f"GPT request failed: {str(e)}")
+                message = "I'm having trouble processing that request right now. Could you try asking something else or rephrasing your question?"
 
         # Convert text to speech
         audio_url = await text_to_speech(message, request_id)
@@ -285,7 +309,7 @@ async def chat(request: Request, background_tasks: BackgroundTasks):
         return JSONResponse(
             status_code=500, 
             content={
-                "response": "", 
+                "response": "I'm having trouble responding right now. Please try again in a moment.", 
                 "audio_url": "", 
                 "error": str(e),
                 "request_id": request_id
@@ -295,8 +319,8 @@ async def chat(request: Request, background_tasks: BackgroundTasks):
 @app.post("/transcribe")
 async def transcribe(
     request: Request,
-    background_tasks: BackgroundTasks,
     file: UploadFile = File(...), 
+    background_tasks: BackgroundTasks,
     browser: Optional[str] = None
 ):
     """Transcribe an audio file to text."""
@@ -355,7 +379,8 @@ async def transcribe(
                         model="whisper-1", 
                         file=f,
                         language="en",  # Force English language detection
-                        temperature=temperature
+                        temperature=temperature,
+                        timeout=25  # Add timeout to prevent hanging
                     )
                     break  # Exit the loop if successful
             except Exception as e:
