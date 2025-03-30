@@ -295,9 +295,9 @@ async def chat(request: Request, background_tasks: BackgroundTasks):
 @app.post("/transcribe")
 async def transcribe(
     request: Request,
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...), 
-    browser: Optional[str] = None, 
-    background_tasks: BackgroundTasks
+    browser: Optional[str] = None
 ):
     """Transcribe an audio file to text."""
     request_id = str(uuid.uuid4())
