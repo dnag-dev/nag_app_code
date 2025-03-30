@@ -1,6 +1,23 @@
 // Nag Digital Twin v2.0.0 - Core Module
 console.log("Nag Digital Twin v2.0.0 loading...");
 
+// Add global error handler
+window.addEventListener('error', function(event) {
+  console.error('Global error:', event.error);
+  
+  // Add visible error on screen
+  const errorDiv = document.createElement('div');
+  errorDiv.style.position = 'fixed';
+  errorDiv.style.top = '10px';
+  errorDiv.style.left = '10px';
+  errorDiv.style.backgroundColor = 'red';
+  errorDiv.style.color = 'white';
+  errorDiv.style.padding = '10px';
+  errorDiv.style.zIndex = '9999';
+  errorDiv.textContent = 'JavaScript Error: ' + (event.error ? event.error.message : 'Unknown error');
+  document.body.appendChild(errorDiv);
+});
+
 // Global state object for sharing between modules
 window.nagState = {
   // Recording state
