@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"name": "nag_app_code",
+			"path": "."
+		},
+		{
+			"name": "static",
+			"path": "../../../../../../Downloads/nag_app_code_updated/static"
+		}
+	],
+	"settings": {}
+}
