@@ -1,0 +1,45 @@
+{
+  "personal_info": {
+    "name": "Dinakara",
+    "email": "dlnagalla@Mac.attlocal.net",
+    "location": "",
+    "timezone": "",
+    "preferred_language": "en-US"
+  },
+  "preferences": {
+    "theme": "dark/light",
+    "notifications": {
+      "email": true,
+      "push": true,
+      "frequency": "daily"
+    },
+    "privacy": {
+      "share_reading_stats": true,
+      "share_recommendations": true
+    }
+  },
+  "reading_preferences": {
+    "favorite_genres": [],
+    "preferred_reading_time": "",
+    "reading_environment": "",
+    "reading_goals": {
+      "daily": 0,
+      "weekly": 0,
+      "monthly": 0,
+      "yearly": 0
+    }
+  },
+  "achievements": {
+    "total_books_read": 0,
+    "current_streak": 0,
+    "longest_streak": 0,
+    "badges": []
+  },
+  "connections": {
+    "following": [],
+    "followers": [],
+    "reading_groups": []
+  },
+  "last_updated": "",
+  "version": "1.0"
+} 

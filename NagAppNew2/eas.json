@@ -1,0 +1,27 @@
+{
+  "cli": {
+    "version": ">= 5.9.1",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "production": {
+      "node": "20.11.1",
+      "env": {
+        "EXPO_NO_DOTENV": "1"
+      },
+      "ios": {
+        "resourceClass": "m-medium",
+        "image": "latest"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "appleId": "dlnagalla@hotmail.com",
+        "ascAppId": "6474041512",
+        "appleTeamId": "27CNC3664F"
+      }
+    }
+  }
+} 

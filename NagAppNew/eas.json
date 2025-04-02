@@ -1,28 +1,16 @@
 {
   "cli": {
-    "version": ">= 5.9.1",
-    "appVersionSource": "local"
+    "version": ">= 5.9.1"
   },
   "build": {
-    "development": {
-      "developmentClient": true,
-      "distribution": "internal",
-      "ios": {
-        "simulator": false,
-        "resourceClass": "m-medium"
-      }
-    },
-    "preview": {
-      "distribution": "internal",
-      "ios": {
-        "simulator": false,
-        "resourceClass": "m-medium"
-      }
-    },
     "production": {
-      "distribution": "store",
+      "node": "20.11.1",
+      "env": {
+        "EXPO_NO_DOTENV": "1"
+      },
       "ios": {
-        "resourceClass": "m-medium"
+        "resourceClass": "m-medium",
+        "image": "latest"
       }
     }
   },
@@ -30,7 +18,7 @@
     "production": {
       "ios": {
         "appleId": "dlnagalla@hotmail.com",
-        "ascAppId": "6471234567",
+        "ascAppId": "647c8c1c-0c1c-4c1c-8c1c-0c1c4c1c8c1c",
         "appleTeamId": "27CNC3664F"
       }
     }

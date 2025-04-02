@@ -10,7 +10,7 @@ import requests
 import uuid
 import aiofiles
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 import hashlib
 import json
 import asyncio
@@ -18,11 +18,14 @@ from functools import lru_cache
 import time
 from typing import Union, Dict, Any, Optional
 from pydantic import BaseModel, EmailStr
+from enum import Enum
+from elevenlabs import generate, set_api_key
+import whisper
 
 # -------------------- Logging Setup --------------------
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 logger.info("Starting application...")
@@ -30,12 +33,27 @@ logger.info("Starting application...")
 # -------------------- Load Environment Variables --------------------
 load_dotenv()
 
-client = OpenAI()
-elevenlabs_api_key = os.getenv("ELEVENLABS_API_KEY")
-dinakara_voice_id = os.getenv("DINAKARA_VOICE_ID")
+# Validate required environment variables
+required_vars = [
+    "OPENAI_API_KEY",
+    "ELEVENLABS_API_KEY",
+    "DINAKARA_VOICE_ID"
+]
 
-if not all([client.api_key, elevenlabs_api_key, dinakara_voice_id]):
-    logger.warning("⚠️ Missing required environment variables. App may not function fully.")
+missing_vars = [var for var in required_vars if not os.getenv(var)]
+if missing_vars:
+    raise ValueError(f"Missing required environment variables: {', '.join(missing_vars)}")
+
+# Initialize OpenAI client
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+# Initialize Whisper model
+model = whisper.load_model("base")
+
+# Set up ElevenLabs
+elevenlabs_api_key = os.getenv("ELEVENLABS_API_KEY")
+set_api_key(elevenlabs_api_key)
+dinakara_voice_id = os.getenv("DINAKARA_VOICE_ID")
 
 # -------------------- Load Context Files --------------------
 try:
@@ -134,6 +152,23 @@ os.makedirs(DATA_BASE, exist_ok=True)
 # Mount static files directory
 app.mount("/static", StaticFiles(directory=STATIC_BASE), name="static")
 
+# Define allowed modes
+class ChatMode(str, Enum):
+    AUTHOR = "Author"
+    THERAPIST = "Therapist"
+
+# Rate limiting configuration
+RATE_LIMIT = {
+    "requests_per_minute": 60,
+    "window_seconds": 60
+}
+
+# Session configuration
+SESSION_TIMEOUT = timedelta(days=30)
+
+# Rate limiting store
+rate_limit_store: Dict[str, list] = {}
+
 @app.get("/")
 async def read_root():
     """Serve the main page."""
@@ -153,9 +188,24 @@ async def health_check():
 async def chat(request: ChatRequest):
     """Handle chat requests."""
     try:
+        # Rate limiting
+        client_id = request.email or "anonymous"
+        if not check_rate_limit(client_id):
+            raise HTTPException(
+                status_code=429,
+                detail="Rate limit exceeded. Please try again later."
+            )
+
         request_id = str(uuid.uuid4())
         logger.info(f"Received chat request: {request_id}")
         logger.info(f"Request details: {request.dict()}")
+
+        # Validate mode
+        if request.mode and request.mode not in [mode.value for mode in ChatMode]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid mode. Must be one of: {', '.join([mode.value for mode in ChatMode])}"
+            )
 
         # Check cache first
         cache_key = f"{request.message}_{request.mode}"
@@ -239,6 +289,7 @@ Respond in a {mode_style} tone, maintaining Dinakara's personality while focusin
 @app.post("/transcribe")
 async def transcribe_audio(file: UploadFile = File(...)):
     """Handle audio transcription requests."""
+    temp_path = None
     try:
         # Validate file size (max 25MB)
         if file.size > 25 * 1024 * 1024:
@@ -254,9 +305,6 @@ async def transcribe_audio(file: UploadFile = File(...)):
         result = model.transcribe(temp_path)
         transcription = result["text"]
 
-        # Clean up temp file
-        os.remove(temp_path)
-
         # Filter transcription
         filtered_text = filter_transcription(transcription)
 
@@ -265,6 +313,13 @@ async def transcribe_audio(file: UploadFile = File(...)):
     except Exception as e:
         logger.exception(f"Error processing transcription: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        # Clean up temp file
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except Exception as e:
+                logger.error(f"Error cleaning up temp file: {e}")
 
 # -------------------- Helper Functions --------------------
 def get_memory_path(email: str) -> str:
@@ -279,18 +334,28 @@ def load_user_memory(email: str) -> dict:
         memory_path = get_memory_path(email)
         if os.path.exists(memory_path):
             with open(memory_path, "r") as f:
-                return json.load(f)
+                data = json.load(f)
+                # Check session expiration
+                last_interaction = datetime.fromisoformat(data.get("last_interaction", "2000-01-01"))
+                if datetime.now() - last_interaction > SESSION_TIMEOUT:
+                    # Reset memory for expired session
+                    return {
+                        "interaction_history": [],
+                        "preferences": {},
+                        "last_interaction": datetime.now().isoformat()
+                    }
+                return data
         return {
             "interaction_history": [],
             "preferences": {},
-            "last_interaction": None
+            "last_interaction": datetime.now().isoformat()
         }
     except Exception as e:
         logger.error(f"Error loading user memory: {e}")
         return {
             "interaction_history": [],
             "preferences": {},
-            "last_interaction": None
+            "last_interaction": datetime.now().isoformat()
         }
 
 def save_user_memory(email: str, data: dict) -> None:
@@ -298,15 +363,38 @@ def save_user_memory(email: str, data: dict) -> None:
     try:
         memory_path = get_memory_path(email)
         os.makedirs(os.path.dirname(memory_path), exist_ok=True)
+        data["last_interaction"] = datetime.now().isoformat()
         with open(memory_path, "w") as f:
             json.dump(data, f, indent=2)
     except Exception as e:
         logger.error(f"Error saving user memory: {e}")
         raise
 
+def check_rate_limit(client_id: str) -> bool:
+    """Check if the client has exceeded rate limits."""
+    now = time.time()
+    if client_id not in rate_limit_store:
+        rate_limit_store[client_id] = []
+    
+    # Remove old timestamps
+    rate_limit_store[client_id] = [ts for ts in rate_limit_store[client_id] 
+                                 if now - ts < RATE_LIMIT["window_seconds"]]
+    
+    # Check if limit exceeded
+    if len(rate_limit_store[client_id]) >= RATE_LIMIT["requests_per_minute"]:
+        return False
+    
+    # Add current timestamp
+    rate_limit_store[client_id].append(now)
+    return True
+
 # -------------------- Text-to-Speech Function --------------------
 async def text_to_speech(text: str, request_id: str) -> str:
+    """Convert text to speech using ElevenLabs API."""
     try:
+        # Ensure directory exists
+        os.makedirs(STATIC_BASE, exist_ok=True)
+        
         file_path = os.path.join(STATIC_BASE, f"audio_{request_id}.mp3")
         headers = {
             "xi-api-key": elevenlabs_api_key,
@@ -346,4 +434,99 @@ async def text_to_speech(text: str, request_id: str) -> str:
 class ChatRequest(BaseModel):
     message: str
     email: Optional[EmailStr] = None
-    mode: Optional[str] = None
+    mode: Optional[ChatMode] = None
+
+# -------------------- Startup Event --------------------
+@app.on_event("startup")
+async def startup_event():
+    """Initialize the app."""
+    try:
+        # Try Azure path first
+        context_path = os.path.join(DATA_BASE, "dinakara_context_full.json")
+        memory_path = os.path.join(DATA_BASE, "book_memory.json")
+        
+        if os.path.exists(context_path):
+            with open(context_path, "r") as f:
+                dinakara_context = json.load(f)
+            logger.info("Loaded context from Azure path")
+        else:
+            # Fall back to local path
+            with open("data/dinakara_context_full.json", "r") as f:
+                dinakara_context = json.load(f)
+            logger.info("Loaded context from local path")
+            
+            # Copy to Azure path if we're on Azure
+            if os.path.exists("/home/LogFiles"):
+                os.makedirs(os.path.dirname(context_path), exist_ok=True)
+                with open(context_path, "w") as f:
+                    json.dump(dinakara_context, f, indent=2)
+                logger.info("Copied context to Azure path")
+                
+        if os.path.exists(memory_path):
+            with open(memory_path, "r") as f:
+                book_memory = json.load(f)
+            logger.info("Loaded memory from Azure path")
+        else:
+            # Fall back to local path
+            with open("data/book_memory.json", "r") as f:
+                book_memory = json.load(f)
+            logger.info("Loaded memory from local path")
+            
+            # Copy to Azure path if we're on Azure
+            if os.path.exists("/home/LogFiles"):
+                os.makedirs(os.path.dirname(memory_path), exist_ok=True)
+                with open(memory_path, "w") as f:
+                    json.dump(book_memory, f, indent=2)
+                logger.info("Copied memory to Azure path")
+                
+    except FileNotFoundError as e:
+        logger.error(f"Context file not found: {e}")
+        # Create default context if needed
+        dinakara_context = {
+            "personal_info": {
+                "name": "Dinakara Nagalla",
+                "role": "Author and Therapist",
+                "background": "Experienced in both writing and therapy"
+            },
+            "personality": {
+                "traits": ["empathetic", "knowledgeable", "professional"],
+                "style": "warm and supportive"
+            },
+            "knowledge_base": {
+                "expertise": ["grief counseling", "writing", "personal development"],
+                "specialties": ["grief support", "author guidance"]
+            }
+        }
+        book_memory = {
+            "current_book": None,
+            "completed_books": [],
+            "to_read": [],
+            "reading_stats": {
+                "total_books_read": 0,
+                "current_streak": 0,
+                "longest_streak": 0
+            },
+            "reading_goals": {
+                "daily_pages": 30,
+                "weekly_books": 1
+            }
+        }
+        
+        # Save to both local and Azure paths if available
+        for path in [context_path, "data/dinakara_context_full.json"]:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w") as f:
+                json.dump(dinakara_context, f, indent=2)
+                
+        for path in [memory_path, "data/book_memory.json"]:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w") as f:
+                json.dump(book_memory, f, indent=2)
+                
+        logger.info("Created default context and memory files")
+    except json.JSONDecodeError as e:
+        logger.error(f"Error parsing context file: {e}")
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error loading context: {e}")
+        raise

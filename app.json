@@ -1,0 +1,70 @@
+{
+  "expo": {
+    "name": "NagApp New",
+    "slug": "nagappnew",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.dnaginc.nagapp",
+      "buildNumber": "2",
+      "infoPlist": {
+        "NSCameraUsageDescription": "This app uses the camera to scan QR codes for voice chat functionality.",
+        "NSMicrophoneUsageDescription": "This app uses the microphone for voice chat functionality.",
+        "UIBackgroundModes": [
+          "remote-notification"
+        ]
+      },
+      "entitlements": {
+        "aps-environment": "production"
+      },
+      "appleTeamId": "3C7G3K8G28"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.dnaginc.nagapp",
+      "versionCode": 1,
+      "permissions": [
+        "CAMERA",
+        "RECORD_AUDIO"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera to scan QR codes for voice chat functionality."
+        }
+      ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone for voice chat functionality."
+        }
+      ]
+    ],
+    "owner": "dlnagalla",
+    "extra": {
+      "eas": {
+        "projectId": "14c43384-7182-4c56-8cf9-cd20b9222063"
+      }
+    }
+  }
+} 

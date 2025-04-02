@@ -1,0 +1,395 @@
+import { Platform, NativeModules } from 'react-native';
+import AudioRecorderPlayer from 'react-native-audio-recorder-player';
+import Voice from '@react-native-voice/voice';
+import Sound from 'react-native-sound';
+import { check, request, PERMISSIONS, RESULTS } from 'react-native-permissions';
+import RNFS from 'react-native-fs';
+import { AZURE_API_BASE_URL } from '../config/azureApi';
+
+// Enable playback in silence mode and configure Sound
+Sound.setCategory('Playback');
+Sound.setMode('Default');
+
+class AudioService {
+  constructor() {
+    this.audioRecorderPlayer = new AudioRecorderPlayer();
+    this.isRecording = false;
+    this.isVoiceRecognitionActive = false;
+    
+    this.isPlaying = false;
+    this.silenceTimeout = null;
+    this.silenceThreshold = -50; // dB threshold for silence detection
+    this.silenceDuration = 1500; // ms of silence before stopping
+    this.noiseReductionEnabled = true;
+    this.currentSound = null;
+
+    // Initialize callbacks
+    this.onTranscriptionStart = () => console.log('Transcription started');
+    this.onTranscriptionEnd = () => console.log('Transcription ended');
+    this.onTranscription = (text) => console.log('Transcription:', text);
+    this.onAudioLevel = null;
+
+    // Initialize Voice recognition handlers
+    Voice.onSpeechStart = this.handleSpeechStart.bind(this);
+    Voice.onSpeechEnd = this.handleSpeechEnd.bind(this);
+    Voice.onSpeechResults = this.handleSpeechResults.bind(this);
+    Voice.onSpeechError = this.handleSpeechError.bind(this);
+  }
+
+  async setupIOSAudioSession() {
+    if (Platform.OS === 'ios') {
+      try {
+        console.log('Setting up iOS audio session...');
+        const AudioSession = NativeModules?.AudioSession || NativeModules?.RNPermissions || {};
+        if (AudioSession?.setCategory) {
+          await AudioSession.setCategory('PlayAndRecord');
+          console.log('Audio session category set to PlayAndRecord');
+        } else {
+          console.warn('AudioSession.setCategory not available');
+        }
+      } catch (error) {
+        console.error('Failed to set AVAudioSession category:', error);
+        throw new Error(`Audio session setup failed: ${error.message}`);
+      }
+    }
+  }
+
+  async initializeComponents() {
+    try {
+      console.log('Initializing audio components...');
+
+      // Set up iOS audio session first
+      await this.setupIOSAudioSession();
+
+      // Check microphone permission
+      const permission = Platform.select({
+        ios: PERMISSIONS.IOS.MICROPHONE,
+        android: PERMISSIONS.ANDROID.RECORD_AUDIO,
+      });
+      
+      console.log('Checking microphone permission...');
+      const permissionStatus = await check(permission);
+      console.log('Permission status:', permissionStatus);
+      
+      if (permissionStatus !== RESULTS.GRANTED) {
+        console.log('Requesting microphone permission...');
+        const requestResult = await request(permission);
+        console.log('Permission request result:', requestResult);
+        
+        if (requestResult !== RESULTS.GRANTED) {
+          throw new Error('Microphone permission is required. Please grant it in your device settings.');
+        }
+      }
+
+      // Check if voice recognition is available
+      if (Platform.OS === 'ios') {
+        const isAvailable = await Voice.isAvailable();
+        console.log('Voice recognition available:', isAvailable);
+        
+        if (!isAvailable) {
+          throw new Error('Voice recognition is not available on this device');
+        }
+      }
+
+      // Configure audio settings with string literals
+      const audioSet = {
+        AudioEncoderAndroid: 'aac',
+        AudioSourceAndroid: 'mic',
+        AVEncoderAudioQualityKeyIOS: 'high',
+        AVNumberOfChannelsKeyIOS: 1,
+        AVFormatIDKeyIOS: 'aac',
+        AVSampleRateKeyIOS: 44100,
+        OutputFormatAndroid: 'aac_adts',
+      };
+
+      console.log('Audio configuration:', audioSet);
+      console.log('Audio components initialized successfully');
+    } catch (error) {
+      console.error('Error initializing audio components:', error);
+      throw error;
+    }
+  }
+
+  async startRecording() {
+    try {
+      if (this.isRecording) {
+        console.warn('Recording is already in progress');
+        return;
+      }
+
+      if (this.isVoiceRecognitionActive) {
+        console.warn('Voice recognition is active, stopping it first');
+        await this.stopVoiceRecognition();
+      }
+
+      console.log('Starting recording...');
+
+      // Generate recording path just before starting
+      const dirPath = Platform.select({
+        ios: RNFS.TemporaryDirectoryPath,
+        android: RNFS.CachesDirectoryPath,
+      });
+      
+      this.recordingPath = Platform.select({
+        ios: `${dirPath}/audio_${Date.now()}.m4a`,
+        android: `${dirPath}/audio_${Date.now()}.mp3`,
+      });
+
+      // Ensure the directory exists and is writable
+      console.log('Checking directory:', dirPath);
+      const dirExists = await RNFS.exists(dirPath);
+      if (!dirExists) {
+        console.log('Creating directory:', dirPath);
+        await RNFS.mkdir(dirPath, 'recursive');
+      }
+      
+      // Check if file exists and delete it if it does
+      const fileExists = await RNFS.exists(this.recordingPath);
+      if (fileExists) {
+        console.log('Deleting existing file:', this.recordingPath);
+        await RNFS.unlink(this.recordingPath);
+      }
+
+      // Use minimal configuration for iOS
+      const audioSet = Platform.select({
+        ios: {
+          AVFormatIDKeyIOS: 'aac',
+          AVSampleRateKeyIOS: 44100,
+          AVNumberOfChannelsKeyIOS: 1,
+        },
+        android: {
+          AudioEncoderAndroid: 'aac',
+          AudioSourceAndroid: 'mic',
+          OutputFormatAndroid: 'aac_adts',
+        },
+      });
+
+      console.log('Starting recorder with path:', this.recordingPath);
+      console.log('Using audio configuration:', audioSet);
+      
+      // Start recording with minimal configuration
+      await this.audioRecorderPlayer.startRecorder(this.recordingPath, audioSet);
+      this.isRecording = true;
+      console.log('Recording started successfully');
+      
+      // Start monitoring audio levels
+      this.audioRecorderPlayer.addRecordBackListener((e) => {
+        console.log('Recording status:', e);
+        if (this.onAudioLevel) {
+          this.onAudioLevel(e.currentMetering);
+        }
+      });
+    } catch (error) {
+      console.error('💥 Failed to start recorder:', error?.message || error);
+      this.isRecording = false;
+      if (error.message.includes('permission')) {
+        throw new Error('Microphone permission is required. Please enable it in your device settings.');
+      } else if (error.message.includes('audio session')) {
+        throw new Error('Audio session error. Please close other apps using the microphone.');
+      }
+      throw error;
+    }
+  }
+
+  async stopRecording() {
+    try {
+      if (!this.isRecording) {
+        console.warn('No recording in progress');
+        return null;
+      }
+
+      console.log('Stopping recording...');
+      await this.stopVoiceRecognition();
+      const audioPath = await this.audioRecorderPlayer.stopRecorder();
+      this.audioRecorderPlayer.removeRecordBackListener();
+      this.isRecording = false;
+      console.log('Recording stopped:', audioPath);
+      return audioPath;
+    } catch (error) {
+      console.error('Error stopping recording:', error);
+      throw error;
+    }
+  }
+
+  handleAudioLevel(level) {
+    if (this.onAudioLevel) {
+      this.onAudioLevel(level);
+    }
+  }
+
+  async startVoiceRecognition() {
+    try {
+      if (this.isRecording) {
+        console.warn('Recording is in progress, stopping it first');
+        await this.stopRecording();
+      }
+
+      console.log('Starting voice recognition...');
+      await Voice.start('en-US');
+      this.isVoiceRecognitionActive = true;
+      console.log('Voice recognition started successfully');
+    } catch (error) {
+      console.error('Error starting voice recognition:', error);
+      this.isVoiceRecognitionActive = false;
+      throw error;
+    }
+  }
+
+  async stopVoiceRecognition() {
+    try {
+      if (!this.isVoiceRecognitionActive) {
+        console.warn('Voice recognition is not active');
+        return;
+      }
+
+      console.log('Stopping voice recognition...');
+      await Voice.stop();
+      this.isVoiceRecognitionActive = false;
+      console.log('Voice recognition stopped successfully');
+    } catch (error) {
+      console.error('Error stopping voice recognition:', error);
+      throw error;
+    }
+  }
+
+  async playAudio(audioUrl) {
+    try {
+      if (!audioUrl) {
+        throw new Error('No audio URL provided');
+      }
+
+      const fullUrl = audioUrl.startsWith('http') 
+        ? audioUrl 
+        : `${AZURE_API_BASE_URL}/${audioUrl.replace(/^\/+/, '')}`;
+
+      console.log('Playing audio from URL:', fullUrl);
+      const tempFilePath = `${RNFS.CachesDirectoryPath}/temp_audio_${Date.now()}.mp3`;
+      console.log('Downloading audio to:', tempFilePath);
+
+      const downloadResult = await RNFS.downloadFile({
+        fromUrl: fullUrl,
+        toFile: tempFilePath,
+      }).promise;
+
+      if (downloadResult.statusCode !== 200) {
+        throw new Error(`Failed to download audio: ${downloadResult.statusCode}`);
+      }
+
+      console.log('Successfully downloaded audio file');
+      return new Promise((resolve, reject) => {
+        Sound.setCategory('Playback', true);
+        
+        console.log('Creating Sound instance with file:', tempFilePath);
+        const sound = new Sound(tempFilePath, '', (error) => {
+          if (error) {
+            console.error('Error loading audio:', error);
+            reject(error);
+            return;
+          }
+
+          console.log('Audio loaded successfully');
+          sound.setVolume(1.0);
+          sound.setNumberOfLoops(0);
+          
+          sound.play((success) => {
+            if (success) {
+              console.log('Audio played successfully');
+            } else {
+              console.log('Audio playback failed');
+            }
+            sound.release();
+            resolve(success);
+          });
+        });
+      });
+    } catch (error) {
+      console.error('Error in playAudio:', error);
+      throw error;
+    }
+  }
+
+  async stopAudio() {
+    try {
+      if (this.currentSound) {
+        this.currentSound.stop();
+        this.currentSound.release();
+        this.currentSound = null;
+      }
+      this.isPlaying = false;
+    } catch (error) {
+      console.error('Error stopping audio:', error);
+      throw error;
+    }
+  }
+
+  handleSpeechStart() {
+    console.log('Speech started');
+    this.onTranscriptionStart();
+  }
+
+  handleSpeechEnd() {
+    console.log('Speech ended');
+    this.onTranscriptionEnd();
+  }
+
+  handleSpeechResults(e) {
+    if (e.value && e.value[0]) {
+      console.log('Speech results:', e.value[0]);
+      this.onTranscription(e.value[0]);
+    }
+  }
+
+  handleSpeechError(e) {
+    if (e.error?.code !== 'recognition_fail') {
+      console.error('Voice recognition error:', e.error?.message || 'Unknown error');
+      throw new Error(`Voice recognition error: ${e.error?.message || 'Unknown error'}`);
+    }
+  }
+
+  async destroy() {
+    try {
+      await this.stopAudio();
+      await this.stopVoiceRecognition();
+      await this.audioRecorderPlayer.removeRecordBackListener();
+      await this.audioRecorderPlayer.removePlayBackListener();
+      Voice.destroy().then(Voice.removeAllListeners);
+    } catch (error) {
+      console.error('Error destroying audio service:', error);
+      throw error;
+    }
+  }
+
+  startAudioLevelMonitoring() {
+    this.audioLevelInterval = setInterval(() => {
+      this.audioRecorderPlayer.getAudioLevel().then(level => {
+        this.handleAudioLevel(level);
+      });
+    }, 100);
+  }
+
+  stopAudioLevelMonitoring() {
+    if (this.audioLevelInterval) {
+      clearInterval(this.audioLevelInterval);
+      this.audioLevelInterval = null;
+    }
+  }
+
+  // Add methods to set callbacks
+  setTranscriptionStartCallback(callback) {
+    this.onTranscriptionStart = callback;
+  }
+
+  setTranscriptionEndCallback(callback) {
+    this.onTranscriptionEnd = callback;
+  }
+
+  setTranscriptionCallback(callback) {
+    this.onTranscription = callback;
+  }
+
+  setAudioLevelCallback(callback) {
+    this.onAudioLevel = callback;
+  }
+}
+
+export default new AudioService(); 
