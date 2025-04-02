@@ -12,8 +12,8 @@
 	<string>Apple Development</string>
 	<key>provisioningProfiles</key>
 	<dict>
-		<key>com.dlnagalla.NagAppNew</key>
-		<string>iOS Team Provisioning Profile: com.dlnagalla.NagAppNew</string>
+		<key>org.reactjs.native.example.NagAppNewPure</key>
+		<string>iOS Team Provisioning Profile: org.reactjs.native.example.NagAppNewPure</string>
 	</dict>
 </dict>
 </plist>

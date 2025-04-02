@@ -19,8 +19,19 @@ import time
 from typing import Union, Dict, Any, Optional
 from pydantic import BaseModel, EmailStr
 from enum import Enum
-from elevenlabs import generate, set_api_key
 import whisper
+
+# -------------------- Request Models --------------------
+class ChatMode(str, Enum):
+    CHAT = "chat"
+    BOOK = "book"
+    VOICE = "voice"
+
+class ChatRequest(BaseModel):
+    text: str
+    mode: ChatMode = ChatMode.CHAT
+    email: Optional[EmailStr] = None
+    request_id: Optional[str] = None
 
 # -------------------- Logging Setup --------------------
 logging.basicConfig(
@@ -33,27 +44,17 @@ logger.info("Starting application...")
 # -------------------- Load Environment Variables --------------------
 load_dotenv()
 
-# Validate required environment variables
-required_vars = [
-    "OPENAI_API_KEY",
-    "ELEVENLABS_API_KEY",
-    "DINAKARA_VOICE_ID"
-]
-
-missing_vars = [var for var in required_vars if not os.getenv(var)]
-if missing_vars:
-    raise ValueError(f"Missing required environment variables: {', '.join(missing_vars)}")
+# Initialize API keys
+openai_api_key = os.getenv("OPENAI_API_KEY")
+elevenlabs_api_key = os.getenv("ELEVENLABS_API_KEY")
+dinakara_voice_id = os.getenv("DINAKARA_VOICE_ID")
+azure_api_url = os.getenv("AZURE_API_URL")
 
 # Initialize OpenAI client
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = OpenAI(api_key=openai_api_key)
 
 # Initialize Whisper model
 model = whisper.load_model("base")
-
-# Set up ElevenLabs
-elevenlabs_api_key = os.getenv("ELEVENLABS_API_KEY")
-set_api_key(elevenlabs_api_key)
-dinakara_voice_id = os.getenv("DINAKARA_VOICE_ID")
 
 # -------------------- Load Context Files --------------------
 try:
@@ -152,11 +153,6 @@ os.makedirs(DATA_BASE, exist_ok=True)
 # Mount static files directory
 app.mount("/static", StaticFiles(directory=STATIC_BASE), name="static")
 
-# Define allowed modes
-class ChatMode(str, Enum):
-    AUTHOR = "Author"
-    THERAPIST = "Therapist"
-
 # Rate limiting configuration
 RATE_LIMIT = {
     "requests_per_minute": 60,
@@ -208,7 +204,7 @@ async def chat(request: ChatRequest):
             )
 
         # Check cache first
-        cache_key = f"{request.message}_{request.mode}"
+        cache_key = f"{request.text}_{request.mode}"
         cached_response = await get_cached_response(cache_key)
         if cached_response:
             logger.info(f"Cache hit for request: {request_id}")
@@ -246,7 +242,7 @@ Respond in a {mode_style} tone, maintaining Dinakara's personality while focusin
             model="gpt-4",
             messages=[
                 {"role": "system", "content": system_message},
-                {"role": "user", "content": request.message}
+                {"role": "user", "content": request.text}
             ],
             temperature=0.7,
             max_tokens=1000
@@ -262,7 +258,7 @@ Respond in a {mode_style} tone, maintaining Dinakara's personality while focusin
         # Update user memory
         user_memory['interaction_history'].append({
             'timestamp': datetime.now().isoformat(),
-            'message': request.message,
+            'message': request.text,
             'response': response_text,
             'mode': request.mode
         })
@@ -390,51 +386,45 @@ def check_rate_limit(client_id: str) -> bool:
 
 # -------------------- Text-to-Speech Function --------------------
 async def text_to_speech(text: str, request_id: str) -> str:
-    """Convert text to speech using ElevenLabs API."""
+    """Convert text to speech using ElevenLabs API"""
     try:
-        # Ensure directory exists
-        os.makedirs(STATIC_BASE, exist_ok=True)
+        # Ensure the audio directory exists
+        audio_dir = "audio"
+        os.makedirs(audio_dir, exist_ok=True)
         
-        file_path = os.path.join(STATIC_BASE, f"audio_{request_id}.mp3")
+        # Generate audio file path
+        audio_file = os.path.join(audio_dir, f"{request_id}.mp3")
+        
+        # Set up the API request
         headers = {
-            "xi-api-key": elevenlabs_api_key,
+            "xi-api-key": os.getenv("ELEVENLABS_API_KEY"),
             "Content-Type": "application/json"
         }
+        
         payload = {
             "text": text,
-            "voice_settings": {"stability": 0.45, "similarity_boost": 0.85}
+            "voice_settings": {
+                "stability": 0.5,
+                "similarity_boost": 0.75
+            }
         }
-
-        for attempt in range(3):
-            try:
-                res = requests.post(
-                    f"https://api.elevenlabs.io/v1/text-to-speech/{dinakara_voice_id}",
-                    headers=headers,
-                    json=payload
-                )
-                res.raise_for_status()
-
-                with open(file_path, "wb") as f:
-                    f.write(res.content)
-
-                logger.info(f"Voice generation successful: {request_id}")
-                return f"/static/audio_{request_id}.mp3"
-
-            except requests.RequestException as e:
-                logger.warning(f"Voice gen failed attempt {attempt+1}: {e}")
-                await asyncio.sleep(1)
-
-        raise RuntimeError("Voice generation failed after retries")
-
+        
+        # Make the API request
+        response = requests.post(
+            f"https://api.elevenlabs.io/v1/text-to-speech/{os.getenv('DINAKARA_VOICE_ID')}",
+            headers=headers,
+            json=payload
+        )
+        response.raise_for_status()
+        
+        # Save the audio file
+        with open(audio_file, "wb") as f:
+            f.write(response.content)
+        
+        return audio_file
     except Exception as e:
-        logger.exception("Voice generation error")
-        raise HTTPException(status_code=500, detail="Voice generation failed")
-
-# Add request model
-class ChatRequest(BaseModel):
-    message: str
-    email: Optional[EmailStr] = None
-    mode: Optional[ChatMode] = None
+        logger.error(f"Error in text_to_speech: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # -------------------- Startup Event --------------------
 @app.on_event("startup")

@@ -1,0 +1,24 @@
+{
+    "deploy": {
+        "include": [
+            "main.py",
+            "requirements.txt",
+            "deploy.sh",
+            "data/",
+            "audio/",
+            "static/"
+        ],
+        "exclude": [
+            "NagAppNew/",
+            "NagAppNew2/",
+            "NagAppNewPure/",
+            "NagAppDev/",
+            "node_modules/",
+            ".git/",
+            ".env",
+            "*.pyc",
+            "__pycache__/",
+            "*.log"
+        ]
+    }
+} 

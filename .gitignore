@@ -71,3 +71,28 @@ static/audio/
 static/cache/
 *.log
 NAG_AI_1.0_Stable.zip
+
+# Exclude development and test directories from deployment
+NagAppNew/
+NagAppNew2/
+NagAppNewPure/
+NagAppDev/
+
+# Virtual Environment
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Project specific
+audio/*
+!audio/.gitkeep
+static/*
+!static/.gitkeep
+data/*.json
+!data/.gitkeep
+
+# Whisper model files
+models/*
+!models/.gitkeep
