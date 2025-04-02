@@ -119,66 +119,152 @@ app.add_middleware(
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # -------------------- Directory Setup --------------------
-# Define base paths for different environments
+# Define base paths based on environment
 STATIC_BASE = "/home/LogFiles/static" if os.path.exists("/home/LogFiles") else "static"
 CACHE_BASE = "/home/LogFiles/cache" if os.path.exists("/home/LogFiles") else "cache"
 MEMORY_BASE = "/home/LogFiles/memory" if os.path.exists("/home/LogFiles") else "memory"
+DATA_BASE = "/home/LogFiles/data" if os.path.exists("/home/LogFiles") else "data"
 
 # Create necessary directories
-for directory in [STATIC_BASE, CACHE_BASE, MEMORY_BASE]:
-    os.makedirs(directory, exist_ok=True)
+os.makedirs(STATIC_BASE, exist_ok=True)
+os.makedirs(CACHE_BASE, exist_ok=True)
+os.makedirs(MEMORY_BASE, exist_ok=True)
+os.makedirs(DATA_BASE, exist_ok=True)
 
 # Mount static files directory
 app.mount("/static", StaticFiles(directory=STATIC_BASE), name="static")
 
+# Load context files
+try:
+    # Try Azure path first
+    context_path = os.path.join(DATA_BASE, "dinakara_context_full.json")
+    memory_path = os.path.join(DATA_BASE, "book_memory.json")
+    
+    if os.path.exists(context_path):
+        with open(context_path, "r") as f:
+            dinakara_context = json.load(f)
+        logger.info("Loaded context from Azure path")
+    else:
+        # Fall back to local path
+        with open("data/dinakara_context_full.json", "r") as f:
+            dinakara_context = json.load(f)
+        logger.info("Loaded context from local path")
+        
+        # Copy to Azure path if we're on Azure
+        if os.path.exists("/home/LogFiles"):
+            os.makedirs(os.path.dirname(context_path), exist_ok=True)
+            with open(context_path, "w") as f:
+                json.dump(dinakara_context, f, indent=2)
+            logger.info("Copied context to Azure path")
+            
+    if os.path.exists(memory_path):
+        with open(memory_path, "r") as f:
+            book_memory = json.load(f)
+        logger.info("Loaded memory from Azure path")
+    else:
+        # Fall back to local path
+        with open("data/book_memory.json", "r") as f:
+            book_memory = json.load(f)
+        logger.info("Loaded memory from local path")
+        
+        # Copy to Azure path if we're on Azure
+        if os.path.exists("/home/LogFiles"):
+            os.makedirs(os.path.dirname(memory_path), exist_ok=True)
+            with open(memory_path, "w") as f:
+                json.dump(book_memory, f, indent=2)
+            logger.info("Copied memory to Azure path")
+            
+except FileNotFoundError as e:
+    logger.error(f"Context file not found: {e}")
+    # Create default context if needed
+    dinakara_context = {
+        "personal_info": {
+            "name": "Dinakara Nagalla",
+            "role": "Author and Therapist",
+            "background": "Experienced in both writing and therapy"
+        },
+        "personality": {
+            "traits": ["empathetic", "knowledgeable", "professional"],
+            "style": "warm and supportive"
+        },
+        "knowledge_base": {
+            "expertise": ["grief counseling", "writing", "personal development"],
+            "specialties": ["grief support", "author guidance"]
+        }
+    }
+    book_memory = {
+        "current_book": None,
+        "completed_books": [],
+        "to_read": [],
+        "reading_stats": {
+            "total_books_read": 0,
+            "current_streak": 0,
+            "longest_streak": 0
+        },
+        "reading_goals": {
+            "daily_pages": 30,
+            "weekly_books": 1
+        }
+    }
+    
+    # Save to both local and Azure paths if available
+    for path in [context_path, "data/dinakara_context_full.json"]:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as f:
+            json.dump(dinakara_context, f, indent=2)
+            
+    for path in [memory_path, "data/book_memory.json"]:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as f:
+            json.dump(book_memory, f, indent=2)
+            
+    logger.info("Created default context and memory files")
+except json.JSONDecodeError as e:
+    logger.error(f"Error parsing context file: {e}")
+    raise
+except Exception as e:
+    logger.error(f"Unexpected error loading context: {e}")
+    raise
+
+# Get voice ID from context
+dinakara_voice_id = dinakara_context.get("voice_id", "21m00Tcm4TlvDq8ikWAM")
+
 # -------------------- Helper Functions --------------------
 def get_memory_path(email: str) -> str:
     """Get the appropriate memory file path based on environment."""
-    # Try Azure path first
-    azure_path = f"/home/LogFiles/memory/{email}.json"
-    local_path = f"memory/{email}.json"
-    
-    if os.path.exists(azure_path):
-        return azure_path
-    return local_path
+    if os.path.exists("/home/LogFiles"):
+        return os.path.join(DATA_BASE, f"{email}.json")
+    return os.path.join("memory", f"{email}.json")
 
 def load_user_memory(email: str) -> dict:
-    """Load user memory from file, creating default if not exists."""
+    """Load user memory from appropriate path."""
     try:
-        filepath = get_memory_path(email)
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        
-        if os.path.exists(filepath):
-            with open(filepath, "r") as f:
+        memory_path = get_memory_path(email)
+        if os.path.exists(memory_path):
+            with open(memory_path, "r") as f:
                 return json.load(f)
-        
-        # Create default memory structure
-        default_memory = {
-            "history": [],
+        return {
+            "interaction_history": [],
             "preferences": {},
-            "mode": "Mentor",
-            "last_updated": datetime.now().isoformat()
+            "last_interaction": None
         }
-        
-        # Save default memory
-        with open(filepath, "w") as f:
-            json.dump(default_memory, f, indent=2)
-        
-        return default_memory
     except Exception as e:
-        logger.error(f"Error loading user memory: {str(e)}")
-        return {"history": [], "preferences": {}, "mode": "Mentor"}
+        logger.error(f"Error loading user memory: {e}")
+        return {
+            "interaction_history": [],
+            "preferences": {},
+            "last_interaction": None
+        }
 
 def save_user_memory(email: str, data: dict) -> None:
-    """Save user memory to file."""
+    """Save user memory to appropriate path."""
     try:
-        filepath = get_memory_path(email)
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        data["last_updated"] = datetime.now().isoformat()
-        with open(filepath, "w") as f:
+        memory_path = get_memory_path(email)
+        os.makedirs(os.path.dirname(memory_path), exist_ok=True)
+        with open(memory_path, "w") as f:
             json.dump(data, f, indent=2)
     except Exception as e:
-        logger.error(f"Error saving user memory: {str(e)}")
+        logger.error(f"Error saving user memory: {e}")
         raise
 
 # -------------------- Text-to-Speech Function --------------------
