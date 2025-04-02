@@ -134,100 +134,137 @@ os.makedirs(DATA_BASE, exist_ok=True)
 # Mount static files directory
 app.mount("/static", StaticFiles(directory=STATIC_BASE), name="static")
 
-# Load context files
-try:
-    # Try Azure path first
-    context_path = os.path.join(DATA_BASE, "dinakara_context_full.json")
-    memory_path = os.path.join(DATA_BASE, "book_memory.json")
-    
-    if os.path.exists(context_path):
-        with open(context_path, "r") as f:
-            dinakara_context = json.load(f)
-        logger.info("Loaded context from Azure path")
-    else:
-        # Fall back to local path
-        with open("data/dinakara_context_full.json", "r") as f:
-            dinakara_context = json.load(f)
-        logger.info("Loaded context from local path")
-        
-        # Copy to Azure path if we're on Azure
-        if os.path.exists("/home/LogFiles"):
-            os.makedirs(os.path.dirname(context_path), exist_ok=True)
-            with open(context_path, "w") as f:
-                json.dump(dinakara_context, f, indent=2)
-            logger.info("Copied context to Azure path")
-            
-    if os.path.exists(memory_path):
-        with open(memory_path, "r") as f:
-            book_memory = json.load(f)
-        logger.info("Loaded memory from Azure path")
-    else:
-        # Fall back to local path
-        with open("data/book_memory.json", "r") as f:
-            book_memory = json.load(f)
-        logger.info("Loaded memory from local path")
-        
-        # Copy to Azure path if we're on Azure
-        if os.path.exists("/home/LogFiles"):
-            os.makedirs(os.path.dirname(memory_path), exist_ok=True)
-            with open(memory_path, "w") as f:
-                json.dump(book_memory, f, indent=2)
-            logger.info("Copied memory to Azure path")
-            
-except FileNotFoundError as e:
-    logger.error(f"Context file not found: {e}")
-    # Create default context if needed
-    dinakara_context = {
-        "personal_info": {
-            "name": "Dinakara Nagalla",
-            "role": "Author and Therapist",
-            "background": "Experienced in both writing and therapy"
-        },
-        "personality": {
-            "traits": ["empathetic", "knowledgeable", "professional"],
-            "style": "warm and supportive"
-        },
-        "knowledge_base": {
-            "expertise": ["grief counseling", "writing", "personal development"],
-            "specialties": ["grief support", "author guidance"]
-        }
-    }
-    book_memory = {
-        "current_book": None,
-        "completed_books": [],
-        "to_read": [],
-        "reading_stats": {
-            "total_books_read": 0,
-            "current_streak": 0,
-            "longest_streak": 0
-        },
-        "reading_goals": {
-            "daily_pages": 30,
-            "weekly_books": 1
-        }
-    }
-    
-    # Save to both local and Azure paths if available
-    for path in [context_path, "data/dinakara_context_full.json"]:
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w") as f:
-            json.dump(dinakara_context, f, indent=2)
-            
-    for path in [memory_path, "data/book_memory.json"]:
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w") as f:
-            json.dump(book_memory, f, indent=2)
-            
-    logger.info("Created default context and memory files")
-except json.JSONDecodeError as e:
-    logger.error(f"Error parsing context file: {e}")
-    raise
-except Exception as e:
-    logger.error(f"Unexpected error loading context: {e}")
-    raise
+@app.get("/")
+async def read_root():
+    """Serve the main page."""
+    try:
+        return FileResponse(os.path.join(STATIC_BASE, "index.html"))
+    except Exception as e:
+        logger.error(f"Error serving index.html: {e}")
+        raise HTTPException(status_code=500, detail="Error serving main page")
 
-# Get voice ID from context
-dinakara_voice_id = dinakara_context.get("voice_id", "21m00Tcm4TlvDq8ikWAM")
+# -------------------- API Routes --------------------
+@app.get("/health")
+async def health_check():
+    """Health check endpoint."""
+    return {"status": "healthy", "timestamp": datetime.now().isoformat()}
+
+@app.post("/chat")
+async def chat(request: ChatRequest):
+    """Handle chat requests."""
+    try:
+        request_id = str(uuid.uuid4())
+        logger.info(f"Received chat request: {request_id}")
+        logger.info(f"Request details: {request.dict()}")
+
+        # Check cache first
+        cache_key = f"{request.message}_{request.mode}"
+        cached_response = await get_cached_response(cache_key)
+        if cached_response:
+            logger.info(f"Cache hit for request: {request_id}")
+            return cached_response
+
+        # Load user memory
+        user_memory = load_user_memory(request.email)
+        logger.info(f"Loaded user memory for {request.email}")
+
+        # Get mode-specific context
+        mode_context = dinakara_context.get("modes", {}).get(request.mode, {})
+        mode_prompt = mode_context.get("prompt", "")
+        mode_style = mode_context.get("style", "professional")
+
+        # Prepare system message
+        system_message = f"""You are Dinakara Nagalla's digital twin, operating in {request.mode} mode.
+{mode_prompt}
+
+Your personality traits: {', '.join(dinakara_context['personality']['traits'])}
+Your style: {dinakara_context['personality']['style']}
+Your expertise: {', '.join(dinakara_context['knowledge_base']['expertise'])}
+Your specialties: {', '.join(dinakara_context['knowledge_base']['specialties'])}
+
+User's reading status:
+Current book: {book_memory['current_book'] or 'None'}
+Completed books: {', '.join(book_memory['completed_books']) or 'None'}
+Reading streak: {book_memory['reading_stats']['current_streak']} days
+
+Previous interactions: {json.dumps(user_memory['interaction_history'][-5:])}
+
+Respond in a {mode_style} tone, maintaining Dinakara's personality while focusing on the user's needs."""
+
+        # Get response from GPT-4
+        response = await client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": request.message}
+            ],
+            temperature=0.7,
+            max_tokens=1000
+        )
+
+        response_text = response.choices[0].message.content
+        logger.info(f"Generated response for request: {request_id}")
+
+        # Convert to speech
+        audio_url = await text_to_speech(response_text, request_id)
+        logger.info(f"Generated audio for request: {request_id}")
+
+        # Update user memory
+        user_memory['interaction_history'].append({
+            'timestamp': datetime.now().isoformat(),
+            'message': request.message,
+            'response': response_text,
+            'mode': request.mode
+        })
+        save_user_memory(request.email, user_memory)
+        logger.info(f"Updated user memory for {request.email}")
+
+        # Cache the response
+        response_data = {
+            "response": response_text,
+            "audio_url": audio_url,
+            "request_id": request_id,
+            "timestamp": datetime.now().isoformat(),
+            "mode": request.mode
+        }
+        await cache_response(cache_key, response_data)
+        logger.info(f"Cached response for request: {request_id}")
+
+        return response_data
+
+    except Exception as e:
+        logger.exception(f"Error processing chat request: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/transcribe")
+async def transcribe_audio(file: UploadFile = File(...)):
+    """Handle audio transcription requests."""
+    try:
+        # Validate file size (max 25MB)
+        if file.size > 25 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="File too large")
+
+        # Save uploaded file
+        temp_path = f"temp_{file.filename}"
+        with open(temp_path, "wb") as buffer:
+            content = await file.read()
+            buffer.write(content)
+
+        # Transcribe using Whisper
+        result = model.transcribe(temp_path)
+        transcription = result["text"]
+
+        # Clean up temp file
+        os.remove(temp_path)
+
+        # Filter transcription
+        filtered_text = filter_transcription(transcription)
+
+        return {"text": filtered_text}
+
+    except Exception as e:
+        logger.exception(f"Error processing transcription: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # -------------------- Helper Functions --------------------
 def get_memory_path(email: str) -> str:
@@ -310,73 +347,3 @@ class ChatRequest(BaseModel):
     message: str
     email: Optional[EmailStr] = None
     mode: Optional[str] = None
-
-@app.post("/chat")
-async def chat(request: ChatRequest, background_tasks: BackgroundTasks):
-    """Process a chat message and return audio response."""
-    request_id = str(uuid.uuid4())
-    try:
-        user_input = request.message.strip()
-
-        if not user_input:
-            raise HTTPException(status_code=400, detail="Empty message.")
-
-        # Log request details
-        logger.info(f"Chat request from {request.email or 'anonymous'} in {request.mode or 'default'} mode")
-
-        # Check cache for existing response
-        msg_hash = hashlib.md5(user_input.encode()).hexdigest()
-        cached = get_cached_gpt_response(msg_hash)
-
-        if cached:
-            message = cached
-            logger.info(f"Using cached response for: {user_input[:30]}...")
-        else:
-            # Generate new response from GPT
-            system_prompt = "You are Nag, Dinakara Nagalla's digital twin — therapist, companion, unfiltered mirror. Be soulful, wise, blunt, Indian immigrant tone."
-            
-            # Adjust system prompt based on mode
-            if request.mode == "Author":
-                system_prompt += " You are in Author mode - be more creative and expressive in your responses."
-            elif request.mode == "Therapist":
-                system_prompt += " You are in Therapist mode - focus on emotional support and guidance."
-            
-            completion = client.chat.completions.create(
-                model="gpt-4",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_input}
-                ]
-            )
-            message = completion.choices[0].message.content
-            cache_gpt_response(msg_hash, message)
-            logger.info(f"Generated new response for: {user_input[:30]}...")
-
-        # Convert text to speech
-        audio_url = await text_to_speech(message, request_id)
-        
-        # Schedule cleanup of old audio files
-        background_tasks.add_task(cleanup_old_audio_files)
-
-        return {
-            "response": message,
-            "audio_url": audio_url,
-            "request_id": request_id,
-            "cached": bool(cached),
-            "mode": request.mode,
-            "email": request.email
-        }
-
-    except Exception as e:
-        logger.exception(f"Chat error: {str(e)}")
-        return JSONResponse(
-            status_code=500, 
-            content={
-                "response": "", 
-                "audio_url": "", 
-                "error": str(e),
-                "request_id": request_id,
-                "mode": request.mode,
-                "email": request.email
-            }
-        )
