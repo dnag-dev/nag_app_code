@@ -27,6 +27,31 @@ wheels/
 .installed.cfg
 *.egg
 
+# Node
+node_modules/
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+.expo/
+dist/
+web-build/
+
+# iOS
+ios/Pods/
+ios/build/
+ios/Podfile.lock
+ios/NagAppNew.xcworkspace/xcshareddata/
+ios/NagAppNew/Assets.xcassets/
+ios/exportOptions.plist
+
+# Android
+android/app/build/
+android/build/
+android/gradle/
+android/.gradle/
+android/local.properties
+android/.idea/
+
 # IDE
 .idea/
 .vscode/
@@ -37,7 +62,11 @@ wheels/
 .DS_Store
 Thumbs.db
 
-# Application specific
-static/audio_*.mp3
+# Project specific
+*.m4a
+*.wav
+*.mp3
 cache/
-*.log 
+static/audio/
+static/cache/
+*.log
