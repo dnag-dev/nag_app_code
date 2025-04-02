@@ -68,7 +68,7 @@ except FileNotFoundError as e:
     dinakara_context = {
         "personal_info": {
             "name": "Dinakara Nagalla",
-            "email": "dlnagalla@Mac.attlocal.net",
+            "email": "dlnagalla@hotmail.com",
             "role": "Digital Twin",
             "version": "2.0.0"
         },
