@@ -38,11 +38,74 @@ if not all([client.api_key, elevenlabs_api_key, dinakara_voice_id]):
     logger.warning("⚠️ Missing required environment variables. App may not function fully.")
 
 # -------------------- Load Context Files --------------------
-with open("data/dinakara_context_full.json", "r") as f:
-    dinakara_context = json.load(f)
-
-with open("data/book_memory.json", "r") as f:
-    book_memory = json.load(f)
+try:
+    # Try Azure path first
+    context_path = "/home/LogFiles/data/dinakara_context_full.json"
+    memory_path = "/home/LogFiles/data/book_memory.json"
+    
+    # If Azure paths don't exist, try local paths
+    if not os.path.exists(context_path):
+        context_path = "data/dinakara_context_full.json"
+    if not os.path.exists(memory_path):
+        memory_path = "data/book_memory.json"
+    
+    # Create data directory if it doesn't exist
+    os.makedirs(os.path.dirname(context_path), exist_ok=True)
+    os.makedirs(os.path.dirname(memory_path), exist_ok=True)
+    
+    # Load context files
+    with open(context_path, "r") as f:
+        dinakara_context = json.load(f)
+    logger.info(f"Successfully loaded context from {context_path}")
+    
+    with open(memory_path, "r") as f:
+        book_memory = json.load(f)
+    logger.info(f"Successfully loaded memory from {memory_path}")
+    
+except FileNotFoundError as e:
+    logger.error(f"Failed to load context files: {str(e)}")
+    # Create default context if files don't exist
+    dinakara_context = {
+        "personal_info": {
+            "name": "Dinakara Nagalla",
+            "email": "dlnagalla@Mac.attlocal.net",
+            "role": "Digital Twin",
+            "version": "2.0.0"
+        },
+        "personality": {
+            "traits": ["soulful", "wise", "blunt", "empathetic", "creative"],
+            "tone": "Indian immigrant",
+            "communication_style": "direct and caring",
+            "values": ["authenticity", "growth", "connection", "wisdom"]
+        }
+    }
+    book_memory = {
+        "books": {
+            "currently_reading": [],
+            "completed": [],
+            "to_read": []
+        },
+        "statistics": {
+            "total_books_read": 0,
+            "books_this_year": 0,
+            "average_rating": 0,
+            "favorite_genre": "",
+            "reading_streak": 0,
+            "last_updated": datetime.now().isoformat()
+        }
+    }
+    # Save default files
+    with open(context_path, "w") as f:
+        json.dump(dinakara_context, f, indent=2)
+    with open(memory_path, "w") as f:
+        json.dump(book_memory, f, indent=2)
+    logger.info("Created default context files")
+except json.JSONDecodeError as e:
+    logger.error(f"Failed to parse context files: {str(e)}")
+    raise
+except Exception as e:
+    logger.error(f"Unexpected error loading context files: {str(e)}")
+    raise
 
 # -------------------- App Setup --------------------
 app = FastAPI(title="Nag - Digital Twin", version="2.0.0")
@@ -56,28 +119,72 @@ app.add_middleware(
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # -------------------- Directory Setup --------------------
-os.makedirs("static", exist_ok=True)
-os.makedirs("cache", exist_ok=True)
-os.makedirs("memory", exist_ok=True)
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# Define base paths for different environments
+STATIC_BASE = "/home/LogFiles/static" if os.path.exists("/home/LogFiles") else "static"
+CACHE_BASE = "/home/LogFiles/cache" if os.path.exists("/home/LogFiles") else "cache"
+MEMORY_BASE = "/home/LogFiles/memory" if os.path.exists("/home/LogFiles") else "memory"
+
+# Create necessary directories
+for directory in [STATIC_BASE, CACHE_BASE, MEMORY_BASE]:
+    os.makedirs(directory, exist_ok=True)
+
+# Mount static files directory
+app.mount("/static", StaticFiles(directory=STATIC_BASE), name="static")
 
 # -------------------- Helper Functions --------------------
+def get_memory_path(email: str) -> str:
+    """Get the appropriate memory file path based on environment."""
+    # Try Azure path first
+    azure_path = f"/home/LogFiles/memory/{email}.json"
+    local_path = f"memory/{email}.json"
+    
+    if os.path.exists(azure_path):
+        return azure_path
+    return local_path
+
 def load_user_memory(email: str) -> dict:
-    filepath = f"memory/{email}.json"
-    if os.path.exists(filepath):
-        with open(filepath, "r") as f:
-            return json.load(f)
-    return {"history": [], "preferences": {}, "mode": "Mentor"}
+    """Load user memory from file, creating default if not exists."""
+    try:
+        filepath = get_memory_path(email)
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        
+        if os.path.exists(filepath):
+            with open(filepath, "r") as f:
+                return json.load(f)
+        
+        # Create default memory structure
+        default_memory = {
+            "history": [],
+            "preferences": {},
+            "mode": "Mentor",
+            "last_updated": datetime.now().isoformat()
+        }
+        
+        # Save default memory
+        with open(filepath, "w") as f:
+            json.dump(default_memory, f, indent=2)
+        
+        return default_memory
+    except Exception as e:
+        logger.error(f"Error loading user memory: {str(e)}")
+        return {"history": [], "preferences": {}, "mode": "Mentor"}
 
 def save_user_memory(email: str, data: dict) -> None:
-    filepath = f"memory/{email}.json"
-    with open(filepath, "w") as f:
-        json.dump(data, f, indent=2)
+    """Save user memory to file."""
+    try:
+        filepath = get_memory_path(email)
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        data["last_updated"] = datetime.now().isoformat()
+        with open(filepath, "w") as f:
+            json.dump(data, f, indent=2)
+    except Exception as e:
+        logger.error(f"Error saving user memory: {str(e)}")
+        raise
 
 # -------------------- Text-to-Speech Function --------------------
 async def text_to_speech(text: str, request_id: str) -> str:
     try:
-        file_path = f"static/audio_{request_id}.mp3"
+        file_path = os.path.join(STATIC_BASE, f"audio_{request_id}.mp3")
         headers = {
             "xi-api-key": elevenlabs_api_key,
             "Content-Type": "application/json"
@@ -100,7 +207,7 @@ async def text_to_speech(text: str, request_id: str) -> str:
                     f.write(res.content)
 
                 logger.info(f"Voice generation successful: {request_id}")
-                return file_path
+                return f"/static/audio_{request_id}.mp3"
 
             except requests.RequestException as e:
                 logger.warning(f"Voice gen failed attempt {attempt+1}: {e}")
