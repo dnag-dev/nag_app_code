@@ -32,6 +32,14 @@ if [ ! -f "/home/LogFiles/data/book_memory.json" ]; then
     cp data/book_memory.json /home/LogFiles/data/ 2>/dev/null || echo "No default memory file found"
 fi
 
+# Run startup tests
+echo "Running startup tests..."
+python test_startup.py
+if [ $? -ne 0 ]; then
+    echo "Startup tests failed. Check the logs for details."
+    exit 1
+fi
+
 # Start the application
 echo "Starting the application..."
 ./startup.sh 
