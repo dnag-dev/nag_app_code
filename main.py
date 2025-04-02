@@ -38,10 +38,10 @@ if not all([client.api_key, elevenlabs_api_key, dinakara_voice_id]):
     logger.warning("⚠️ Missing required environment variables. App may not function fully.")
 
 # -------------------- Load Context Files --------------------
-with open("/mnt/data/dinakara_context_full.json", "r") as f:
+with open("data/dinakara_context_full.json", "r") as f:
     dinakara_context = json.load(f)
 
-with open("/mnt/data/book_memory.json", "r") as f:
+with open("data/book_memory.json", "r") as f:
     book_memory = json.load(f)
 
 # -------------------- App Setup --------------------

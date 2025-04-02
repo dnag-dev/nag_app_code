@@ -1,0 +1,82 @@
+{
+  "books": {
+    "currently_reading": [
+      {
+        "title": "",
+        "author": "",
+        "start_date": "",
+        "current_page": 0,
+        "total_pages": 0,
+        "notes": []
+      }
+    ],
+    "completed": [
+      {
+        "title": "",
+        "author": "",
+        "completion_date": "",
+        "rating": 0,
+        "key_takeaways": [],
+        "review": ""
+      }
+    ],
+    "to_read": [
+      {
+        "title": "",
+        "author": "",
+        "priority": "high/medium/low",
+        "reason": "",
+        "added_date": ""
+      }
+    ]
+  },
+  "statistics": {
+    "total_books_read": 0,
+    "books_this_year": 0,
+    "average_rating": 0,
+    "favorite_genre": "",
+    "reading_streak": 0,
+    "last_updated": "2024-04-02"
+  },
+  "goals": [
+    {
+      "description": "",
+      "target_date": "",
+      "status": "pending/in_progress/completed",
+      "progress": 0
+    }
+  ],
+  "reading_insights": [
+    {
+      "date": "",
+      "book": "",
+      "thoughts": "",
+      "tags": []
+    }
+  ],
+  "reading_habits": {
+    "preferred_time": "",
+    "environment": "",
+    "challenges": [],
+    "solutions": []
+  },
+  "recommendations": {
+    "received": [
+      {
+        "book": "",
+        "recommended_by": "",
+        "date": "",
+        "priority": "high/medium/low"
+      }
+    ],
+    "given": [
+      {
+        "book": "",
+        "recommended_to": "",
+        "date": "",
+        "reason": ""
+      }
+    ]
+  },
+  "version": "1.0"
+} 
