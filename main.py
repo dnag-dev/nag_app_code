@@ -501,6 +501,12 @@ async def startup_event():
                 "weekly_books": 1
             }
         }
+       @app.get("/health")
+async def health():
+    return {
+        "status": "ok",
+        "timestamp": datetime.now().isoformat()
+    } 
         
         # Save to both local and Azure paths if available
         for path in [context_path, "data/dinakara_context_full.json"]:
