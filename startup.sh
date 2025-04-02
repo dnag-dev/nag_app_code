@@ -1,2 +1,14 @@
 #!/bin/bash
-gunicorn main:app --workers 4 --worker-class uvicorn.workers.UvicornWorker --bind=0.0.0.0:8000 
+
+# Create necessary directories
+mkdir -p /home/LogFiles/data
+mkdir -p /home/LogFiles/static
+mkdir -p /home/LogFiles/cache
+mkdir -p /home/LogFiles/memory
+
+# Set environment variables
+export PYTHONPATH=$PYTHONPATH:$(pwd)
+
+# Start the application
+echo "Starting Nag App with gunicorn..."
+gunicorn main:app --workers 4 --worker-class uvicorn.workers.UvicornWorker --bind=0.0.0.0:8000 --timeout 120 --log-level info 
