@@ -50,30 +50,10 @@ jobs:
         env:
           PIP_CACHE_DIR: ~/.cache/pip
 
-      - name: Get changed files
-        id: changed-files
-        uses: tj-actions/changed-files@v41
-        with:
-          files: |
-            **/*.py
-            **/*.html
-            **/*.js
-            **/*.css
-            **/*.json
-            web.config
-            startup.py
-            requirements.txt
-
       - name: Create deployment package
         run: |
-          if [ "${{ steps.changed-files.outputs.any_changed }}" == "true" ]; then
-            # Create a zip with only changed files
-            zip -r release.zip ${{ steps.changed-files.outputs.all_changed_files }}
-          else
-            # If no files changed, create an empty zip to trigger a restart
-            touch dummy.txt
-            zip release.zip dummy.txt
-          fi
+          # Create a zip with all files
+          zip -r release.zip . -x "venv/*" "*.git*" "*.md"
 
       - name: Upload artifact for deployment jobs
         uses: actions/upload-artifact@v4
@@ -100,22 +80,11 @@ jobs:
           name: python-app
 
       - name: 'Deploy to Azure Web App'
-        uses: azure/webapps-deploy@v3
         id: deploy-to-webapp
+        uses: azure/webapps-deploy@v2
         with:
           app-name: 'nag-app-new'
-          slot-name: 'Production'
-          publish-profile: |
-            <publishData>
-              <publishProfile profileName="nag-app-new - Web Deploy" publishMethod="MSDeploy" publishUrl="nag-app-new.scm.azurewebsites.net:443" msdeploySite="nag-app-new" userName="$nag-app-new" userPWD="uogHXTq6nWthyEXbCCaDuqgBffXMv3CD7bHNoDaBWQNtkSu8QrWsWurY6wRC" destinationAppUrl="http://nag-app-new.azurewebsites.net" SQLServerDBConnectionString="" mySQLDBConnectionString="" hostingProviderForumLink="" controlPanelLink="https://portal.azure.com" webSystem="WebSites">
-                <databases />
-              </publishProfile>
-              <publishProfile profileName="nag-app-new - FTP" publishMethod="FTP" publishUrl="ftps://waws-prod-blu-401.ftp.azurewebsites.windows.net/site/wwwroot" ftpPassiveMode="True" userName="nag-app-new\$nag-app-new" userPWD="uogHXTq6nWthyEXbCCaDuqgBffXMv3CD7bHNoDaBWQNtkSu8QrWsWurY6wRC" destinationAppUrl="http://nag-app-new.azurewebsites.net" SQLServerDBConnectionString="" mySQLDBConnectionString="" hostingProviderForumLink="" controlPanelLink="https://portal.azure.com" webSystem="WebSites">
-                <databases />
-              </publishProfile>
-              <publishProfile profileName="nag-app-new - Zip Deploy" publishMethod="ZipDeploy" publishUrl="nag-app-new.scm.azurewebsites.net:443" userName="$nag-app-new" userPWD="uogHXTq6nWthyEXbCCaDuqgBffXMv3CD7bHNoDaBWQNtkSu8QrWsWurY6wRC" destinationAppUrl="http://nag-app-new.azurewebsites.net" SQLServerDBConnectionString="" mySQLDBConnectionString="" hostingProviderForumLink="" controlPanelLink="https://portal.azure.com" webSystem="WebSites">
-                <databases />
-              </publishProfile>
-            </publishData>
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
           package: release.zip
+          startup-command: 'python -m uvicorn main:app --host 0.0.0.0 --port 8000'
           
