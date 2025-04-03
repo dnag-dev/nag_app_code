@@ -7,7 +7,10 @@ ls -la
 echo "Checking Python installation:"
 which python3 || echo "python3 not found"
 which python || echo "python not found"
-find / -name python -type f -executable 2>/dev/null || echo "No Python found in system"
+
+# Set up environment
+export PYTHONPATH=/home/site/wwwroot
+export PYTHONUNBUFFERED=1
 
 # Create necessary directories
 mkdir -p /home/LogFiles/data
@@ -17,6 +20,7 @@ mkdir -p /home/LogFiles/memory
 
 # Install dependencies
 echo "Installing dependencies..."
+cd /home/site/wwwroot
 python3 -m pip install --no-cache-dir -r requirements.txt
 
 # Copy default context files if they don't exist
@@ -30,7 +34,6 @@ fi
 
 # Run startup tests
 echo "Running startup tests..."
-cd /home/site/wwwroot
 if [ -f "test_startup.py" ]; then
     python3 test_startup.py
     if [ $? -ne 0 ]; then
