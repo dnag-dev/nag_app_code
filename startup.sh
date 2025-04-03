@@ -11,6 +11,7 @@ which python || echo "python not found"
 # Set up environment
 export PYTHONPATH=/home/site/wwwroot
 export PYTHONUNBUFFERED=1
+cd /home/site/wwwroot
 
 # Create necessary directories
 mkdir -p /home/LogFiles/data
@@ -20,7 +21,6 @@ mkdir -p /home/LogFiles/memory
 
 # Install dependencies
 echo "Installing dependencies..."
-cd /home/site/wwwroot
 python3 -m pip install --no-cache-dir -r requirements.txt
 
 # Copy default context files if they don't exist
@@ -30,6 +30,13 @@ fi
 
 if [ ! -f "/home/LogFiles/data/book_memory.json" ]; then
     cp data/book_memory.json /home/LogFiles/data/ 2>/dev/null || echo "No default memory file found"
+fi
+
+# Verify main.py exists
+if [ ! -f "main.py" ]; then
+    echo "ERROR: main.py not found in $(pwd)"
+    ls -la
+    exit 1
 fi
 
 # Run startup tests
