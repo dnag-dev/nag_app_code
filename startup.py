@@ -12,7 +12,7 @@ def create_directories():
     logger.info("Creating required directories...")
     
     # Check if we're running on Azure
-    is_azure = os.path.exists("/home/LogFiles")
+    is_azure = os.path.exists("/home/site/wwwroot")
     
     # Define directories based on environment
     if is_azure:
@@ -40,7 +40,8 @@ def start_application():
     logger.info("Starting Nag App with uvicorn...")
     
     # Set environment variables
-    os.environ["PYTHONPATH"] = os.environ.get("PYTHONPATH", "") + ":" + os.getcwd()
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    os.environ["PYTHONPATH"] = os.environ.get("PYTHONPATH", "") + ":" + current_dir
     os.environ["PYTHONUNBUFFERED"] = "1"
     
     # Get configuration from environment variables
@@ -49,6 +50,11 @@ def start_application():
     timeout = int(os.environ.get("GUNICORN_TIMEOUT", 120))
     max_requests = int(os.environ.get("GUNICORN_MAX_REQUESTS", 1000))
     max_requests_jitter = int(os.environ.get("GUNICORN_MAX_REQUESTS_JITTER", 50))
+    
+    # Log the Python path for debugging
+    logger.info(f"PYTHONPATH: {os.environ.get('PYTHONPATH')}")
+    logger.info(f"Current directory: {current_dir}")
+    logger.info(f"Files in current directory: {os.listdir(current_dir)}")
     
     # Start uvicorn
     uvicorn.run(
