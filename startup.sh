@@ -9,6 +9,15 @@ ls -la
 export PYTHONPATH=/home/site/wwwroot
 export PYTHONUNBUFFERED=1
 
+# Find Python installation
+echo "Finding Python installation..."
+PYTHON_PATH=$(which python3)
+if [ -z "$PYTHON_PATH" ]; then
+    echo "ERROR: Python3 not found"
+    exit 1
+fi
+echo "Using Python at: $PYTHON_PATH"
+
 # Create necessary directories in the correct location
 echo "Creating necessary directories..."
 mkdir -p /home/site/wwwroot/data
@@ -34,20 +43,20 @@ ls -la
 
 # Create and activate virtual environment
 echo "Setting up virtual environment..."
-python3 -m venv antenv
+$PYTHON_PATH -m venv antenv
 source antenv/bin/activate
 
 # Upgrade pip
 echo "Upgrading pip..."
-python -m pip install --upgrade pip
+python3 -m pip install --upgrade pip
 
 # Install dependencies
 echo "Installing dependencies..."
 if [ -f "requirements.txt" ]; then
     echo "Installing from requirements.txt..."
-    pip install --no-cache-dir -r requirements.txt
+    python3 -m pip install --no-cache-dir -r requirements.txt
     echo "Installed packages:"
-    pip list
+    python3 -m pip list
 else
     echo "ERROR: requirements.txt not found in $(pwd)"
     ls -la
@@ -56,9 +65,9 @@ fi
 
 # Verify fastapi is installed
 echo "Verifying fastapi installation..."
-python -c "import fastapi" || {
+python3 -c "import fastapi" || {
     echo "ERROR: fastapi not installed correctly"
-    pip list
+    python3 -m pip list
     exit 1
 }
 
@@ -81,7 +90,7 @@ fi
 # Run startup tests
 echo "Running startup tests..."
 if [ -f "test_startup.py" ]; then
-    python test_startup.py
+    python3 test_startup.py
     if [ $? -ne 0 ]; then
         echo "Startup tests failed. Check the logs for details."
         exit 1
