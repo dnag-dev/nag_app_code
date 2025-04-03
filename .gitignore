@@ -131,3 +131,10 @@ models/*
 !data/.gitkeep
 !models/
 !models/.gitkeep
+
+# App directories moved to separate repositories
+NagAppNew/
+NagAppMobileNew/
+NagAppNewPure/
+NagAppNew2/
+NagAppNewPure_1.0_Stable/
