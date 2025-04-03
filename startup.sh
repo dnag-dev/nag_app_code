@@ -38,6 +38,7 @@ fi
 
 # Run startup tests
 echo "Running startup tests..."
+cd /home/site/wwwroot
 python3 test_startup.py
 if [ $? -ne 0 ]; then
     echo "Startup tests failed. Check the logs for details."
