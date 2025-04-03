@@ -9,26 +9,15 @@ which python3 || echo "python3 not found"
 which python || echo "python not found"
 find / -name python -type f -executable 2>/dev/null || echo "No Python found in system"
 
-# Add pip to PATH
-export PATH=$PATH:/home/.local/bin
-
 # Create necessary directories
 mkdir -p /home/LogFiles/data
 mkdir -p /home/LogFiles/static
 mkdir -p /home/LogFiles/cache
 mkdir -p /home/LogFiles/memory
 
-# Install pip if it's not available
-if ! command -v pip &> /dev/null; then
-    echo "Installing pip..."
-    curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
-    python3 get-pip.py --user
-    rm get-pip.py
-fi
-
 # Install dependencies
 echo "Installing dependencies..."
-python3 -m pip install --user --no-cache-dir -r requirements.txt
+python3 -m pip install --no-cache-dir -r requirements.txt
 
 # Copy default context files if they don't exist
 if [ ! -f "/home/LogFiles/data/dinakara_context_full.json" ]; then

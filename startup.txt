@@ -11,4 +11,12 @@ python3 -m pip list
 echo "Checking if main.py exists:"
 ls -la main.py
 echo "Starting uvicorn..."
-python3 -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload 
+python3 -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+# Oryx startup configuration
+PYTHON_VERSION=3.8.20
+PYTHONPATH=/home/site/wwwroot
+GUNICORN_CMD_ARGS="--timeout 600 --access-logfile '-' --error-logfile '-' --chdir=/home/site/wwwroot"
+GUNICORN_WORKERS=4
+GUNICORN_WORKER_CLASS=uvicorn.workers.UvicornWorker
+GUNICORN_BIND=0.0.0.0:8000 
