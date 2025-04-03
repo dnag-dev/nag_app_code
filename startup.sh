@@ -1,20 +1,28 @@
 #!/bin/bash
 
-# Set environment variables
-export PYTHONPATH=/home/site/wwwroot
-export PYTHONUNBUFFERED=1
-
 # Create necessary directories
-mkdir -p /home/site/wwwroot/data
-mkdir -p /home/site/wwwroot/static
-mkdir -p /home/site/wwwroot/cache
-mkdir -p /home/site/wwwroot/memory
+mkdir -p /home/LogFiles/data
+mkdir -p /home/LogFiles/static
+mkdir -p /home/LogFiles/cache
+mkdir -p /home/LogFiles/memory
 
-# Change to the application directory
-cd /home/site/wwwroot
-
-# Install uvicorn if it's not already installed
+# Install dependencies
 /home/site/wwwroot/antenv/bin/python -m pip install uvicorn[standard] gunicorn fastapi
 
-# Start the application
-/home/site/wwwroot/antenv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8000 --workers 2 
+# Copy default context files if they don't exist
+if [ ! -f "/home/LogFiles/data/dinakara_context_full.json" ]; then
+    cp data/dinakara_context_full.json /home/LogFiles/data/ 2>/dev/null || echo "No default context file found"
+fi
+
+if [ ! -f "/home/LogFiles/data/book_memory.json" ]; then
+    cp data/book_memory.json /home/LogFiles/data/ 2>/dev/null || echo "No default memory file found"
+fi
+
+# Run startup tests
+/home/site/wwwroot/antenv/bin/python test_startup.py
+if [ $? -ne 0 ]; then
+    echo "Startup tests failed. Check the logs for details."
+    exit 1
+fi
+
+echo "Deployment completed successfully. Application will be started by Azure's web.config configuration." 
