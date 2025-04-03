@@ -8,6 +8,7 @@ ls -la
 # Set up environment
 export PYTHONPATH=/home/site/wwwroot
 export PYTHONUNBUFFERED=1
+export PATH="/home/site/wwwroot/antenv/bin:$PATH"
 
 # Find Python installation
 echo "Finding Python installation..."
@@ -44,6 +45,13 @@ ls -la
 # Create and activate virtual environment
 echo "Setting up virtual environment..."
 $PYTHON_PATH -m venv antenv
+if [ ! -f "antenv/bin/activate" ]; then
+    echo "ERROR: Virtual environment activation script not found"
+    exit 1
+fi
+
+# Activate virtual environment
+echo "Activating virtual environment..."
 source antenv/bin/activate
 
 # Upgrade pip
