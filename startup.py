@@ -1,7 +1,7 @@
 import os
 import sys
-import subprocess
 import logging
+import uvicorn
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -17,10 +17,10 @@ def create_directories():
     # Define directories based on environment
     if is_azure:
         dirs = [
-            "/home/LogFiles/data",
-            "/home/LogFiles/static",
-            "/home/LogFiles/cache",
-            "/home/LogFiles/memory"
+            "/home/site/wwwroot/data",
+            "/home/site/wwwroot/static",
+            "/home/site/wwwroot/cache",
+            "/home/site/wwwroot/memory"
         ]
     else:
         dirs = [
@@ -36,43 +36,33 @@ def create_directories():
             logger.info(f"Created directory: {dir_path}")
 
 def start_application():
-    """Start the FastAPI application with gunicorn."""
-    logger.info("Starting Nag App with gunicorn...")
+    """Start the FastAPI application with uvicorn."""
+    logger.info("Starting Nag App with uvicorn...")
     
     # Set environment variables
     os.environ["PYTHONPATH"] = os.environ.get("PYTHONPATH", "") + ":" + os.getcwd()
     os.environ["PYTHONUNBUFFERED"] = "1"
     
-    # Start gunicorn
-    cmd = [
-        "gunicorn",
+    # Get configuration from environment variables
+    port = int(os.environ.get("PORT", 8000))
+    workers = int(os.environ.get("GUNICORN_WORKERS", 2))
+    timeout = int(os.environ.get("GUNICORN_TIMEOUT", 120))
+    max_requests = int(os.environ.get("GUNICORN_MAX_REQUESTS", 1000))
+    max_requests_jitter = int(os.environ.get("GUNICORN_MAX_REQUESTS_JITTER", 50))
+    
+    # Start uvicorn
+    uvicorn.run(
         "main:app",
-        "--workers", "1",
-        "--worker-class", "uvicorn.workers.UvicornWorker",
-        "--bind", "0.0.0.0:8000",
-        "--timeout", "120",
-        "--log-level", "debug"
-    ]
-    
-    logger.info(f"Running command: {' '.join(cmd)}")
-    
-    # Execute gunicorn
-    process = subprocess.Popen(
-        cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        universal_newlines=True
+        host="0.0.0.0",
+        port=port,
+        log_level="debug",
+        access_log=True,
+        reload=False,  # Disable reload to prevent duplicate processes
+        workers=workers,
+        timeout_keep_alive=timeout,
+        limit_concurrency=max_requests,
+        limit_max_requests=max_requests + max_requests_jitter
     )
-    
-    # Stream output
-    for line in process.stdout:
-        print(line, end='')
-    
-    # Wait for process to complete
-    process.wait()
-    
-    # Return the exit code
-    return process.returncode
 
 if __name__ == "__main__":
     try:
@@ -80,10 +70,7 @@ if __name__ == "__main__":
         create_directories()
         
         # Start application
-        exit_code = start_application()
-        
-        # Exit with the same code
-        sys.exit(exit_code)
+        start_application()
     except Exception as e:
         logger.error(f"Error starting application: {e}")
         sys.exit(1) 
