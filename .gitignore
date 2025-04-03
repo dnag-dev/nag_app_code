@@ -37,6 +37,7 @@ dist/
 web-build/
 
 # iOS
+ios/
 ios/Pods/
 ios/build/
 ios/Podfile.lock
@@ -45,6 +46,7 @@ ios/NagAppNew/Assets.xcassets/
 ios/exportOptions.plist
 
 # Android
+android/
 android/app/build/
 android/build/
 android/gradle/
@@ -72,11 +74,18 @@ static/cache/
 *.log
 NAG_AI_1.0_Stable.zip
 
-# Exclude development and test directories from deployment
+# Exclude all development and test directories from deployment
 NagAppNew/
 NagAppNew2/
 NagAppNewPure/
 NagAppDev/
+NagAppMobileNew/
+NagAppPure/
+NagAppPure_1.0/
+NagAppPure_1.0_Stable/
+NagAppPure_1.0_Stable_20250402/
+NagAppNewPure_1.0_Stable/
+NagAppNewPure_1.0_Stable_20250402/
 
 # Virtual Environment
 .env
@@ -95,4 +104,30 @@ data/*.json
 
 # Whisper model files
 models/*
+!models/.gitkeep
+
+# Keep only essential files for deployment
+!main.py
+!requirements.txt
+!web.config
+!startup.sh
+!entrypoint.py
+!healthcheck.py
+
+# Exclude all other files and directories
+*
+!.gitignore
+!main.py
+!requirements.txt
+!web.config
+!startup.sh
+!entrypoint.py
+!healthcheck.py
+!static/
+!static/.gitkeep
+!audio/
+!audio/.gitkeep
+!data/
+!data/.gitkeep
+!models/
 !models/.gitkeep
