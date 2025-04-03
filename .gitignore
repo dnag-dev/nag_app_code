@@ -108,9 +108,11 @@ models/*
 !main.py
 !requirements.txt
 !web.config
-!startup.sh
+!startup.py
 !entrypoint.py
 !healthcheck.py
+!azure_deploy.sh
+!local_setup.sh
 
 # Exclude all other files and directories
 *
@@ -118,9 +120,11 @@ models/*
 !main.py
 !requirements.txt
 !web.config
-!startup.sh
+!startup.py
 !entrypoint.py
 !healthcheck.py
+!azure_deploy.sh
+!local_setup.sh
 !static/
 !static/.gitkeep
 !audio/
