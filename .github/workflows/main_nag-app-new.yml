@@ -33,11 +33,8 @@ jobs:
 
     - name: Create deployment package
       run: |
-        mkdir -p deploy
-        # Copy all files except deploy directory
-        find . -maxdepth 1 -not -name "deploy" -not -name ".git" -not -name ".github" -exec cp -r {} deploy/ \;
-        cd deploy
-        zip -r ../deploy.zip .
+        # Create a zip with all files except venv and git directories
+        zip -r deploy.zip . -x "venv/*" "*.git*" "*.md"
 
     - name: Deploy to Azure Web App
       uses: azure/webapps-deploy@v2
