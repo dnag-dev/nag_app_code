@@ -4,18 +4,11 @@ echo "Current directory: $(pwd)"
 echo "Python path: $PYTHONPATH"
 echo "Files in current directory:"
 ls -la
-echo "Looking for Python installation..."
-PYTHON_PATH=$(find / -name python -type f -executable 2>/dev/null | grep -v "Permission denied" | head -n 1)
-if [ -z "$PYTHON_PATH" ]; then
-    echo "Python not found, trying alternative locations..."
-    PYTHON_PATH=$(which python3 || which python)
-fi
-echo "Found Python at: $PYTHON_PATH"
 echo "Checking Python version:"
-$PYTHON_PATH --version
+python3 --version
 echo "Checking pip list:"
-$PYTHON_PATH -m pip list
+python3 -m pip list
 echo "Checking if main.py exists:"
 ls -la main.py
 echo "Starting uvicorn..."
-$PYTHON_PATH -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload 
+python3 -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload 
