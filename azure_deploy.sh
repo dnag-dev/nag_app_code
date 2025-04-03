@@ -18,10 +18,6 @@ mkdir -p /home/LogFiles/memory
 echo "Installing dependencies..."
 pip install -r requirements.txt
 
-# Make startup script executable
-echo "Making startup script executable..."
-chmod +x startup.sh
-
 # Copy default context files if they don't exist
 echo "Setting up default context files..."
 if [ ! -f "/home/LogFiles/data/dinakara_context_full.json" ]; then
@@ -40,6 +36,4 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# Start the application
-echo "Starting the application..."
-./startup.sh 
+echo "Deployment completed successfully. Application will be started by Azure's web.config configuration." 

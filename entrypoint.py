@@ -31,11 +31,12 @@ def main():
         
         # Define directories based on environment
         if is_azure:
+            base_dir = "/home/site/wwwroot"
             dirs = [
-                "/home/LogFiles/data",
-                "/home/LogFiles/static",
-                "/home/LogFiles/cache",
-                "/home/LogFiles/memory"
+                os.path.join(base_dir, "data"),
+                os.path.join(base_dir, "static"),
+                os.path.join(base_dir, "cache"),
+                os.path.join(base_dir, "memory")
             ]
         else:
             dirs = [
@@ -54,14 +55,22 @@ def main():
         
         # Set environment variables
         logger.info("Setting environment variables...")
-        os.environ["PYTHONPATH"] = os.environ.get("PYTHONPATH", "") + ":" + os.getcwd()
+        if is_azure:
+            os.environ["PYTHONPATH"] = base_dir
+        else:
+            os.environ["PYTHONPATH"] = os.environ.get("PYTHONPATH", "") + ":" + os.getcwd()
+        
         os.environ["PYTHONUNBUFFERED"] = "1"
         
         # Import and run the application
         logger.info("Importing and running the application...")
         try:
             # Add the current directory to Python path
-            sys.path.insert(0, os.getcwd())
+            if is_azure:
+                sys.path.insert(0, base_dir)
+            else:
+                sys.path.insert(0, os.getcwd())
+            
             logger.info(f"Updated Python path: {sys.path}")
             
             # Try to import the app module
@@ -69,12 +78,15 @@ def main():
             module_name, app_name = app_module.split(":")
             logger.info(f"Importing {module_name} and getting {app_name}")
             
+            # First try to import uvicorn
+            import uvicorn
+            logger.info("Successfully imported uvicorn")
+            
+            # Then import the app
             module = __import__(module_name)
             app = getattr(module, app_name)
             logger.info("Successfully imported app")
             
-            import uvicorn
-            logger.info("Successfully imported uvicorn")
         except ImportError as e:
             logger.error(f"Error importing app or uvicorn: {e}")
             logger.error(f"Traceback: {traceback.format_exc()}")
