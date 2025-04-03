@@ -59,8 +59,8 @@ model = None  # We'll use OpenAI's API directly instead of local model
 # -------------------- Load Context Files --------------------
 try:
     # Try Azure path first
-    context_path = "/home/LogFiles/data/dinakara_context_full.json"
-    memory_path = "/home/LogFiles/data/book_memory.json"
+    context_path = "/home/site/wwwroot/data/dinakara_context_full.json"
+    memory_path = "/home/site/wwwroot/data/book_memory.json"
     
     # If Azure paths don't exist, try local paths
     if not os.path.exists(context_path):
@@ -139,10 +139,10 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # -------------------- Directory Setup --------------------
 # Define base paths based on environment
-STATIC_BASE = "/home/LogFiles/static" if os.path.exists("/home/LogFiles") else "static"
-CACHE_BASE = "/home/LogFiles/cache" if os.path.exists("/home/LogFiles") else "cache"
-MEMORY_BASE = "/home/LogFiles/memory" if os.path.exists("/home/LogFiles") else "memory"
-DATA_BASE = "/home/LogFiles/data" if os.path.exists("/home/LogFiles") else "data"
+STATIC_BASE = "/home/site/wwwroot/static" if os.path.exists("/home/site/wwwroot") else "static"
+CACHE_BASE = "/home/site/wwwroot/cache" if os.path.exists("/home/site/wwwroot") else "cache"
+MEMORY_BASE = "/home/site/wwwroot/memory" if os.path.exists("/home/site/wwwroot") else "memory"
+DATA_BASE = "/home/site/wwwroot/data" if os.path.exists("/home/site/wwwroot") else "data"
 
 # Create necessary directories
 os.makedirs(STATIC_BASE, exist_ok=True)
@@ -327,7 +327,7 @@ async def transcribe_audio(file: UploadFile = File(...)):
 # -------------------- Helper Functions --------------------
 def get_memory_path(email: str) -> str:
     """Get the appropriate memory file path based on environment."""
-    if os.path.exists("/home/LogFiles"):
+    if os.path.exists("/home/site/wwwroot"):
         return os.path.join(DATA_BASE, f"{email}.json")
     return os.path.join("memory", f"{email}.json")
 
@@ -453,7 +453,7 @@ async def startup_event():
             logger.info("Loaded context from local path")
             
             # Copy to Azure path if we're on Azure
-            if os.path.exists("/home/LogFiles"):
+            if os.path.exists("/home/site/wwwroot"):
                 os.makedirs(os.path.dirname(context_path), exist_ok=True)
                 with open(context_path, "w") as f:
                     json.dump(dinakara_context, f, indent=2)
@@ -470,7 +470,7 @@ async def startup_event():
             logger.info("Loaded memory from local path")
             
             # Copy to Azure path if we're on Azure
-            if os.path.exists("/home/LogFiles"):
+            if os.path.exists("/home/site/wwwroot"):
                 os.makedirs(os.path.dirname(memory_path), exist_ok=True)
                 with open(memory_path, "w") as f:
                     json.dump(book_memory, f, indent=2)
