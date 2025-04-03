@@ -4,20 +4,33 @@
 echo "Current directory: $(pwd)"
 echo "Listing directory contents:"
 ls -la
-echo "Checking Python installation:"
-which python3 || echo "python3 not found"
-which python || echo "python not found"
 
 # Set up environment
 export PYTHONPATH=/home/site/wwwroot
 export PYTHONUNBUFFERED=1
+
+# Create necessary directories in the correct location
+echo "Creating necessary directories..."
+mkdir -p /home/site/wwwroot/data
+mkdir -p /home/site/wwwroot/static
+mkdir -p /home/site/wwwroot/cache
+mkdir -p /home/site/wwwroot/memory
+
+# Copy files from extraction directory to the correct location
+echo "Copying files to /home/site/wwwroot..."
+cp -r /tmp/zipdeploy/extracted/* /home/site/wwwroot/
+cp -r /tmp/zipdeploy/extracted/.* /home/site/wwwroot/ 2>/dev/null || true
+
+# Set proper permissions
+echo "Setting permissions..."
+chmod -R 755 /home/site/wwwroot
+
+# Change to the correct directory
 cd /home/site/wwwroot
 
-# Create necessary directories
-mkdir -p /home/LogFiles/data
-mkdir -p /home/LogFiles/static
-mkdir -p /home/LogFiles/cache
-mkdir -p /home/LogFiles/memory
+# Verify files are in place
+echo "Verifying files in /home/site/wwwroot:"
+ls -la
 
 # Install dependencies
 echo "Installing dependencies..."
@@ -30,12 +43,12 @@ else
 fi
 
 # Copy default context files if they don't exist
-if [ ! -f "/home/LogFiles/data/dinakara_context_full.json" ]; then
-    cp data/dinakara_context_full.json /home/LogFiles/data/ 2>/dev/null || echo "No default context file found"
+if [ ! -f "/home/site/wwwroot/data/dinakara_context_full.json" ]; then
+    cp data/dinakara_context_full.json /home/site/wwwroot/data/ 2>/dev/null || echo "No default context file found"
 fi
 
-if [ ! -f "/home/LogFiles/data/book_memory.json" ]; then
-    cp data/book_memory.json /home/LogFiles/data/ 2>/dev/null || echo "No default memory file found"
+if [ ! -f "/home/site/wwwroot/data/book_memory.json" ]; then
+    cp data/book_memory.json /home/site/wwwroot/data/ 2>/dev/null || echo "No default memory file found"
 fi
 
 # Verify main.py exists
