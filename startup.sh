@@ -32,10 +32,17 @@ cd /home/site/wwwroot
 echo "Verifying files in /home/site/wwwroot:"
 ls -la
 
+# Create and activate virtual environment
+echo "Setting up virtual environment..."
+python3 -m venv antenv
+source antenv/bin/activate
+
 # Install dependencies
 echo "Installing dependencies..."
 if [ -f "requirements.txt" ]; then
-    python3 -m pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir -r requirements.txt
+    echo "Installed packages:"
+    pip list
 else
     echo "ERROR: requirements.txt not found in $(pwd)"
     ls -la
@@ -61,7 +68,7 @@ fi
 # Run startup tests
 echo "Running startup tests..."
 if [ -f "test_startup.py" ]; then
-    python3 test_startup.py
+    python test_startup.py
     if [ $? -ne 0 ]; then
         echo "Startup tests failed. Check the logs for details."
         exit 1
