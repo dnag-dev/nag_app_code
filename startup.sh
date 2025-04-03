@@ -19,6 +19,10 @@ if [ -z "$PYTHON_PATH" ]; then
 fi
 echo "Using Python at: $PYTHON_PATH"
 
+# Install required system packages
+echo "Installing required system packages..."
+apt-get update && apt-get install -y python3-venv
+
 # Create necessary directories in the correct location
 echo "Creating necessary directories..."
 mkdir -p /home/site/wwwroot/data
