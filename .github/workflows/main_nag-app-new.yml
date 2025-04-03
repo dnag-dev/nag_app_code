@@ -34,12 +34,8 @@ jobs:
     - name: Create deployment package
       run: |
         mkdir -p deploy
-        cp -r . deploy/
-        # Ensure deployment files are included
-        cp startup.sh deploy/
-        cp .deployment deploy/
-        cp check_env.py deploy/
-        cp web.config deploy/
+        # Copy all files except deploy directory
+        find . -maxdepth 1 -not -name "deploy" -not -name ".git" -not -name ".github" -exec cp -r {} deploy/ \;
         cd deploy
         zip -r ../deploy.zip .
 
