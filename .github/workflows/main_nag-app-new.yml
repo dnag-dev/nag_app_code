@@ -33,8 +33,10 @@ jobs:
 
     - name: Create deployment package
       run: |
-        # Create a zip with all files except venv and git directories
-        zip -r deploy.zip . -x "venv/*" "*.git*" "*.md"
+        # Make the deployment script executable
+        chmod +x deploy.sh
+        # Run the deployment script
+        ./deploy.sh
 
     - name: Deploy to Azure Web App
       uses: azure/webapps-deploy@v2
