@@ -19,6 +19,7 @@ def main():
         # Log environment information
         logger.info(f"Current working directory: {os.getcwd()}")
         logger.info(f"Python version: {sys.version}")
+        logger.info(f"Python path: {sys.path}")
         logger.info(f"Environment variables: {dict(os.environ)}")
         
         # Create necessary directories
@@ -59,9 +60,21 @@ def main():
         # Import and run the application
         logger.info("Importing and running the application...")
         try:
-            from main import app
+            # Add the current directory to Python path
+            sys.path.insert(0, os.getcwd())
+            logger.info(f"Updated Python path: {sys.path}")
+            
+            # Try to import the app module
+            app_module = os.environ.get("APP_MODULE", "main:app")
+            module_name, app_name = app_module.split(":")
+            logger.info(f"Importing {module_name} and getting {app_name}")
+            
+            module = __import__(module_name)
+            app = getattr(module, app_name)
+            logger.info("Successfully imported app")
+            
             import uvicorn
-            logger.info("Successfully imported app and uvicorn")
+            logger.info("Successfully imported uvicorn")
         except ImportError as e:
             logger.error(f"Error importing app or uvicorn: {e}")
             logger.error(f"Traceback: {traceback.format_exc()}")
