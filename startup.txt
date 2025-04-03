@@ -1,0 +1,14 @@
+#!/bin/bash
+echo "Starting application..."
+echo "Current directory: $(pwd)"
+echo "Python path: $PYTHONPATH"
+echo "Files in current directory:"
+ls -la
+echo "Checking Python version:"
+python --version
+echo "Checking pip list:"
+pip list
+echo "Checking if main.py exists:"
+ls -la main.py
+echo "Starting uvicorn..."
+python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload 
