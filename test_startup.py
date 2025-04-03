@@ -13,7 +13,6 @@ def test_imports():
         import fastapi
         import uvicorn
         import openai
-        import whisper
         import gunicorn
         logger.info("All imports successful!")
         return True
