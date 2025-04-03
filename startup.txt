@@ -1,16 +1,16 @@
 #!/bin/bash
+
+# Set up environment
+export PYTHONPATH=/home/site/wwwroot
+export PYTHONUNBUFFERED=1
+cd /home/site/wwwroot
+
+# Install dependencies
+echo "Installing dependencies..."
+python3 -m pip install --no-cache-dir -r requirements.txt
+
+# Start the application
 echo "Starting application..."
-echo "Current directory: $(pwd)"
-echo "Python path: $PYTHONPATH"
-echo "Files in current directory:"
-ls -la
-echo "Checking Python version:"
-python3 --version
-echo "Checking pip list:"
-python3 -m pip list
-echo "Checking if main.py exists:"
-ls -la main.py
-echo "Starting uvicorn..."
 python3 -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
 # Oryx startup configuration

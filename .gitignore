@@ -114,6 +114,9 @@ models/*
 !azure_deploy.sh
 !local_setup.sh
 !.github/workflows/
+!test_startup.py
+!startup.sh
+!.deployment
 
 # Exclude all other files and directories
 *
@@ -126,6 +129,9 @@ models/*
 !healthcheck.py
 !azure_deploy.sh
 !local_setup.sh
+!test_startup.py
+!startup.sh
+!.deployment
 !static/
 !static/.gitkeep
 !audio/
