@@ -80,12 +80,16 @@ def main():
             logger.error(f"Traceback: {traceback.format_exc()}")
             raise
         
+        # Get port from environment variable or use default
+        port = int(os.environ.get("PORT", 8000))
+        logger.info(f"Using port: {port}")
+        
         # Run the application
         logger.info("Starting the application...")
         uvicorn.run(
             app, 
             host="0.0.0.0", 
-            port=8000,
+            port=port,
             log_level="debug",
             access_log=True
         )
