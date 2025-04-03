@@ -113,6 +113,7 @@ models/*
 !healthcheck.py
 !azure_deploy.sh
 !local_setup.sh
+!.github/workflows/
 
 # Exclude all other files and directories
 *
@@ -133,6 +134,8 @@ models/*
 !data/.gitkeep
 !models/
 !models/.gitkeep
+!.github/
+!.github/workflows/
 
 # App directories moved to separate repositories
 NagAppNew/

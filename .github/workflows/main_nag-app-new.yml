@@ -8,6 +8,10 @@ on:
   push:
     branches:
       - main
+    paths:
+      - '**'
+      - '!**.md'
+      - '!.gitignore'
   workflow_dispatch:
 
 jobs:
@@ -24,18 +28,52 @@ jobs:
         with:
           python-version: '3.8'
 
+      - name: Cache pip dependencies
+        uses: actions/cache@v3
+        id: pip-cache
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
       - name: Create and start virtual environment
         run: |
           python -m venv venv
           source venv/bin/activate
       
       - name: Install dependencies
-        run: pip install -r requirements.txt
-        
-      # Optional: Add step to run tests here (PyTest, Django test suites, etc.)
+        if: steps.pip-cache.outputs.cache-hit != 'true'
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+        env:
+          PIP_CACHE_DIR: ~/.cache/pip
 
-      - name: Zip artifact for deployment
-        run: zip release.zip ./* -r
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v41
+        with:
+          files: |
+            **/*.py
+            **/*.html
+            **/*.js
+            **/*.css
+            **/*.json
+            web.config
+            startup.py
+            requirements.txt
+
+      - name: Create deployment package
+        run: |
+          if [ "${{ steps.changed-files.outputs.any_changed }}" == "true" ]; then
+            # Create a zip with only changed files
+            zip -r release.zip ${{ steps.changed-files.outputs.all_changed_files }}
+          else
+            # If no files changed, create an empty zip to trigger a restart
+            touch dummy.txt
+            zip release.zip dummy.txt
+          fi
 
       - name: Upload artifact for deployment jobs
         uses: actions/upload-artifact@v4
@@ -60,9 +98,6 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: python-app
-
-      - name: Unzip artifact for deployment
-        run: unzip release.zip
 
       - name: 'Deploy to Azure Web App'
         uses: azure/webapps-deploy@v3
