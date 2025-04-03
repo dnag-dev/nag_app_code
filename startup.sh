@@ -37,9 +37,14 @@ echo "Setting up virtual environment..."
 python3 -m venv antenv
 source antenv/bin/activate
 
+# Upgrade pip
+echo "Upgrading pip..."
+python -m pip install --upgrade pip
+
 # Install dependencies
 echo "Installing dependencies..."
 if [ -f "requirements.txt" ]; then
+    echo "Installing from requirements.txt..."
     pip install --no-cache-dir -r requirements.txt
     echo "Installed packages:"
     pip list
@@ -48,6 +53,14 @@ else
     ls -la
     exit 1
 fi
+
+# Verify fastapi is installed
+echo "Verifying fastapi installation..."
+python -c "import fastapi" || {
+    echo "ERROR: fastapi not installed correctly"
+    pip list
+    exit 1
+}
 
 # Copy default context files if they don't exist
 if [ ! -f "/home/site/wwwroot/data/dinakara_context_full.json" ]; then
