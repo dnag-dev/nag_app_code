@@ -87,6 +87,21 @@ if [ ! -f "main.py" ]; then
     exit 1
 fi
 
+# Set up Python path for the application
+echo "Setting up Python path..."
+export PYTHONPATH=/home/site/wwwroot:$PYTHONPATH
+echo "PYTHONPATH: $PYTHONPATH"
+
+# Verify main module can be imported
+echo "Verifying main module can be imported..."
+python3 -c "import main" || {
+    echo "ERROR: main module cannot be imported"
+    echo "Current directory: $(pwd)"
+    echo "Directory contents:"
+    ls -la
+    exit 1
+}
+
 # Run startup tests
 echo "Running startup tests..."
 if [ -f "test_startup.py" ]; then
