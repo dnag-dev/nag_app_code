@@ -11,12 +11,25 @@ def main():
     try:
         # Create necessary directories
         logger.info("Creating required directories...")
-        dirs = [
-            "/home/LogFiles/data",
-            "/home/LogFiles/static",
-            "/home/LogFiles/cache",
-            "/home/LogFiles/memory"
-        ]
+        
+        # Check if we're running on Azure
+        is_azure = os.path.exists("/home/LogFiles")
+        
+        # Define directories based on environment
+        if is_azure:
+            dirs = [
+                "/home/LogFiles/data",
+                "/home/LogFiles/static",
+                "/home/LogFiles/cache",
+                "/home/LogFiles/memory"
+            ]
+        else:
+            dirs = [
+                "data",
+                "static",
+                "cache",
+                "memory"
+            ]
         
         for dir_path in dirs:
             if not os.path.exists(dir_path):

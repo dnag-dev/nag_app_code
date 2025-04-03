@@ -1,10 +1,19 @@
 #!/bin/bash
 
-# Create necessary directories
-mkdir -p /home/LogFiles/data
-mkdir -p /home/LogFiles/static
-mkdir -p /home/LogFiles/cache
-mkdir -p /home/LogFiles/memory
+# Check if we're running on Azure
+if [ -d "/home/LogFiles" ]; then
+    # Create necessary directories for Azure
+    mkdir -p /home/LogFiles/data
+    mkdir -p /home/LogFiles/static
+    mkdir -p /home/LogFiles/cache
+    mkdir -p /home/LogFiles/memory
+else
+    # Create necessary directories for local development
+    mkdir -p data
+    mkdir -p static
+    mkdir -p cache
+    mkdir -p memory
+fi
 
 # Set environment variables
 export PYTHONPATH=$PYTHONPATH:$(pwd)
