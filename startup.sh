@@ -21,7 +21,13 @@ mkdir -p /home/LogFiles/memory
 
 # Install dependencies
 echo "Installing dependencies..."
-python3 -m pip install --no-cache-dir -r requirements.txt
+if [ -f "requirements.txt" ]; then
+    python3 -m pip install --no-cache-dir -r requirements.txt
+else
+    echo "ERROR: requirements.txt not found in $(pwd)"
+    ls -la
+    exit 1
+fi
 
 # Copy default context files if they don't exist
 if [ ! -f "/home/LogFiles/data/dinakara_context_full.json" ]; then

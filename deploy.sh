@@ -14,6 +14,8 @@ cp startup.sh $DEPLOY_DIR/
 cp startup.txt $DEPLOY_DIR/
 cp .deployment $DEPLOY_DIR/
 cp test_startup.py $DEPLOY_DIR/
+cp entrypoint.py $DEPLOY_DIR/
+cp healthcheck.py $DEPLOY_DIR/
 
 # Create necessary directories
 mkdir -p $DEPLOY_DIR/data
