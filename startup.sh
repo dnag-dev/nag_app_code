@@ -19,10 +19,6 @@ if [ -z "$PYTHON_PATH" ]; then
 fi
 echo "Using Python at: $PYTHON_PATH"
 
-# Install required system packages
-echo "Installing required system packages..."
-apt-get update && apt-get install -y python3-venv
-
 # Create necessary directories in the correct location
 echo "Creating necessary directories..."
 mkdir -p /home/site/wwwroot/data
@@ -46,9 +42,9 @@ cd /home/site/wwwroot
 echo "Verifying files in /home/site/wwwroot:"
 ls -la
 
-# Create and activate virtual environment
+# Create virtual environment using python3 -m venv
 echo "Setting up virtual environment..."
-$PYTHON_PATH -m venv antenv
+python3 -m venv antenv --clear
 if [ ! -f "antenv/bin/activate" ]; then
     echo "ERROR: Virtual environment activation script not found"
     exit 1
@@ -57,6 +53,12 @@ fi
 # Activate virtual environment
 echo "Activating virtual environment..."
 source antenv/bin/activate
+
+# Install pip directly
+echo "Installing pip..."
+curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
+python3 get-pip.py --no-warn-script-location
+rm get-pip.py
 
 # Upgrade pip
 echo "Upgrading pip..."
