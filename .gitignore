@@ -77,14 +77,12 @@ NAG_AI_1.0_Stable.zip
 # Exclude all development and test directories from deployment
 NagAppNew/
 NagAppNew2/
-NagAppNewPure/
 NagAppDev/
 NagAppMobileNew/
 NagAppPure/
 NagAppPure_1.0/
 NagAppPure_1.0_Stable/
 NagAppPure_1.0_Stable_20250402/
-NagAppNewPure_1.0_Stable/
 NagAppNewPure_1.0_Stable_20250402/
 
 # Virtual Environment
@@ -135,6 +133,4 @@ models/*
 # App directories moved to separate repositories
 NagAppNew/
 NagAppMobileNew/
-NagAppNewPure/
 NagAppNew2/
-NagAppNewPure_1.0_Stable/
