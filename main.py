@@ -19,7 +19,7 @@ import time
 from typing import Union, Dict, Any, Optional
 from pydantic import BaseModel, EmailStr
 from enum import Enum
-import whisper
+import openai
 
 # -------------------- Request Models --------------------
 class ChatMode(str, Enum):
@@ -54,7 +54,7 @@ azure_api_url = os.getenv("AZURE_API_URL")
 client = OpenAI(api_key=openai_api_key)
 
 # Initialize Whisper model
-model = whisper.load_model("base")
+model = None  # We'll use OpenAI's API directly instead of local model
 
 # -------------------- Load Context Files --------------------
 try:
@@ -299,9 +299,14 @@ async def transcribe_audio(file: UploadFile = File(...)):
             content = await file.read()
             buffer.write(content)
 
-        # Transcribe using Whisper
-        result = model.transcribe(temp_path)
-        transcription = result["text"]
+        # Transcribe using OpenAI's API
+        with open(temp_path, "rb") as audio_file:
+            transcript = client.audio.transcriptions.create(
+                model="whisper-1",
+                file=audio_file,
+                language="en"
+            )
+        transcription = transcript.text
 
         # Filter transcription
         filtered_text = filter_transcription(transcription)
