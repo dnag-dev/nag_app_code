@@ -14,7 +14,7 @@ mkdir -p /home/site/wwwroot/memory
 cd /home/site/wwwroot
 
 # Install uvicorn if it's not already installed
-python -m pip install uvicorn[standard] gunicorn fastapi
+/home/site/wwwroot/antenv/bin/python -m pip install uvicorn[standard] gunicorn fastapi
 
 # Start the application
-python -m uvicorn main:app --host 0.0.0.0 --port 8000 --workers 2 
+/home/site/wwwroot/antenv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8000 --workers 2 
