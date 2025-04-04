@@ -186,21 +186,49 @@ function startRecording() {
 function stopRecording() {
   if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state === "recording") {
     try {
+      logDebug("🛑 Attempting to stop MediaRecorder...");
       window.nagState.mediaRecorder.stop();
-      logDebug("🎙️ Recording stopped");
+      logDebug("✅ MediaRecorder stopped successfully");
+      
+      // Log the state of audio chunks
+      logDebug(`📊 Audio chunks collected: ${window.nagState.audioChunks.length}`);
+      if (window.nagState.audioChunks.length > 0) {
+        logDebug(`📊 First chunk size: ${window.nagState.audioChunks[0].size} bytes`);
+      }
+      
+      // Log MediaRecorder state
+      logDebug(`📊 MediaRecorder state after stop: ${window.nagState.mediaRecorder.state}`);
+      
+      // Log stream state
+      if (window.nagState.stream) {
+        const tracks = window.nagState.stream.getTracks();
+        logDebug(`📊 Active tracks: ${tracks.length}`);
+        tracks.forEach(track => {
+          logDebug(`📊 Track ${track.kind} state: ${track.readyState}`);
+        });
+      }
     } catch (e) {
       logDebug("❌ Error stopping recording: " + e.message);
+      logDebug("❌ Error stack: " + e.stack);
       
       // Force cleanup in case of error
       if (window.nagState.stream) {
-        window.nagState.stream.getTracks().forEach(track => track.stop());
+        logDebug("🔄 Forcing stream cleanup...");
+        window.nagState.stream.getTracks().forEach(track => {
+          logDebug(`🔄 Stopping ${track.kind} track`);
+          track.stop();
+        });
       }
       
       // Restart process after error
       if (!window.nagState.isWalkieTalkieMode && !window.nagState.isPaused && !window.nagState.interrupted) {
+        logDebug("🔄 Scheduling restart after error...");
         setTimeout(() => startListening(), 1000);
       }
     }
+  } else {
+    logDebug("⚠️ Cannot stop recording - MediaRecorder not in recording state");
+    logDebug(`📊 MediaRecorder state: ${window.nagState.mediaRecorder ? window.nagState.mediaRecorder.state : 'null'}`);
   }
 }
 
