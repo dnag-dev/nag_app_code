@@ -160,19 +160,19 @@ function startRecording() {
     // Special handling for Safari to use timeslices
     if (window.nagState.isSafari) {
       // For Safari, use shorter timeslices to get more frequent chunks
-      window.nagState.mediaRecorder.start(200); // Get data every 200ms
-      logDebug("🎙️ Safari recording with 200ms timeslices");
+      window.nagState.mediaRecorder.start(100); // Get data every 100ms for better responsiveness
+      logDebug("🎙️ Safari recording with 100ms timeslices");
       
       // Add Safari-specific event handler for dataavailable
       window.nagState.mediaRecorder.ondataavailable = function(e) {
         if (e.data && e.data.size > 0) {
           // For Safari, we need to ensure the chunk is large enough to contain meaningful audio
-          if (e.data.size > 500) { // Only add chunks larger than 500 bytes
+          if (e.data.size > 200) { // Reduced threshold to 200 bytes
             window.nagState.audioChunks.push(e.data);
             logDebug(`🔊 Audio chunk received: ${e.data.size} bytes`);
             
             // Update speech detection based on chunk size
-            if (e.data.size > 3000) { // Consider chunks > 3KB as likely containing speech
+            if (e.data.size > 1000) { // Reduced threshold to 1KB
               window.nagState.speechDetected = true;
             }
           }
@@ -184,7 +184,7 @@ function startRecording() {
     
     // Use different recording durations based on browser
     // Safari needs shorter recordings for reliability
-    const maxRecordingTime = window.nagState.isSafari ? 10000 : 20000;
+    const maxRecordingTime = window.nagState.isSafari ? 5000 : 20000; // Reduced to 5 seconds for Safari
     
     // Set a maximum recording time to prevent hanging
     window.nagState.longRecordingTimer = setTimeout(() => {
@@ -428,4 +428,71 @@ async function stopListening() {
   removePlayButton();
   pauseBtn.disabled = true;
   window.nagState.listening = false;
+}
+
+// Initialize MediaRecorder with proper audio format
+function initializeMediaRecorder(stream) {
+  try {
+    // For Safari, we need to use audio/mp4
+    const mimeType = window.nagState.isSafari ? "audio/mp4" : "audio/webm";
+    
+    // Check if the MIME type is supported
+    if (!MediaRecorder.isTypeSupported(mimeType)) {
+      logDebug(`❌ ${mimeType} not supported, trying alternatives...`);
+      // Try other formats
+      const formats = ["audio/mp4", "audio/webm", "audio/mpeg", "audio/ogg;codecs=opus"];
+      for (const format of formats) {
+        if (MediaRecorder.isTypeSupported(format)) {
+          logDebug(`✅ Using alternative format: ${format}`);
+          window.nagState.mediaRecorder = new MediaRecorder(stream, {
+            mimeType: format,
+            audioBitsPerSecond: 128000
+          });
+          break;
+        }
+      }
+    } else {
+      window.nagState.mediaRecorder = new MediaRecorder(stream, {
+        mimeType: mimeType,
+        audioBitsPerSecond: 128000
+      });
+    }
+    
+    if (!window.nagState.mediaRecorder) {
+      throw new Error("No supported audio format found");
+    }
+    
+    logDebug(`Using audio format: ${window.nagState.mediaRecorder.mimeType}`);
+    
+    // Set up event handlers
+    window.nagState.mediaRecorder.ondataavailable = function(e) {
+      if (e.data && e.data.size > 0) {
+        window.nagState.audioChunks.push(e.data);
+        logDebug(`🔊 Audio chunk received: ${e.data.size} bytes`);
+      }
+    };
+    
+    window.nagState.mediaRecorder.onstop = async function() {
+      logDebug("✅ MediaRecorder stopped successfully");
+      logDebug(`📊 Audio chunks collected: ${window.nagState.audioChunks.length}`);
+      
+      if (window.nagState.audioChunks.length > 0) {
+        logDebug(`📊 First chunk size: ${window.nagState.audioChunks[0].size} bytes`);
+        logDebug(`📊 Last chunk size: ${window.nagState.audioChunks[window.nagState.audioChunks.length - 1].size} bytes`);
+        
+        // Calculate total size
+        const totalSize = window.nagState.audioChunks.reduce((sum, chunk) => sum + chunk.size, 0);
+        logDebug(`📊 Total audio size: ${totalSize} bytes`);
+        
+        // Process the audio and transcribe
+        await processAudioAndTranscribe();
+      }
+    };
+    
+    window.nagState.mediaRecorder.onerror = function(e) {
+      logDebug("❌ MediaRecorder error: " + e.error.name);
+    };
+  } catch (e) {
+    logDebug("❌ Error initializing MediaRecorder: " + e.message);
+  }
 }
