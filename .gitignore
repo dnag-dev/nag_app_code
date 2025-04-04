@@ -65,3 +65,4 @@ output.tar.gz
 !static/**
 !data/
 !data/**
+archive/NagAppNewPure
