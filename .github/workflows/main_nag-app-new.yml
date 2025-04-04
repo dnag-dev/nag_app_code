@@ -1,4 +1,3 @@
-# .github/workflows/main_nag-app-new.yml
 name: Build and deploy Python app to Azure Web App - nag_app_code
 
 on:
@@ -29,9 +28,15 @@ jobs:
         chmod +x deploy.sh
         ./deploy.sh
 
+    - name: Upload deploy.zip as artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: deploy-package
+        path: deploy.zip
+
     - name: Deploy to Azure Web App
       uses: azure/webapps-deploy@v2
       with:
-        app-name: 'nag-app-new'  # 👈 This is your Azure app service name
+        app-name: 'nag-app-new'  # Azure app service name
         publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
         package: deploy.zip
