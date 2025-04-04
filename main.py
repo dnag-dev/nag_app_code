@@ -142,6 +142,8 @@ async def transcribe_audio(file: UploadFile = File(...)):
     try:
         # Get the file extension based on content type
         content_type = file.content_type.lower()
+        logger.info(f"Received audio file with content type: {content_type}")
+        
         if "mp4" in content_type:
             ext = "mp4"
         elif "webm" in content_type:
@@ -156,13 +158,21 @@ async def transcribe_audio(file: UploadFile = File(...)):
         
         async with aiofiles.open(temp_path, "wb") as out_file:
             content = await file.read()
+            file_size = len(content)
+            logger.info(f"Audio file size: {file_size} bytes")
             await out_file.write(content)
             
         with open(temp_path, "rb") as audio_file:
-            transcript = await openai.Audio.atranscribe(
-                model="whisper-1",
-                file=audio_file
-            )
+            logger.info("Starting transcription with Whisper...")
+            try:
+                transcript = await openai.Audio.atranscribe(
+                    model="whisper-1",
+                    file=audio_file
+                )
+                logger.info(f"Transcription successful: {transcript['text']}")
+            except Exception as e:
+                logger.error(f"Whisper transcription error: {str(e)}")
+                raise
             
         os.remove(temp_path)
         return {"transcription": transcript["text"]}
