@@ -8,7 +8,6 @@ ls -la
 # Set up environment
 export PYTHONPATH=/home/site/wwwroot
 export PYTHONUNBUFFERED=1
-export PATH="/home/site/wwwroot/antenv/bin:$PATH"
 
 # Find Python installation
 echo "Finding Python installation..."
@@ -42,17 +41,15 @@ cd /home/site/wwwroot
 echo "Verifying files in /home/site/wwwroot:"
 ls -la
 
-# Create virtual environment using python3 -m venv
+# Create virtual environment in a temporary location
 echo "Setting up virtual environment..."
-python3 -m venv antenv --clear
-if [ ! -f "antenv/bin/activate" ]; then
-    echo "ERROR: Virtual environment activation script not found"
-    exit 1
-fi
+TEMP_VENV="/tmp/antenv"
+rm -rf $TEMP_VENV
+python3 -m venv $TEMP_VENV
 
 # Activate virtual environment
 echo "Activating virtual environment..."
-source antenv/bin/activate
+source $TEMP_VENV/bin/activate
 
 # Install pip directly
 echo "Installing pip..."
@@ -127,5 +124,11 @@ if [ -f "test_startup.py" ]; then
 else
     echo "test_startup.py not found, skipping tests"
 fi
+
+# Copy virtual environment to final location
+echo "Copying virtual environment to final location..."
+rm -rf antenv
+cp -r $TEMP_VENV antenv
+chmod -R 755 antenv
 
 echo "Deployment completed successfully. Application will be started by Azure's web.config configuration." 
