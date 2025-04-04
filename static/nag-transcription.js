@@ -39,12 +39,19 @@ async function processAudioAndTranscribe() {
       mimeType = window.nagState.audioChunks[0].type;
     }
     
+    // For Safari, ensure we're using the correct MIME type
+    if (window.nagState.isSafari && !mimeType.includes("mp4")) {
+      mimeType = "audio/mp4";
+      logDebug("📝 Forcing audio/mp4 MIME type for Safari");
+    }
+    
     // Create blob with appropriate type
     const blob = new Blob(window.nagState.audioChunks, mimeType ? { type: mimeType } : {});
     
     // Log blob size for Safari debugging
     if (window.nagState.isSafari) {
       logDebug(`📊 Safari: Final blob size: ${blob.size} bytes`);
+      logDebug(`📊 Safari: Using MIME type: ${mimeType}`);
     }
     
     // Check if we have enough audio data
@@ -57,9 +64,9 @@ async function processAudioAndTranscribe() {
     const formData = new FormData();
     
     // Determine file extension based on MIME type
-    let fileExt = "audio";
+    let fileExt = "mp3"; // Default to mp3 for Safari
     if (mimeType.includes("webm")) fileExt = "webm";
-    else if (mimeType.includes("mp4") || mimeType.includes("mpeg")) fileExt = "mp3";
+    else if (mimeType.includes("mp4")) fileExt = "mp4";
     else if (mimeType.includes("ogg")) fileExt = "ogg";
     
     // Add file to form data
@@ -71,6 +78,7 @@ async function processAudioAndTranscribe() {
       formData.append("chunk_count", window.nagState.audioChunks.length.toString());
       formData.append("total_size", blob.size.toString());
       formData.append("mime_type", mimeType);
+      formData.append("format", "mp4"); // Force MP4 format for Safari
     }
 
     // Show uploading state
