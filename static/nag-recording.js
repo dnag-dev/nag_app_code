@@ -159,9 +159,17 @@ function startRecording() {
   try {
     // Special handling for Safari to use timeslices
     if (window.nagState.isSafari) {
-      // For Safari, use timeslices to get more frequent chunks
-      window.nagState.mediaRecorder.start(1000); // Get data every 1 second
-      logDebug("🎙️ Safari recording with 1s timeslices");
+      // For Safari, use shorter timeslices to get more frequent chunks
+      window.nagState.mediaRecorder.start(500); // Get data every 500ms
+      logDebug("🎙️ Safari recording with 500ms timeslices");
+      
+      // Add Safari-specific event handler for dataavailable
+      window.nagState.mediaRecorder.ondataavailable = function(e) {
+        if (e.data && e.data.size > 0) {
+          window.nagState.audioChunks.push(e.data);
+          logDebug(`🔊 Audio chunk received: ${e.data.size} bytes`);
+        }
+      };
     } else {
       window.nagState.mediaRecorder.start();
     }
@@ -187,25 +195,36 @@ function stopRecording() {
   if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state === "recording") {
     try {
       logDebug("🛑 Attempting to stop MediaRecorder...");
-      window.nagState.mediaRecorder.stop();
-      logDebug("✅ MediaRecorder stopped successfully");
       
-      // Log the state of audio chunks
-      logDebug(`📊 Audio chunks collected: ${window.nagState.audioChunks.length}`);
-      if (window.nagState.audioChunks.length > 0) {
-        logDebug(`📊 First chunk size: ${window.nagState.audioChunks[0].size} bytes`);
-      }
-      
-      // Log MediaRecorder state
-      logDebug(`📊 MediaRecorder state after stop: ${window.nagState.mediaRecorder.state}`);
-      
-      // Log stream state
-      if (window.nagState.stream) {
-        const tracks = window.nagState.stream.getTracks();
-        logDebug(`📊 Active tracks: ${tracks.length}`);
-        tracks.forEach(track => {
-          logDebug(`📊 Track ${track.kind} state: ${track.readyState}`);
-        });
+      // For Safari, request final data before stopping
+      if (window.nagState.isSafari) {
+        window.nagState.mediaRecorder.requestData();
+        // Wait a short time to ensure the data is processed
+        setTimeout(() => {
+          window.nagState.mediaRecorder.stop();
+          logDebug("✅ MediaRecorder stopped successfully");
+          
+          // Log the state of audio chunks
+          logDebug(`📊 Audio chunks collected: ${window.nagState.audioChunks.length}`);
+          if (window.nagState.audioChunks.length > 0) {
+            logDebug(`📊 First chunk size: ${window.nagState.audioChunks[0].size} bytes`);
+          }
+          
+          // Log MediaRecorder state
+          logDebug(`📊 MediaRecorder state after stop: ${window.nagState.mediaRecorder.state}`);
+          
+          // Log stream state
+          if (window.nagState.stream) {
+            const tracks = window.nagState.stream.getTracks();
+            logDebug(`📊 Active tracks: ${tracks.length}`);
+            tracks.forEach(track => {
+              logDebug(`📊 Track ${track.kind} state: ${track.readyState}`);
+            });
+          }
+        }, 500);
+      } else {
+        window.nagState.mediaRecorder.stop();
+        logDebug("✅ MediaRecorder stopped successfully");
       }
     } catch (e) {
       logDebug("❌ Error stopping recording: " + e.message);

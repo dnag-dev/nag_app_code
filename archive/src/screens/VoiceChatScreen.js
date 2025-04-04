@@ -26,16 +26,12 @@ import RNFS from 'react-native-fs';
 import Sound from 'react-native-sound';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import OrbAnimation from '../components/OrbAnimation';
-import Voice from '@react-native-voice/voice';
 import AudioService from '../services/audioService';
 
 const { width } = Dimensions.get('window');
 const ORB_SIZE = width * 0.6;
 
 const BUILD_NUMBER = '1.0.0';
-
-// Initialize voice event emitter
-const voiceEmitter = new NativeEventEmitter(Voice);
 
 export default function VoiceChatScreen() {
   const navigation = useNavigation();
@@ -69,40 +65,6 @@ export default function VoiceChatScreen() {
     addLog(`Chat Endpoint: ${AZURE_API_ENDPOINTS.chat}`, 'info');
     addLog(`Transcribe Endpoint: ${AZURE_API_ENDPOINTS.transcribe}`, 'info');
     addLog(`Text-to-Speech Endpoint: ${AZURE_API_ENDPOINTS.textToSpeech}`, 'info');
-
-    // Set up voice event listeners
-    const onSpeechStart = () => {
-      addLog('Speech recognition started', 'info');
-      setIsRecording(true);
-    };
-
-    const onSpeechEnd = () => {
-      addLog('Speech recognition ended', 'info');
-      setIsRecording(false);
-    };
-
-    const onSpeechResults = (e) => {
-      const text = e.value[0];
-      addLog(`Speech recognized: ${text}`, 'success');
-      setAudioUri(text);
-    };
-
-    const onSpeechError = (e) => {
-      addLog(`Speech recognition error: ${e.error?.message}`, 'error');
-      setIsRecording(false);
-    };
-
-    voiceEmitter.addListener('onSpeechStart', onSpeechStart);
-    voiceEmitter.addListener('onSpeechEnd', onSpeechEnd);
-    voiceEmitter.addListener('onSpeechResults', onSpeechResults);
-    voiceEmitter.addListener('onSpeechError', onSpeechError);
-
-    return () => {
-      voiceEmitter.removeAllListeners('onSpeechStart');
-      voiceEmitter.removeAllListeners('onSpeechEnd');
-      voiceEmitter.removeAllListeners('onSpeechResults');
-      voiceEmitter.removeAllListeners('onSpeechError');
-    };
   }, []);
 
   const handleStartRecording = async () => {
@@ -128,10 +90,6 @@ export default function VoiceChatScreen() {
       const uri = await audioService.startRecording();
       setAudioUri(uri);
       addLog(`Recording started at: ${uri}`, 'success');
-      
-      // Start voice recognition
-      await audioService.startVoiceRecognition();
-      addLog('Voice recognition started', 'success');
     } catch (error) {
       console.error('Error starting recording:', error);
       addLog(`Error starting recording: ${error.message}`, 'error');
@@ -154,10 +112,6 @@ export default function VoiceChatScreen() {
       // Stop recording
       const result = await audioService.stopRecording();
       addLog('Recording stopped', 'success');
-      
-      // Stop voice recognition
-      await audioService.stopVoiceRecognition();
-      addLog('Voice recognition stopped', 'success');
       
       if (currentTranscription) {
         setIsProcessing(true);

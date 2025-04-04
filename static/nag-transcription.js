@@ -9,6 +9,13 @@ async function processAudioAndTranscribe() {
     if (window.nagState.isSafari) {
       logDebug("📊 Safari audio processing - chunks: " + window.nagState.audioChunks.length);
       
+      // For Safari, ensure we have enough audio data
+      if (window.nagState.audioChunks.length < 3) {
+        logDebug("⚠️ Not enough audio chunks for Safari");
+        handleTranscriptionError();
+        return;
+      }
+      
       // For Safari, ensure we request a larger time slice for data
       if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state === "recording") {
         try {
@@ -41,7 +48,7 @@ async function processAudioAndTranscribe() {
     }
     
     // Check if we have enough audio data
-    if (blob.size < 1000) { // Less than 1KB is probably just noise
+    if (blob.size < 2000) { // Less than 2KB is probably just noise
       logDebug("⚠️ Audio too small to process: " + blob.size + " bytes");
       handleTranscriptionError();
       return;
@@ -63,6 +70,7 @@ async function processAudioAndTranscribe() {
       formData.append("browser", "safari");
       formData.append("chunk_count", window.nagState.audioChunks.length.toString());
       formData.append("total_size", blob.size.toString());
+      formData.append("mime_type", mimeType);
     }
 
     // Show uploading state
