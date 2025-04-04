@@ -2,11 +2,14 @@
 
 echo "📦 Zipping app for Azure deployment..."
 
-rm -f deploy.zip
-
-# Include all necessary files from the nag_app_code folder
 zip -r deploy.zip \
-  nag_app_code \
-  static \
-  data \
-  requirements.txt
+    main.py \
+    requirements.txt \
+    entrypoint.py \
+    healthcheck.py \
+    startup.sh \
+    web.config \
+    test_startup.py \
+    static \
+    data \
+    *.py
