@@ -1,149 +1,76 @@
-# Environment variables
+# Environment
 .env
-
-# Python
+.venv/
+env/
+ENV/
 __pycache__/
 *.py[cod]
-*$py.class
 *.so
 .Python
-.venv/
-venv/
-ENV/
-env/
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
 
 # Node
 node_modules/
 npm-debug.log
 yarn-debug.log
-yarn-error.log
 .expo/
 dist/
 web-build/
 
-# iOS
+# iOS / Android
 ios/
 ios/Pods/
 ios/build/
-ios/Podfile.lock
-ios/NagAppNew.xcworkspace/xcshareddata/
-ios/NagAppNew/Assets.xcassets/
-ios/exportOptions.plist
-
-# Android
 android/
-android/app/build/
-android/build/
-android/gradle/
 android/.gradle/
+android/app/build/
 android/local.properties
-android/.idea/
 
-# IDE
+# IDE & OS files
 .idea/
 .vscode/
-*.swp
-*.swo
-
-# OS
 .DS_Store
 Thumbs.db
 
-# Project specific
+# Logs & Audio
+*.log
 *.m4a
 *.wav
 *.mp3
+audio/*
+!audio/.gitkeep
+
+# Cache
 cache/
 static/audio/
 static/cache/
-*.log
-NAG_AI_1.0_Stable.zip
 
-# Exclude all development and test directories from deployment
-NagAppNew/
-NagAppNew2/
-NagAppDev/
-NagAppMobileNew/
-NagAppPure/
-NagAppPure_1.0/
-NagAppPure_1.0_Stable/
-NagAppPure_1.0_Stable_20250402/
-NagAppNewPure_1.0_Stable_20250402/
-
-# Virtual Environment
-.env
-.venv
-env/
-venv/
-ENV/
-
-# Project specific
-audio/*
-!audio/.gitkeep
-static/*
-!static/.gitkeep
-data/*.json
-!data/.gitkeep
-
-# Whisper model files
+# Whisper models
 models/*
 !models/.gitkeep
 
-# Keep only essential files for deployment
-!main.py
-!requirements.txt
-!web.config
-!startup.py
-!entrypoint.py
-!healthcheck.py
-!azure_deploy.sh
-!local_setup.sh
-!.github/workflows/
-!test_startup.py
-!startup.sh
-!.deployment
-
-# Exclude all other files and directories
-*
-!.gitignore
-!main.py
-!requirements.txt
-!web.config
-!startup.py
-!entrypoint.py
-!healthcheck.py
-!azure_deploy.sh
-!local_setup.sh
-!test_startup.py
-!startup.sh
-!.deployment
-!static/
-!static/.gitkeep
-!audio/
-!audio/.gitkeep
-!data/
-!data/.gitkeep
-!models/
-!models/.gitkeep
-!.github/
-!.github/workflows/
-
-# App directories moved to separate repositories
+# App-specific excluded folders
 NagAppNew/
 NagAppMobileNew/
 NagAppNew2/
+NagAppDev/
+NagAppPure/
+
+# ✅ Include these critical files and folders for deployment
+!main.py
+!requirements.txt
+!web.config
+!entrypoint.py
+!startup.py
+!startup.sh
+!healthcheck.py
+!test_startup.py
+!.deployment
+!azure_deploy.sh
+!local_setup.sh
+
+# ✅ Include folders and their contents
+!static/
+!static/**
+
+!data/
+!data/**
