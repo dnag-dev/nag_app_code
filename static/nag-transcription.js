@@ -10,18 +10,22 @@ async function processAudioAndTranscribe() {
       logDebug("📊 Safari audio processing - chunks: " + window.nagState.audioChunks.length);
       
       // For Safari, ensure we have enough audio data
-      if (window.nagState.audioChunks.length < 3) {
+      if (window.nagState.audioChunks.length < 2) {
         logDebug("⚠️ Not enough audio chunks for Safari");
         handleTranscriptionError();
         return;
       }
+      
+      // Calculate total size of audio chunks
+      const totalSize = window.nagState.audioChunks.reduce((sum, chunk) => sum + chunk.size, 0);
+      logDebug(`📊 Safari: Total audio size before processing: ${totalSize} bytes`);
       
       // For Safari, ensure we request a larger time slice for data
       if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state === "recording") {
         try {
           // Request data now to ensure we get the current buffer
           window.nagState.mediaRecorder.requestData();
-          await new Promise(resolve => setTimeout(resolve, 500)); // Wait for data to be processed
+          await new Promise(resolve => setTimeout(resolve, 300)); // Wait for data to be processed
         } catch (e) {
           logDebug("⚠️ requestData error: " + e.message);
         }
@@ -55,7 +59,7 @@ async function processAudioAndTranscribe() {
     }
     
     // Check if we have enough audio data
-    if (blob.size < 2000) { // Less than 2KB is probably just noise
+    if (blob.size < 1000) { // Less than 1KB is probably just noise
       logDebug("⚠️ Audio too small to process: " + blob.size + " bytes");
       handleTranscriptionError();
       return;
@@ -64,7 +68,7 @@ async function processAudioAndTranscribe() {
     const formData = new FormData();
     
     // Determine file extension based on MIME type
-    let fileExt = "mp3"; // Default to mp3 for Safari
+    let fileExt = "mp4"; // Default to mp4 for Safari
     if (mimeType.includes("webm")) fileExt = "webm";
     else if (mimeType.includes("mp4")) fileExt = "mp4";
     else if (mimeType.includes("ogg")) fileExt = "ogg";
@@ -79,6 +83,7 @@ async function processAudioAndTranscribe() {
       formData.append("total_size", blob.size.toString());
       formData.append("mime_type", mimeType);
       formData.append("format", "mp4"); // Force MP4 format for Safari
+      formData.append("sample_rate", "44100"); // Add sample rate for Safari
     }
 
     // Show uploading state
