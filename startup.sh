@@ -74,13 +74,21 @@ else
     exit 1
 fi
 
-# Verify fastapi is installed
-echo "Verifying fastapi installation..."
-python3 -c "import fastapi" || {
-    echo "ERROR: fastapi not installed correctly"
-    python3 -m pip list
-    exit 1
-}
+# Verify critical packages are installed
+echo "Verifying critical package installations..."
+for package in "fastapi" "uvicorn" "gunicorn"; do
+    echo "Checking $package..."
+    python3 -c "import $package" || {
+        echo "ERROR: $package not installed correctly"
+        echo "Attempting to reinstall $package..."
+        python3 -m pip install --no-cache-dir $package
+        python3 -c "import $package" || {
+            echo "ERROR: Failed to install $package"
+            python3 -m pip list
+            exit 1
+        }
+    }
+done
 
 # Copy default context files if they don't exist
 if [ ! -f "/home/site/wwwroot/data/dinakara_context_full.json" ]; then
@@ -130,5 +138,17 @@ echo "Copying virtual environment to final location..."
 rm -rf antenv
 cp -r $TEMP_VENV antenv
 chmod -R 755 antenv
+
+# Verify uvicorn worker is available
+echo "Verifying uvicorn worker availability..."
+python3 -c "from uvicorn.workers import UvicornWorker" || {
+    echo "ERROR: UvicornWorker not found"
+    echo "Attempting to reinstall uvicorn[standard]..."
+    python3 -m pip install --no-cache-dir "uvicorn[standard]"
+    python3 -c "from uvicorn.workers import UvicornWorker" || {
+        echo "ERROR: Failed to install uvicorn[standard]"
+        exit 1
+    }
+}
 
 echo "Deployment completed successfully. Application will be started by Azure's web.config configuration." 
