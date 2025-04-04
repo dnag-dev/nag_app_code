@@ -29,7 +29,7 @@ jobs:
         ./deploy.sh
 
     - name: Upload deploy.zip as artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: deploy-package
         path: deploy.zip
@@ -37,6 +37,4 @@ jobs:
     - name: Deploy to Azure Web App
       uses: azure/webapps-deploy@v2
       with:
-        app-name: 'nag-app-new'  # Azure app service name
-        publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-        package: deploy.zip
+        app-name:
