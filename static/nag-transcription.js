@@ -40,6 +40,13 @@ async function processAudioAndTranscribe() {
       logDebug(`📊 Safari: Final blob size: ${blob.size} bytes`);
     }
     
+    // Check if we have enough audio data
+    if (blob.size < 1000) { // Less than 1KB is probably just noise
+      logDebug("⚠️ Audio too small to process: " + blob.size + " bytes");
+      handleTranscriptionError();
+      return;
+    }
+    
     const formData = new FormData();
     
     // Determine file extension based on MIME type
@@ -54,6 +61,8 @@ async function processAudioAndTranscribe() {
     // For Safari, add a flag in the form data
     if (window.nagState.isSafari) {
       formData.append("browser", "safari");
+      formData.append("chunk_count", window.nagState.audioChunks.length.toString());
+      formData.append("total_size", blob.size.toString());
     }
 
     // Show uploading state
@@ -107,25 +116,20 @@ async function processAudioAndTranscribe() {
 
     // Check for empty or short messages
     const wordCount = message.split(/\s+/).filter(Boolean).length;
-    if (!message || message === "undefined" || wordCount <= 1) {
+    if (wordCount < 2) {
       logDebug("⚠️ Too short or empty message. Continuing to listen...");
-      window.nagState.emptyTranscriptionCount++;
-      
-      if (window.nagState.emptyTranscriptionCount >= 3) {
-        window.nagState.emptyTranscriptionCount = 0;
-        await sendToChat("I didn't hear enough. Please try speaking a complete sentence.");
-      } else {
-        handleTranscriptionError();
+      if (!window.nagState.isWalkieTalkieMode && !window.nagState.isPaused) {
+        setTimeout(() => {
+          if (!window.nagState.interrupted && !window.nagState.isPaused) startListening();
+        }, 1000);
       }
       return;
     }
 
-    // Reset empty count and send message to chat
-    window.nagState.emptyTranscriptionCount = 0;
+    // Send to chat if we have a valid message
     await sendToChat(message);
   } catch (e) {
-    window.nagState.isUploading = false;
-    logDebug("❌ Transcription error: " + e.message);
+    logDebug("❌ Processing error: " + e.message);
     handleTranscriptionError();
   }
 }
@@ -165,11 +169,24 @@ async function sendToChat(message) {
         "Content-Type": "application/json; charset=utf-8",
         "Accept": "application/json"
       },
-      body: JSON.stringify({ message })
+      body: JSON.stringify({ 
+        text: message,
+        mode: "voice",
+        request_id: Date.now().toString()
+      })
     });
     window.nagState.isUploading = false;
 
     if (!res.ok) {
+      const errorText = await res.text();
+      logDebug(`❌ Server error: ${res.status} - ${errorText}`);
+      
+      if (res.status === 422) {
+        logDebug("⚠️ Invalid message format. Please try speaking again.");
+        handleChatError();
+        return;
+      }
+      
       throw new Error(`Server error: ${res.status} ${res.statusText}`);
     }
 
