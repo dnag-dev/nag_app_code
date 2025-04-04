@@ -1,4 +1,5 @@
-name: Build and deploy Python app to Azure Web App - nag-app-new
+# .github/workflows/main_nag-app-new.yml
+name: Build and deploy Python app to Azure Web App - nag_app_code
 
 on:
   push:
@@ -16,7 +17,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: '3.11'  # Match with Azure App Service version
+        python-version: '3.11'
 
     - name: Install dependencies
       run: |
@@ -31,6 +32,6 @@ jobs:
     - name: Deploy to Azure Web App
       uses: azure/webapps-deploy@v2
       with:
-        app-name: 'nag-app-new'
+        app-name: 'nag_app_code'  # 👈 This is your Azure app service name
         publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
         package: deploy.zip

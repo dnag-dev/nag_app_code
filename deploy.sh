@@ -1,19 +1,13 @@
 #!/bin/bash
 
-echo "🔄 Creating Azure deployment package..."
+echo "📦 Zipping app for Azure deployment..."
 
-# Remove old zip if it exists
 rm -f deploy.zip
 
-# Build zip with relevant files
 zip -r deploy.zip \
-  main.py \
   requirements.txt \
-  styles.css \
-  index.html \
-  nag*.js \
+  nag_app_code/ \
   static/ \
-  templates/ \
-  .env
+  data/
 
-echo "✅ deploy.zip created successfully."
+echo "✅ deploy.zip created with nag_app_code/, static/, and data/"
