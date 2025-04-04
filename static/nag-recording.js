@@ -199,7 +199,7 @@ function startRecording() {
 }
 
 // Stop recording audio
-function stopRecording() {
+async function stopRecording() {
   if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state === "recording") {
     try {
       logDebug("🛑 Attempting to stop MediaRecorder...");
