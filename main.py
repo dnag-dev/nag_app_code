@@ -140,17 +140,32 @@ async def chat(request: ChatRequest):
 @app.post("/transcribe")
 async def transcribe_audio(file: UploadFile = File(...)):
     try:
-        temp_path = f"temp_{uuid.uuid4().hex}.mp3"
+        # Get the file extension based on content type
+        content_type = file.content_type.lower()
+        if "mp4" in content_type:
+            ext = "mp4"
+        elif "webm" in content_type:
+            ext = "webm"
+        elif "ogg" in content_type:
+            ext = "ogg"
+        else:
+            ext = "mp3"  # default fallback
+            
+        temp_path = f"temp_{uuid.uuid4().hex}.{ext}"
+        logger.info(f"Transcribing audio file with extension: {ext}")
+        
         async with aiofiles.open(temp_path, "wb") as out_file:
             content = await file.read()
             await out_file.write(content)
+            
         with open(temp_path, "rb") as audio_file:
             transcript = await openai.Audio.atranscribe(
                 model="whisper-1",
                 file=audio_file
             )
+            
         os.remove(temp_path)
-        return {"text": transcript["text"]}
+        return {"transcription": transcript["text"]}
     except Exception as e:
         logger.exception("Transcription error:")
         raise HTTPException(status_code=500, detail=str(e))
