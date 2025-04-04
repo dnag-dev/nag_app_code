@@ -160,19 +160,19 @@ function startRecording() {
     // Special handling for Safari to use timeslices
     if (window.nagState.isSafari) {
       // For Safari, use shorter timeslices to get more frequent chunks
-      window.nagState.mediaRecorder.start(300); // Get data every 300ms
-      logDebug("🎙️ Safari recording with 300ms timeslices");
+      window.nagState.mediaRecorder.start(200); // Get data every 200ms
+      logDebug("🎙️ Safari recording with 200ms timeslices");
       
       // Add Safari-specific event handler for dataavailable
       window.nagState.mediaRecorder.ondataavailable = function(e) {
         if (e.data && e.data.size > 0) {
           // For Safari, we need to ensure the chunk is large enough to contain meaningful audio
-          if (e.data.size > 1000) { // Only add chunks larger than 1KB
+          if (e.data.size > 500) { // Only add chunks larger than 500 bytes
             window.nagState.audioChunks.push(e.data);
             logDebug(`🔊 Audio chunk received: ${e.data.size} bytes`);
             
             // Update speech detection based on chunk size
-            if (e.data.size > 5000) { // Consider chunks > 5KB as likely containing speech
+            if (e.data.size > 3000) { // Consider chunks > 3KB as likely containing speech
               window.nagState.speechDetected = true;
             }
           }
@@ -207,9 +207,9 @@ async function stopRecording() {
       // For Safari, request final data before stopping
       if (window.nagState.isSafari) {
         // Request data multiple times to ensure we get all chunks
-        for (let i = 0; i < 3; i++) {
+        for (let i = 0; i < 5; i++) {
           window.nagState.mediaRecorder.requestData();
-          await new Promise(resolve => setTimeout(resolve, 100));
+          await new Promise(resolve => setTimeout(resolve, 50));
         }
         
         // Wait a short time to ensure the data is processed
@@ -222,6 +222,10 @@ async function stopRecording() {
           if (window.nagState.audioChunks.length > 0) {
             logDebug(`📊 First chunk size: ${window.nagState.audioChunks[0].size} bytes`);
             logDebug(`📊 Last chunk size: ${window.nagState.audioChunks[window.nagState.audioChunks.length - 1].size} bytes`);
+            
+            // Calculate total size
+            const totalSize = window.nagState.audioChunks.reduce((sum, chunk) => sum + chunk.size, 0);
+            logDebug(`📊 Total audio size: ${totalSize} bytes`);
           }
           
           // Log MediaRecorder state
@@ -235,7 +239,7 @@ async function stopRecording() {
               logDebug(`📊 Track ${track.kind} state: ${track.readyState}`);
             });
           }
-        }, 500);
+        }, 300);
       } else {
         window.nagState.mediaRecorder.stop();
         logDebug("✅ MediaRecorder stopped successfully");
