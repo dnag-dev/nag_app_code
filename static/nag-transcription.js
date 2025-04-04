@@ -11,8 +11,8 @@ async function processAudioAndTranscribe() {
       
       // For Safari, ensure we have enough audio data
       if (window.nagState.audioChunks.length < 2) {
-        logDebug("⚠️ Not enough audio chunks for Safari");
-        handleTranscriptionError();
+        logDebug("⚠️ Not enough audio chunks for Safari (need at least 2)");
+        handleTranscriptionError("Not enough audio data. Please try speaking again.");
         return;
       }
       
@@ -61,7 +61,7 @@ async function processAudioAndTranscribe() {
     // Check if we have enough audio data
     if (blob.size < 1000) { // Less than 1KB is probably just noise
       logDebug("⚠️ Audio too small to process: " + blob.size + " bytes");
-      handleTranscriptionError();
+      handleTranscriptionError("Audio too quiet or too short. Please speak louder or longer.");
       return;
     }
     
@@ -108,7 +108,7 @@ async function processAudioAndTranscribe() {
     } catch (jsonErr) {
       logDebug("❌ JSON parse failed: " + jsonErr.message);
       logDebug("Raw response: " + rawText.substring(0, 100) + "...");
-      handleTranscriptionError();
+      handleTranscriptionError("Failed to process audio. Please try again.");
       return;
     }
 
@@ -122,7 +122,7 @@ async function processAudioAndTranscribe() {
       
       if (window.nagState.consecutiveIdenticalTranscriptions >= 2) {
         logDebug("⚠️ Multiple identical transcriptions detected. Skipping to avoid loop.");
-        handleTranscriptionError();
+        handleTranscriptionError("Multiple identical transcriptions detected. Please try speaking again.");
         
         // Reset and wait longer before trying again
         window.nagState.consecutiveIdenticalTranscriptions = 0;
@@ -139,6 +139,7 @@ async function processAudioAndTranscribe() {
     const wordCount = message.split(/\s+/).filter(Boolean).length;
     if (wordCount < 2) {
       logDebug("⚠️ Too short or empty message. Continuing to listen...");
+      handleTranscriptionError("Message too short. Please speak at least two words.");
       if (!window.nagState.isWalkieTalkieMode && !window.nagState.isPaused) {
         setTimeout(() => {
           if (!window.nagState.interrupted && !window.nagState.isPaused) startListening();
@@ -151,20 +152,26 @@ async function processAudioAndTranscribe() {
     await sendToChat(message);
   } catch (e) {
     logDebug("❌ Processing error: " + e.message);
-    handleTranscriptionError();
+    handleTranscriptionError("Error processing audio: " + e.message);
   }
 }
 
-// Handle error when transcription fails
-function handleTranscriptionError() {
+// Update the handleTranscriptionError function to show messages
+function handleTranscriptionError(message) {
   const orb = window.nagElements.orb;
+  const statusText = window.nagElements.statusText;
   
-  orb.classList.remove("thinking");
+  orb.classList.remove("listening", "thinking");
   orb.classList.add("idle");
-  if (!window.nagState.isWalkieTalkieMode && !window.nagState.isPaused) {
+  
+  if (statusText) {
+    statusText.textContent = message;
+    statusText.style.display = "block";
+    
+    // Hide the message after 3 seconds
     setTimeout(() => {
-      if (!window.nagState.interrupted && !window.nagState.isPaused) startListening();
-    }, 1000);
+      statusText.style.display = "none";
+    }, 3000);
   }
 }
 
