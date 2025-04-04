@@ -1,0 +1,22 @@
+2025-03-28 17:38:21,284 - __main__ - INFO - Starting server in development environment
+2025-03-28 17:38:21,285 - __main__ - INFO - Server will run on http://0.0.0.0:9000
+2025-03-28 17:38:21,285 - __main__ - INFO - Log level: info
+2025-03-28 17:38:21,285 - __main__ - INFO - Auto-reload: False
+2025-03-28 17:38:21,285 - __main__ - INFO - Workers: 1
+2025-03-28 17:40:17,585 - __main__ - INFO - Received shutdown signal. Cleaning up...
+2025-03-28 18:24:29,238 - __main__ - INFO - Starting server in development environment
+2025-03-28 18:24:29,238 - __main__ - INFO - Server will run on http://0.0.0.0:9000
+2025-03-28 18:24:29,238 - __main__ - INFO - Log level: info
+2025-03-28 18:24:29,238 - __main__ - INFO - Auto-reload: False
+2025-03-28 18:24:29,238 - __main__ - INFO - Workers: 1
+2025-03-29 12:10:11,069 - __main__ - INFO - Starting server in development environment
+2025-03-29 12:10:11,070 - __main__ - INFO - Server will run on http://0.0.0.0:9000
+2025-03-29 12:10:11,070 - __main__ - INFO - Log level: info
+2025-03-29 12:10:11,070 - __main__ - INFO - Auto-reload: False
+2025-03-29 12:10:11,070 - __main__ - INFO - Workers: 1
+2025-03-29 12:10:11,865 - __main__ - ERROR - Failed to start server: unsupported operand type(s) for |: 'type' and 'NoneType'
+2025-03-29 12:10:29,363 - __main__ - INFO - Starting server in development environment
+2025-03-29 12:10:29,363 - __main__ - INFO - Server will run on http://0.0.0.0:9000
+2025-03-29 12:10:29,363 - __main__ - INFO - Log level: info
+2025-03-29 12:10:29,363 - __main__ - INFO - Auto-reload: False
+2025-03-29 12:10:29,363 - __main__ - INFO - Workers: 1

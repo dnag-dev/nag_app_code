@@ -1,11 +1,33 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Dimensions, Platform, NativeModules } from 'react-native';
-import { AZURE_API_ENDPOINTS, AZURE_API_BASE_URL } from '../config/azureApi';
-import { processVoiceChat } from '../services/voiceChatService';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  View,
+  Text,
+  Pressable,
+  StyleSheet,
+  SafeAreaView,
+  ScrollView,
+  Dimensions,
+  Alert,
+  Platform,
+  Clipboard,
+  ActivityIndicator
+} from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { NativeEventEmitter } from 'react-native';
-import Icon from 'react-native-vector-icons/Ionicons';
+import useChatStore from '../store/chatStore';
+import chatService from '../services/chatService';
+import { 
+  AZURE_API_ENDPOINTS, 
+  AZURE_API_BASE_URL,
+  checkApiHealth,
+  HEALTH_CHECK_CONFIG,
+  AZURE_API_ERRORS
+} from '../config/azureApi';
+import RNFS from 'react-native-fs';
+import Sound from 'react-native-sound';
+import Ionicons from 'react-native-vector-icons/Ionicons';
+import OrbAnimation from '../components/OrbAnimation';
 import Voice from '@react-native-voice/voice';
+import AudioService from '../services/audioService';
 
 const { width } = Dimensions.get('window');
 const ORB_SIZE = width * 0.6;
@@ -15,10 +37,26 @@ const BUILD_NUMBER = '1.0.0';
 // Initialize voice event emitter
 const voiceEmitter = new NativeEventEmitter(Voice);
 
-const VoiceChatScreen = () => {
+export default function VoiceChatScreen() {
   const navigation = useNavigation();
+  const {
+    messages,
+    addMessage,
+    isRecording,
+    isProcessing,
+    isPlaying,
+    currentTranscription,
+    setIsRecording,
+    setIsProcessing,
+    setIsPlaying,
+    setCurrentTranscription,
+    clearTranscription
+  } = useChatStore();
+
+  // Initialize AudioService
+  const audioService = useRef(new AudioService()).current;
+
   const [logs, setLogs] = useState([]);
-  const [isRecording, setIsRecording] = useState(false);
   const [audioUri, setAudioUri] = useState(null);
 
   const addLog = (message, type = 'info') => {
@@ -67,55 +105,98 @@ const VoiceChatScreen = () => {
     };
   }, []);
 
-  const startRecording = async () => {
-    try {
-      await Voice.start('en-US');
-      addLog('Started recording', 'info');
-    } catch (error) {
-      addLog(`Error starting recording: ${error.message}`, 'error');
-    }
-  };
-
-  const stopRecording = async () => {
-    try {
-      await Voice.stop();
-      addLog('Stopped recording', 'info');
-    } catch (error) {
-      addLog(`Error stopping recording: ${error.message}`, 'error');
-    }
-  };
-
-  const handleVoiceChat = async () => {
-    if (!audioUri) {
-      addLog('No audio file available. Please record audio first.', 'error');
+  const handleStartRecording = async () => {
+    if (azureStatus !== 'connected') {
+      addLog('Cannot start recording: Azure API is not connected', 'error');
+      Alert.alert(
+        'Connection Error',
+        'Please wait for the Azure API connection to be established before recording.',
+        [{ text: 'OK' }]
+      );
       return;
     }
 
     try {
-      addLog('Starting voice chat...', 'info');
-      addLog(`Using audio file: ${audioUri}`, 'info');
+      setIsRecording(true);
+      setOrbColor(ORB_COLORS.LISTENING);
+      addLog('Starting recording...', 'info');
       
-      const result = await processVoiceChat(audioUri);
+      // Initialize audio components
+      await audioService.initializeComponents();
       
-      addLog(`Transcription: ${result.transcription}`, 'success');
-      addLog(`Response: ${result.response}`, 'success');
-      addLog(`Audio URL: ${result.audioUrl}`, 'success');
+      // Start recording
+      const uri = await audioService.startRecording();
+      setAudioUri(uri);
+      addLog(`Recording started at: ${uri}`, 'success');
+      
+      // Start voice recognition
+      await audioService.startVoiceRecognition();
+      addLog('Voice recognition started', 'success');
     } catch (error) {
-      addLog(`Error: ${error.message}`, 'error');
-      if (error.response?.data) {
-        addLog(`Server Response: ${JSON.stringify(error.response.data, null, 2)}`, 'error');
-      }
-      if (error.response?.status) {
-        addLog(`HTTP Status: ${error.response.status}`, 'error');
-      }
+      console.error('Error starting recording:', error);
+      addLog(`Error starting recording: ${error.message}`, 'error');
+      setIsRecording(false);
+      setOrbColor(ORB_COLORS.ERROR);
+      Alert.alert(
+        'Recording Error',
+        'Failed to start recording. Please check your microphone permissions and try again.',
+        [{ text: 'OK' }]
+      );
     }
   };
 
-  const toggleRecording = () => {
-    if (isRecording) {
-      stopRecording();
-    } else {
-      startRecording();
+  const handleStopRecording = async () => {
+    try {
+      setIsRecording(false);
+      setOrbColor(ORB_COLORS.PROCESSING);
+      addLog('Stopping recording...', 'info');
+      
+      // Stop recording
+      const result = await audioService.stopRecording();
+      addLog('Recording stopped', 'success');
+      
+      // Stop voice recognition
+      await audioService.stopVoiceRecognition();
+      addLog('Voice recognition stopped', 'success');
+      
+      if (currentTranscription) {
+        setIsProcessing(true);
+        addLog(`Processing transcription: ${currentTranscription}`, 'info');
+        
+        // Process the voice chat
+        const response = await audioService.processVoiceChat(currentTranscription);
+        
+        if (!response || !response.audio_url) {
+          throw new Error('Invalid response from Azure API');
+        }
+        
+        addLog('Voice chat processed successfully', 'success');
+        addMessage({
+          text: currentTranscription,
+          isUser: true,
+          timestamp: new Date().toISOString()
+        });
+        
+        addMessage({
+          text: response.text || 'No text response',
+          isUser: false,
+          timestamp: new Date().toISOString()
+        });
+        
+        clearTranscription();
+      }
+    } catch (error) {
+      console.error('Error stopping recording:', error);
+      addLog(`Error stopping recording: ${error.message}`, 'error');
+      setOrbColor(ORB_COLORS.ERROR);
+      Alert.alert(
+        'Processing Error',
+        'Failed to process the recording. Please try again.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setIsProcessing(false);
+      setOrbColor(ORB_COLORS.IDLE);
     }
   };
 
@@ -124,7 +205,7 @@ const VoiceChatScreen = () => {
       <View style={styles.controls}>
         <TouchableOpacity 
           style={[styles.button, isRecording ? styles.recordingButton : null]}
-          onPress={toggleRecording}
+          onPress={handleStartRecording}
         >
           <Icon 
             name={isRecording ? "stop-circle" : "mic"} 
@@ -138,7 +219,7 @@ const VoiceChatScreen = () => {
         
         <TouchableOpacity 
           style={styles.button}
-          onPress={handleVoiceChat}
+          onPress={handleStopRecording}
         >
           <Icon name="play-circle" size={24} color="#fff" />
           <Text style={styles.buttonText}>Process Voice Chat</Text>
@@ -164,7 +245,7 @@ const VoiceChatScreen = () => {
       </View>
     </View>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
@@ -219,6 +300,4 @@ const styles = StyleSheet.create({
   successLog: {
     color: 'green',
   },
-});
-
-export default VoiceChatScreen; 
+}); 

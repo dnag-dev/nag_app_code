@@ -1,8 +1,9 @@
 body {
     margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background: linear-gradient(to bottom right, #000000, #1a1a1a);
-    color: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    background-color: #f5f5f5;
+    color: #333;
+    line-height: 1.6;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -14,215 +15,178 @@ body {
   }
   
   h1 { 
-    font-size: 2rem; 
-    margin-bottom: 0.2rem; 
+    color: #2c3e50;
     text-align: center;
+    margin-bottom: 10px;
   }
   
   p { 
-    margin-top: 0; 
-    font-style: italic; 
-    opacity: 0.8; 
     text-align: center;
+    color: #7f8c8d;
+    margin-bottom: 30px;
   }
   
   #orb {
-    width: 120px; 
-    height: 120px; 
+    width: 200px; 
+    height: 200px; 
+    margin: 0 auto 30px;
     border-radius: 50%;
-    margin: 2rem auto;
-    background: radial-gradient(circle, #00f2ff, #001f3f);
-    box-shadow: 0 0 25px rgba(0,255,255,0.6);
-    transition: all 0.4s ease-in-out;
-    animation: pulseIdle 2s infinite;
+    background: linear-gradient(145deg, #e6e6e6, #ffffff);
+    box-shadow: 20px 20px 60px #d9d9d9, -20px -20px 60px #ffffff;
     position: relative;
     cursor: pointer;
-    will-change: transform; /* Improves animation performance */
-    -webkit-user-select: none; /* Safari-specific */
-    user-select: none;
-    touch-action: manipulation; /* Better handling of touch events */
+    transition: all 0.3s ease;
+  }
+  
+  #orb.idle {
+    background: linear-gradient(145deg, #e6e6e6, #ffffff);
   }
   
   #orb.listening {
-    background: radial-gradient(circle, #ff7300, #a62c00);
-    animation: pulseListening 1s infinite;
-  }
-  
-  #orb.speaking {
-    background: radial-gradient(circle, #00ff8c, #004d33);
-    animation: pulseSpeaking 1s infinite;
-  }
-  
-  #orb.thinking {
-    background: radial-gradient(circle, #ffcc00, #cc7700);
-    animation: pulseThinking 1.5s infinite;
-  }
-  
-  @keyframes pulseIdle {
-    0%, 100% { transform: scale(1); box-shadow: 0 0 20px rgba(0,255,255,0.2); }
-    50% { transform: scale(1.05); box-shadow: 0 0 30px rgba(0,255,255,0.4); }
-  }
-  
-  @keyframes pulseListening {
-    0%, 100% { transform: scale(1); box-shadow: 0 0 30px rgba(255,115,0,0.3); }
-    50% { transform: scale(1.1); box-shadow: 0 0 40px rgba(255,115,0,0.5); }
-  }
-  
-  @keyframes pulseSpeaking {
-    0%, 100% { transform: scale(1); box-shadow: 0 0 30px rgba(0,255,140,0.4); }
-    50% { transform: scale(1.1); box-shadow: 0 0 40px rgba(0,255,140,0.6); }
-  }
-  
-  @keyframes pulseThinking {
-    0%, 100% { transform: scale(1); box-shadow: 0 0 30px rgba(255,204,0,0.3); }
-    50% { transform: scale(1.08); box-shadow: 0 0 40px rgba(255,204,0,0.5); }
-  }
-  
-  #debug {
-    width: 90%;
-    max-height: 180px;
-    overflow-y: auto;
-    background: #111;
-    border: 1px solid #333;
-    padding: 10px;
-    font-family: monospace;
-    font-size: 0.85rem;
-    color: #0f0;
-    margin-top: 1rem;
-    -webkit-overflow-scrolling: touch; /* Smooth scrolling for iOS */
-  }
-  
-  #controls {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    justify-content: center;
-    margin-top: 1rem;
-    gap: 10px;
-  }
-  
-  .btn {
-    padding: 10px 20px;
-    font-size: 1rem;
-    border: none;
-    background-color: #00f2ff;
-    color: #000;
-    border-radius: 10px;
-    cursor: pointer;
-    -webkit-appearance: none; /* Fixes iOS button styling */
-    -webkit-tap-highlight-color: transparent;
-  }
-  
-  .btn:disabled {
-    background-color: #555;
-    cursor: not-allowed;
-    opacity: 0.5;
-  }
-  
-  .play-button {
-    padding: 12px 24px;
-    margin: 16px auto;
-    display: block;
-    background-color: #00ff8c;
-    color: #000;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    font-weight: bold;
-    font-size: 1.1rem;
-    -webkit-appearance: none; /* Fixes iOS button styling */
-    -webkit-tap-highlight-color: transparent;
-  }
-  
-  .play-button.safari {
-    padding: 14px 28px;
-    font-size: 1.3rem;
-    background-color: #ff7300;
-    margin: 20px auto;
+    background: linear-gradient(145deg, #4CAF50, #45a049);
     animation: pulse 1.5s infinite;
-    box-shadow: 0 0 15px rgba(255,115,0,0.5);
   }
   
-  @keyframes pulse {
-    0%, 100% { transform: scale(1); }
-    50% { transform: scale(1.05); }
-  }
-  
-  .version {
-    position: fixed;
-    bottom: 5px;
-    right: 10px;
-    font-size: 10px;
-    opacity: 0.4;
+  #orb.processing {
+    background: linear-gradient(145deg, #2196F3, #1976D2);
+    animation: spin 2s linear infinite;
   }
   
   #volume-indicator {
     position: absolute;
-    width: 100%;
-    height: 100%;
-    border-radius: 50%;
-    top: 0;
+    bottom: 0;
     left: 0;
+    right: 0;
+    height: 20px;
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 0 0 100px 100px;
     overflow: hidden;
-    pointer-events: none;
   }
   
   .volume-bar {
-    position: absolute;
-    bottom: 0;
-    left: 0;
     width: 100%;
-    background-color: rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.8);
     transition: height 0.1s ease;
   }
   
-  .walkie-talkie-hint {
-    margin-top: 10px;
-    font-size: 0.9rem;
-    opacity: 0.7;
-    text-align: center;
+  .btn {
+    background-color: #3498db;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+    margin: 5px;
+    transition: background-color 0.3s ease;
+  }
+  
+  .btn:disabled {
+    background-color: #bdc3c7;
+    cursor: not-allowed;
+  }
+  
+  .btn:hover:not(:disabled) {
+    background-color: #2980b9;
   }
   
   #mode-toggle {
-    background: none;
-    border: none;
-    color: #00f2ff;
-    text-decoration: underline;
-    cursor: pointer;
-    font-size: 0.9rem;
-    padding: 8px;
-    margin-top: 5px;
-    opacity: 0.8;
-    -webkit-appearance: none;
-    -webkit-tap-highlight-color: transparent;
+    display: block;
+    margin: 20px auto;
+    background-color: #2ecc71;
   }
   
-  #pause-btn {
-    background-color: #ff4f4f;
+  #mode-toggle:hover {
+    background-color: #27ae60;
   }
   
-  #pause-btn.paused {
-    background-color: #4fff4f;
-  }
-  
-  /* Safari-specific hint shown when audio needs user interaction */
-  .safari-hint {
-    color: #ff7300;
+  .walkie-talkie-hint {
     text-align: center;
-    font-size: 0.9rem;
-    margin: 5px 0;
-    animation: fade 2s infinite;
+    color: #7f8c8d;
+    margin: 10px 0;
+    font-style: italic;
   }
   
-  @keyframes fade {
-    0%, 100% { opacity: 0.5; }
-    50% { opacity: 1; }
+  .status {
+    text-align: center;
+    padding: 10px;
+    margin: 10px 0;
+    border-radius: 5px;
+    font-weight: bold;
+  }
+  
+  .status.success {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+  }
+  
+  .status.error {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+  }
+  
+  .status.info {
+    background-color: #d1ecf1;
+    color: #0c5460;
+    border: 1px solid #bee5eb;
+  }
+  
+  #debug {
+    margin-top: 20px;
+    padding: 10px;
+    background-color: #f8f9fa;
+    border-radius: 5px;
+    font-family: monospace;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+  
+  .version {
+    text-align: center;
+    color: #95a5a6;
+    font-size: 12px;
+    margin-top: 20px;
+  }
+  
+  @keyframes pulse {
+    0% {
+      transform: scale(1);
+      box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.7);
+    }
+    70% {
+      transform: scale(1.05);
+      box-shadow: 0 0 0 10px rgba(76, 175, 80, 0);
+    }
+    100% {
+      transform: scale(1);
+      box-shadow: 0 0 0 0 rgba(76, 175, 80, 0);
+    }
+  }
+  
+  @keyframes spin {
+    0% {
+      transform: rotate(0deg);
+    }
+    100% {
+      transform: rotate(360deg);
+    }
   }
   
   /* Responsive adjustments */
-  @media (max-width: 480px) {
-    h1 { font-size: 1.7rem; }
-    #orb { width: 100px; height: 100px; margin: 1.5rem auto; }
-    .btn { padding: 10px 15px; font-size: 0.9rem; }
-    #debug { max-height: 150px; font-size: 0.75rem; }
+  @media (max-width: 600px) {
+    #orb {
+      width: 150px;
+      height: 150px;
+    }
+    
+    .btn {
+      width: 100%;
+      margin: 5px 0;
+    }
+    
+    #app-container {
+      padding: 10px;
+    }
   }
