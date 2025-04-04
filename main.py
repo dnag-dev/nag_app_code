@@ -1,4 +1,5 @@
-from fastapi import FastAPI, Request, UploadFile, File, HTTPException
+
+from fastapi import FastAPI, Request, UploadFile, File, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,11 +9,15 @@ import os
 from dotenv import load_dotenv
 import requests
 import uuid
+import aiofiles
 import logging
 from datetime import datetime, timedelta
+import hashlib
 import json
+import asyncio
+from functools import lru_cache
 import time
-from typing import Optional, Dict
+from typing import Union, Dict, Any, Optional
 from pydantic import BaseModel, EmailStr
 from enum import Enum
 
@@ -28,41 +33,28 @@ class ChatRequest(BaseModel):
     email: Optional[EmailStr] = None
     request_id: Optional[str] = None
 
-# -------------------- Logging --------------------
-logging.basicConfig(level=logging.INFO)
+# -------------------- Logging Setup --------------------
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
+logger.info("Starting application...")
 
-# -------------------- Load Environment --------------------
+# -------------------- Load Environment Variables --------------------
 load_dotenv()
-openai_api_key = os.getenv("OPENAI_API_KEY")
-client = openai.OpenAI(api_key=openai_api_key)
-
-# -------------------- Paths --------------------
-STATIC_BASE = "/home/site/wwwroot/static" if os.path.exists("/home/site/wwwroot") else "static"
-DATA_BASE = "/home/site/wwwroot/data" if os.path.exists("/home/site/wwwroot") else "data"
-os.makedirs(STATIC_BASE, exist_ok=True)
-os.makedirs(DATA_BASE, exist_ok=True)
-
-# -------------------- Load Context --------------------
-context_path = os.path.join(DATA_BASE, "dinakara_context_full.json")
-memory_path = os.path.join(DATA_BASE, "book_memory.json")
-try:
-    with open(context_path) as f:
-        dinakara_context = json.load(f)
-    with open(memory_path) as f:
-        book_memory = json.load(f)
-except:
-    dinakara_context = {"personal_info": {}, "personality": {}, "knowledge_base": {}}
-    book_memory = {"current_book": None, "completed_books": [], "reading_stats": {}}
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
 # -------------------- App Setup --------------------
-app = FastAPI(title="Nag - Digital Twin")
+app = FastAPI(title="Nag - Digital Twin", version="2.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+STATIC_BASE = "static"
 app.mount("/static", StaticFiles(directory=STATIC_BASE), name="static")
 
 @app.get("/")
-async def index():
+async def read_root():
     return FileResponse(os.path.join(STATIC_BASE, "index.html"))
 
 @app.get("/health")
@@ -72,8 +64,8 @@ async def health():
 @app.post("/chat")
 async def chat(request: ChatRequest):
     try:
-        system_message = f"""You are Dinakara Nagalla's digital twin, operating in {request.mode} mode."""
-        response = await client.chat.completions.create(
+        system_message = "You are a helpful assistant."
+        completion = await openai.ChatCompletion.acreate(
             model="gpt-4",
             messages=[
                 {"role": "system", "content": system_message},
@@ -82,29 +74,26 @@ async def chat(request: ChatRequest):
             temperature=0.7,
             max_tokens=1000
         )
-        return {
-            "response": response.choices[0].message.content,
-            "timestamp": datetime.now().isoformat()
-        }
+        reply = completion.choices[0].message.content
+        return {"response": reply}
     except Exception as e:
-        logger.error(f"Chat error: {str(e)}")
+        logger.exception("Chat error:")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/transcribe")
 async def transcribe_audio(file: UploadFile = File(...)):
     try:
-        temp_path = f"temp_{file.filename}"
-        with open(temp_path, "wb") as buffer:
-            buffer.write(await file.read())
-
+        temp_path = f"temp_{uuid.uuid4().hex}.mp3"
+        async with aiofiles.open(temp_path, "wb") as out_file:
+            content = await file.read()
+            await out_file.write(content)
         with open(temp_path, "rb") as audio_file:
-            transcript = client.audio.transcriptions.create(
+            transcript = await openai.Audio.atranscribe(
                 model="whisper-1",
-                file=audio_file,
-                language="en"
+                file=audio_file
             )
         os.remove(temp_path)
-        return {"text": transcript.text}
+        return {"text": transcript["text"]}
     except Exception as e:
-        logger.error(f"Transcription error: {str(e)}")
+        logger.exception("Transcription error:")
         raise HTTPException(status_code=500, detail=str(e))
