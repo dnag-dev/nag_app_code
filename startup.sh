@@ -81,7 +81,11 @@ for package in "fastapi" "uvicorn" "gunicorn"; do
     python3 -c "import $package" || {
         echo "ERROR: $package not installed correctly"
         echo "Attempting to reinstall $package..."
-        python3 -m pip install --no-cache-dir $package
+        if [ "$package" = "uvicorn" ]; then
+            python3 -m pip install --no-cache-dir "uvicorn[standard]"
+        else
+            python3 -m pip install --no-cache-dir $package
+        fi
         python3 -c "import $package" || {
             echo "ERROR: Failed to install $package"
             python3 -m pip list
@@ -149,6 +153,13 @@ python3 -c "from uvicorn.workers import UvicornWorker" || {
         echo "ERROR: Failed to install uvicorn[standard]"
         exit 1
     }
+}
+
+# Final verification of uvicorn installation
+echo "Final verification of uvicorn installation..."
+python3 -c "import uvicorn; print('Uvicorn version:', uvicorn.__version__)" || {
+    echo "ERROR: Final uvicorn verification failed"
+    exit 1
 }
 
 echo "Deployment completed successfully. Application will be started by Azure's web.config configuration." 
