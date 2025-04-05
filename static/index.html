@@ -8,11 +8,6 @@
   <link rel="stylesheet" href="/static/styles.css">
   <!-- Core script loads all other modules in the correct sequence -->
   <script src="/static/nag-core.js"></script>
-  <script src="/static/nag-audio.js"></script>
-  <script src="/static/nag-recording.js"></script>
-  <script src="/static/nag-transcription.js"></script>
-  <script src="/static/nag-ui.js"></script>
-  <script src="/static/nag-utils.js"></script>
 </head>
 <body>
   <div id="app-container">
@@ -35,75 +30,117 @@
     <div class="walkie-talkie-hint" id="mode-hint">Click &amp; hold the orb to use walkie-talkie mode</div>
     <button id="mode-toggle">Switch to continuous mode</button>
     
-    <div id="status" class="status"></div>
+    <div id="status" class="status">Ready</div>
     <div id="debug"><strong>Debug Log:</strong></div>
     <div class="version">v2.0.0</div>
   </div>
 
   <script>
-    // WebSocket connection
+    // WebSocket connection with fallback
     let ws = null;
     let isConnected = false;
     let reconnectAttempts = 0;
-    const MAX_RECONNECT_ATTEMPTS = 5;
-    const RECONNECT_DELAY = 5000; // 5 seconds
+    const MAX_RECONNECT_ATTEMPTS = 3;
+    const RECONNECT_DELAY = 3000; // 3 seconds
 
     function connectWebSocket() {
-      if (ws) {
-        ws.close();
-      }
+      try {
+        // If we already have a connection, close it
+        if (ws) {
+          ws.close();
+        }
 
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
-      
-      ws.onopen = () => {
-        isConnected = true;
-        reconnectAttempts = 0;
-        updateStatus('Connected to server', 'success');
-        console.log('WebSocket connection established');
-      };
-      
-      ws.onclose = (event) => {
-        isConnected = false;
-        console.log('WebSocket closed:', event.code, event.reason);
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/ws`;
+        console.log(`Attempting WebSocket connection to: ${wsUrl}`);
         
-        if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-          reconnectAttempts++;
-          updateStatus(`Disconnected. Reconnecting in ${RECONNECT_DELAY/1000} seconds... (Attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`, 'info');
-          setTimeout(connectWebSocket, RECONNECT_DELAY);
-        } else {
-          updateStatus('Failed to connect to server after multiple attempts', 'error');
-        }
-      };
-      
-      ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
-        updateStatus('Connection error occurred', 'error');
-      };
-      
-      ws.onmessage = (event) => {
-        console.log('Received:', event.data);
-        try {
-          const data = JSON.parse(event.data);
-          // Handle incoming messages based on their type
-          if (data.type === 'status') {
-            updateStatus(data.message, data.status || 'info');
+        // Create new WebSocket with timeout
+        ws = new WebSocket(wsUrl);
+        
+        // Set connection timeout
+        const connectionTimeout = setTimeout(() => {
+          console.log('WebSocket connection timeout');
+          if (ws && ws.readyState !== WebSocket.OPEN) {
+            ws.close();
+            fallbackToOfflineMode('Connection timeout');
           }
-        } catch (e) {
-          console.error('Error parsing message:', e);
-        }
-      };
+        }, 5000);
+        
+        ws.onopen = () => {
+          clearTimeout(connectionTimeout);
+          console.log('WebSocket connection established');
+          isConnected = true;
+          reconnectAttempts = 0;
+          updateStatus('Connected to server', 'success');
+        };
+        
+        ws.onclose = (event) => {
+          clearTimeout(connectionTimeout);
+          isConnected = false;
+          console.log('WebSocket closed:', event.code, event.reason);
+          
+          if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+            reconnectAttempts++;
+            updateStatus(`Reconnecting... (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`, 'info');
+            setTimeout(connectWebSocket, RECONNECT_DELAY);
+          } else {
+            fallbackToOfflineMode('Max reconnection attempts reached');
+          }
+        };
+        
+        ws.onerror = (error) => {
+          console.error('WebSocket error:', error);
+          // Don't try to reconnect here, the onclose handler will do that
+        };
+        
+        ws.onmessage = (event) => {
+          console.log('Received:', event.data);
+          try {
+            const data = JSON.parse(event.data);
+            // Handle incoming messages based on their type
+            if (data.type === 'status') {
+              updateStatus(data.message, data.status || 'info');
+            }
+          } catch (e) {
+            console.error('Error parsing message:', e);
+          }
+        };
+      } catch (e) {
+        console.error('WebSocket initialization error:', e);
+        fallbackToOfflineMode('Connection error');
+      }
+    }
+
+    function fallbackToOfflineMode(reason) {
+      console.log(`Switching to offline mode: ${reason}`);
+      updateStatus('Operating in offline mode', 'info');
+      
+      // You might want to update other UI elements or behavior here
+      // to indicate that we're in offline mode
     }
 
     function updateStatus(message, type = 'info') {
       const status = document.getElementById('status');
-      status.textContent = message;
-      status.className = `status ${type}`;
+      if (status) {
+        status.textContent = message;
+        status.className = `status ${type}`;
+      }
     }
 
     // Initialize WebSocket connection when the page loads
     window.addEventListener('load', () => {
-      connectWebSocket();
+      // First load all required scripts
+      loadRemainingScripts(() => {
+        // Then try to connect WebSocket, but continue if it fails
+        setTimeout(() => {
+          try {
+            connectWebSocket();
+          } catch (e) {
+            console.error('Failed to initialize WebSocket:', e);
+            fallbackToOfflineMode('Initialization error');
+          }
+        }, 1000);
+      });
       
       // Add error handling for static resources
       document.querySelectorAll('script').forEach(script => {
@@ -113,12 +150,41 @@
       });
     });
 
-    // Reconnect on visibility change
+    // Reconnect on visibility change, but only if we're not already connected
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible' && !isConnected) {
         connectWebSocket();
       }
     });
+    
+    // Helper to load remaining scripts
+    function loadRemainingScripts(callback) {
+      const scripts = [
+        '/static/nag-audio.js',
+        '/static/nag-recording.js',
+        '/static/nag-transcription.js',
+        '/static/nag-ui.js',
+        '/static/nag-utils.js'
+      ];
+      
+      let loaded = 0;
+      
+      scripts.forEach(script => {
+        const scriptEl = document.createElement('script');
+        scriptEl.src = script;
+        scriptEl.onload = () => {
+          loaded++;
+          if (loaded === scripts.length && typeof callback === 'function') {
+            callback();
+          }
+        };
+        scriptEl.onerror = () => {
+          console.error(`Failed to load script: ${script}`);
+          updateStatus(`Failed to load ${script}`, 'error');
+        };
+        document.head.appendChild(scriptEl);
+      });
+    }
   </script>
 </body>
 </html>

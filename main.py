@@ -98,25 +98,27 @@ async def health():
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    await manager.connect(websocket)
-    logger.info(f"New WebSocket connection established")
     try:
-        while True:
-            try:
+        # Accept the connection first
+        await websocket.accept()
+        logger.info("WebSocket connection accepted")
+        
+        # Add to connection manager
+        manager.active_connections.append(websocket)
+        
+        try:
+            while True:
                 data = await websocket.receive_text()
                 logger.info(f"Received message: {data}")
-                await manager.broadcast(f"Message received: {data}")
-            except WebSocketDisconnect:
-                logger.info("Client disconnected")
-                break
-            except Exception as e:
-                logger.error(f"Error processing message: {str(e)}")
-                break
+                await websocket.send_text(f"Message received: {data}")
+        except WebSocketDisconnect:
+            logger.info("Client disconnected")
+        finally:
+            # Remove from connection manager
+            if websocket in manager.active_connections:
+                manager.active_connections.remove(websocket)
     except Exception as e:
         logger.error(f"WebSocket error: {str(e)}")
-    finally:
-        manager.disconnect(websocket)
-        logger.info("WebSocket connection closed")
 
 @app.post("/chat")
 async def chat(request_data: dict):

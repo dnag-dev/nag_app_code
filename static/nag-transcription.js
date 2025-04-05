@@ -1,6 +1,7 @@
 // Nag Digital Twin v2.0.0 - Transcription and Chat Functions
 
 // Process recorded audio and get transcription
+// Process recorded audio and get transcription
 async function processAudioAndTranscribe() {
   const orb = window.nagElements.orb;
   
@@ -92,64 +93,103 @@ async function processAudioAndTranscribe() {
     orb.classList.add("thinking");
     logDebug("📤 Uploading voice...");
     
-    // Send to server for transcription
-    const res = await fetch("/transcribe", { 
-      method: "POST", 
-      body: formData 
-    });
+    // Add retry logic for transcription
+    let attempts = 0;
+    const maxAttempts = 3;
     
-    window.nagState.isUploading = false;
-
-    // Process response
-    const rawText = await res.text();
-    let data;
-    try {
-      data = JSON.parse(rawText);
-    } catch (jsonErr) {
-      logDebug("❌ JSON parse failed: " + jsonErr.message);
-      logDebug("Raw response: " + rawText.substring(0, 100) + "...");
-      handleTranscriptionError("Failed to process audio. Please try again.");
-      return;
-    }
-
-    // Get transcribed message
-    const message = (data.transcription || "").trim();
-    logDebug("📝 Transcribed: " + (message || "No speech detected"));
-
-    // Check for repeated identical transcriptions to avoid loops
-    if (message === window.nagState.lastTranscription) {
-      window.nagState.consecutiveIdenticalTranscriptions++;
-      
-      if (window.nagState.consecutiveIdenticalTranscriptions >= 2) {
-        logDebug("⚠️ Multiple identical transcriptions detected. Skipping to avoid loop.");
-        handleTranscriptionError("Multiple identical transcriptions detected. Please try speaking again.");
+    while (attempts < maxAttempts) {
+      try {
+        // Send to server for transcription
+        const res = await fetch("/transcribe", { 
+          method: "POST", 
+          body: formData 
+        });
         
-        // Reset and wait longer before trying again
-        window.nagState.consecutiveIdenticalTranscriptions = 0;
-        window.nagState.lastTranscription = "";
-        return;
+        // If successful, process response
+        if (res.ok) {
+          window.nagState.isUploading = false;
+          
+          // Process response
+          const rawText = await res.text();
+          let data;
+          try {
+            data = JSON.parse(rawText);
+          } catch (jsonErr) {
+            logDebug("❌ JSON parse failed: " + jsonErr.message);
+            logDebug("Raw response: " + rawText.substring(0, 100) + "...");
+            handleTranscriptionError("Failed to process audio. Please try again.");
+            return;
+          }
+          
+          // Get transcribed message
+          const message = (data.transcription || "").trim();
+          logDebug("📝 Transcribed: " + (message || "No speech detected"));
+          
+          // Check for repeated identical transcriptions to avoid loops
+          if (message === window.nagState.lastTranscription) {
+            window.nagState.consecutiveIdenticalTranscriptions++;
+            
+            if (window.nagState.consecutiveIdenticalTranscriptions >= 2) {
+              logDebug("⚠️ Multiple identical transcriptions detected. Skipping to avoid loop.");
+              handleTranscriptionError("Multiple identical transcriptions detected. Please try speaking again.");
+              
+              // Reset and wait longer before trying again
+              window.nagState.consecutiveIdenticalTranscriptions = 0;
+              window.nagState.lastTranscription = "";
+              return;
+            }
+          } else {
+            // Different transcription, reset counter
+            window.nagState.consecutiveIdenticalTranscriptions = 0;
+            window.nagState.lastTranscription = message;
+          }
+          
+          // Check for empty or short messages
+          const wordCount = message.split(/\s+/).filter(Boolean).length;
+          if (wordCount < 2) {
+            logDebug("⚠️ Too short or empty message. Continuing to listen...");
+            handleTranscriptionError("Message too short. Please speak at least two words.");
+            if (!window.nagState.isWalkieTalkieMode && !window.nagState.isPaused) {
+              setTimeout(() => {
+                if (!window.nagState.interrupted && !window.nagState.isPaused) startListening();
+              }, 1000);
+            }
+            return;
+          }
+          
+          // Send to chat if we have a valid message
+          await sendToChat(message);
+          
+          // Successful, break out of retry loop
+          break;
+        } else {
+          // Handle error response
+          attempts++;
+          logDebug(`❌ Transcription request failed (attempt ${attempts}/${maxAttempts}). Status: ${res.status}`);
+          
+          if (attempts >= maxAttempts) {
+            handleTranscriptionError(`Failed to transcribe audio. Server returned status ${res.status}`);
+            window.nagState.isUploading = false;
+            return;
+          }
+          
+          // Wait before retrying
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      } catch (fetchError) {
+        attempts++;
+        logDebug(`❌ Fetch error during transcription (attempt ${attempts}/${maxAttempts}): ${fetchError.message}`);
+        
+        if (attempts >= maxAttempts) {
+          handleTranscriptionError("Network error while transcribing. Please check your connection.");
+          window.nagState.isUploading = false;
+          return;
+        }
+        
+        // Wait before retrying
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
-    } else {
-      // Different transcription, reset counter
-      window.nagState.consecutiveIdenticalTranscriptions = 0;
-      window.nagState.lastTranscription = message;
     }
-
-    // Check for empty or short messages
-    const wordCount = message.split(/\s+/).filter(Boolean).length;
-    if (wordCount < 2) {
-      logDebug("⚠️ Too short or empty message. Continuing to listen...");
-      handleTranscriptionError("Message too short. Please speak at least two words.");
-      if (!window.nagState.isWalkieTalkieMode && !window.nagState.isPaused) {
-        setTimeout(() => {
-          if (!window.nagState.interrupted && !window.nagState.isPaused) startListening();
-        }, 1000);
-      }
-      return;
-    }
-
-    // Send to chat if we have a valid message
-    await sendToChat(message);
   } catch (e) {
     logDebug("❌ Processing error: " + e.message);
     handleTranscriptionError("Error processing audio: " + e.message);
