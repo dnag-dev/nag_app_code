@@ -13,6 +13,7 @@ from typing import Optional, List
 from pydantic import BaseModel, EmailStr
 from enum import Enum
 from fastapi import WebSocketDisconnect
+import json  # Added for JSON handling
 
 # -------------------- Request Models --------------------
 class ChatMode(str, Enum):
@@ -24,6 +25,11 @@ class ChatRequest(BaseModel):
     text: str
     mode: ChatMode = ChatMode.CHAT
     email: Optional[EmailStr] = None
+    request_id: Optional[str] = None
+
+# Alternative request model for request bodies that use 'message' instead of 'text'
+class MessageRequest(BaseModel):
+    message: str
     request_id: Optional[str] = None
 
 # -------------------- Logging Setup --------------------
@@ -113,20 +119,38 @@ async def websocket_endpoint(websocket: WebSocket):
         logger.info("WebSocket connection closed")
 
 @app.post("/chat")
-async def chat(request: ChatRequest):
+async def chat(request_data: dict):
     try:
-        system_message = "You are a helpful assistant."
+        logger.info(f"Received chat request: {request_data}")
+        
+        # Handle both formats: text and message
+        user_message = request_data.get('text') or request_data.get('message')
+        if not user_message:
+            raise HTTPException(status_code=400, detail="Missing 'text' or 'message' field")
+        
+        system_message = "You are Nag, Dinakara Nagalla's digital twin — therapist, companion, unfiltered mirror. Be soulful, wise, blunt, Indian immigrant tone."
         completion = await client.chat.completions.create(
             model="gpt-4",
             messages=[
                 {"role": "system", "content": system_message},
-                {"role": "user", "content": request.text}
+                {"role": "user", "content": user_message}
             ],
             temperature=0.7,
             max_tokens=1000
         )
         reply = completion.choices[0].message.content
-        return {"response": reply}
+        
+        # Generate audio response from the reply
+        # (This would require integration with a TTS service)
+        audio_url = None
+        # Example of how you might generate an audio URL:
+        # audio_url = await generate_tts(reply)
+        
+        return {
+            "response": reply,
+            "audio_url": audio_url,
+            "request_id": request_data.get('request_id')
+        }
     except Exception as e:
         logger.exception("Chat error:")
         raise HTTPException(status_code=500, detail=str(e))
@@ -145,8 +169,9 @@ async def transcribe_audio(file: UploadFile = File(...)):
 
         logger.info("Starting transcription with Whisper...")
 
+        # Transcribe with OpenAI Whisper
         audio_file = io.BytesIO(content)
-        audio_file.name = file.filename  # Required by OpenAI SDK
+        audio_file.name = file.filename
 
         transcript = await client.audio.transcriptions.create(
             model="whisper-1",
@@ -174,3 +199,22 @@ async def server_error_handler(request: Request, exc: HTTPException):
         status_code=500,
         content={"detail": "Internal server error"}
     )
+
+# Serve specific static files that might be requested directly
+@app.get("/{file_path:path}")
+async def serve_static_files(file_path: str):
+    # Check if the file exists in the static directory
+    file_location = os.path.join(STATIC_BASE, file_path)
+    if os.path.isfile(file_location):
+        return FileResponse(file_location)
+    else:
+        raise HTTPException(status_code=404, detail=f"File {file_path} not found")
+
+# Add startup and shutdown events
+@app.on_event("startup")
+async def startup_event():
+    logger.info("Application started")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    logger.info("Application shutdown")
