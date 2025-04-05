@@ -235,8 +235,9 @@ async def transcribe_audio(file: UploadFile = File(...)):
 
         logger.info("Starting transcription with Whisper...")
 
-        # Save to temporary file for OpenAI
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
+        # Create a temporary file with the correct extension
+        file_extension = os.path.splitext(file.filename)[1] or '.wav'
+        with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) as tmp_file:
             tmp_path = tmp_file.name
             tmp_file.write(content)
 
@@ -247,8 +248,6 @@ async def transcribe_audio(file: UploadFile = File(...)):
                     # For Safari, we'll try with slightly higher temperature
                     temperature = 0.2 if is_safari else 0.0
                     
-                    # Use the correct API method with proper file handling
-                    audio_file.name = file.filename  # Set the filename for OpenAI
                     transcript = await client.audio.transcriptions.create(
                         model="whisper-1",
                         file=audio_file,
@@ -324,14 +323,7 @@ async def serve_static_files(file_path: str):
 @app.on_event("startup")
 async def startup_event():
     logger.info("Application started")
-    await validate_api_key()
 
 @app.on_event("shutdown")
 async def shutdown_event():
     logger.info("Application shutdown")
-
-async def validate_api_key():
-    try:
-        await client.models.list()
-    except Exception as e:
-        raise ValueError(f"OpenAI API key validation failed: {str(e)}")
