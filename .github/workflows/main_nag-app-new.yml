@@ -28,14 +28,16 @@ jobs:
         python-version: '3.11'
         cache: 'pip'
 
-    - name: 📦 Install Python dependencies
+    - name: 📦 Create and activate virtual environment
       run: |
+        python -m venv antenv
+        source antenv/bin/activate
         python -m pip install --upgrade pip
         pip install --no-cache-dir -r requirements.txt
 
     - name: 📁 Create deploy.zip package
       run: |
-        zip -r deploy.zip . -x "*.git*" "*.DS_Store*" "*.venv*" "__pycache__/*" "node_modules/*" "deploy.sh" "startup.sh"
+        zip -r deploy.zip . -x "*.git*" "*.DS_Store*" "__pycache__/*" "node_modules/*" "deploy.sh" "startup.sh"
 
     - name: 🚀 Deploy to Azure Web App
       uses: azure/webapps-deploy@v2
