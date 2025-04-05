@@ -11,28 +11,41 @@
 </head>
 <body>
   <div id="app-container">
-    <h1>Welcome to Nag 3.0</h1>
-    <p>Dinakara's mind — therapist, companion, unfiltered mirror.</p>
-    
-    <div id="orb" class="idle">
-      <div id="volume-indicator">
-        <div class="volume-bar" style="height: 0"></div>
+    <header>
+      <h1>Nag 3.0</h1>
+      <p class="subtitle">Dinakara's mind — therapist, companion, unfiltered mirror.</p>
+    </header>
+
+    <main>
+      <div id="orb-container">
+        <div id="orb" class="idle">
+          <div id="volume-indicator">
+            <div class="volume-bar" style="height: 0"></div>
+          </div>
+        </div>
       </div>
-    </div>
-    
-    <audio id="audio" hidden></audio>
-    
-    <div id="controls">
-      <button id="toggle-btn" class="btn">Start Conversation</button>
-      <button id="pause-btn" class="btn" disabled>Pause</button>
-    </div>
-    
-    <div class="walkie-talkie-hint" id="mode-hint">Click &amp; hold the orb to use walkie-talkie mode</div>
-    <button id="mode-toggle">Switch to continuous mode</button>
-    
-    <div id="status" class="status">Ready</div>
-    <div id="debug"><strong>Debug Log:</strong></div>
-    <div class="version">v2.0.0</div>
+
+      <audio id="audio" hidden></audio>
+
+      <div id="controls" class="controls-container">
+        <div class="button-group">
+          <button id="toggle-btn" class="btn primary">Start Conversation</button>
+          <button id="pause-btn" class="btn secondary" disabled>Pause</button>
+        </div>
+        <button id="mode-toggle" class="btn mode">Switch to continuous mode</button>
+      </div>
+
+      <div class="walkie-talkie-hint" id="mode-hint">Click &amp; hold the orb to use walkie-talkie mode</div>
+    </main>
+
+    <footer>
+      <div id="status" class="status">Ready</div>
+      <div id="debug" class="debug-container">
+        <h3>Debug Log</h3>
+        <div class="debug-content"></div>
+      </div>
+      <div class="version">v2.0.0</div>
+    </footer>
   </div>
 
   <script>
