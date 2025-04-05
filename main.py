@@ -49,21 +49,13 @@ if not api_key:
     logger.error("OPENAI_API_KEY not found in environment variables")
     raise ValueError("OPENAI_API_KEY environment variable is required")
 
-# Validate API key format
-if not api_key.startswith('sk-'):
-    raise ValueError("Invalid OpenAI API key format. Please use a personal API key starting with 'sk-'")
-
 client = AsyncOpenAI(
     api_key=api_key,
-    timeout=30.0,  # 30 second timeout
-    max_retries=3  # Retry failed requests up to 3 times
+    http_client=httpx.AsyncClient(
+        timeout=30.0,
+        verify=True
+    )
 )
-
-async def validate_api_key():
-    try:
-        await client.models.list()
-    except Exception as e:
-        raise ValueError(f"OpenAI API key validation failed: {str(e)}")
 
 # -------------------- App Setup --------------------
 app = FastAPI(title="Nag - Digital Twin", version="2.0.0")
@@ -332,7 +324,14 @@ async def serve_static_files(file_path: str):
 @app.on_event("startup")
 async def startup_event():
     logger.info("Application started")
+    await validate_api_key()
 
 @app.on_event("shutdown")
 async def shutdown_event():
     logger.info("Application shutdown")
+
+async def validate_api_key():
+    try:
+        await client.models.list()
+    except Exception as e:
+        raise ValueError(f"OpenAI API key validation failed: {str(e)}")
