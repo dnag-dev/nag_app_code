@@ -1,7 +1,6 @@
 // Nag Digital Twin v2.0.0 - Transcription and Chat Functions
 
 // Process recorded audio and get transcription
-// Process recorded audio and get transcription
 async function processAudioAndTranscribe() {
   const orb = window.nagElements.orb;
   
@@ -105,21 +104,12 @@ async function processAudioAndTranscribe() {
           body: formData 
         });
         
+        // Process response
+        const data = await res.json();
+        
         // If successful, process response
         if (res.ok) {
           window.nagState.isUploading = false;
-          
-          // Process response
-          const rawText = await res.text();
-          let data;
-          try {
-            data = JSON.parse(rawText);
-          } catch (jsonErr) {
-            logDebug("❌ JSON parse failed: " + jsonErr.message);
-            logDebug("Raw response: " + rawText.substring(0, 100) + "...");
-            handleTranscriptionError("Failed to process audio. Please try again.");
-            return;
-          }
           
           // Get transcribed message
           const message = (data.transcription || "").trim();
@@ -166,9 +156,10 @@ async function processAudioAndTranscribe() {
           // Handle error response
           attempts++;
           logDebug(`❌ Transcription request failed (attempt ${attempts}/${maxAttempts}). Status: ${res.status}`);
+          logDebug(`Error details: ${data.error || 'No error details provided'}`);
           
           if (attempts >= maxAttempts) {
-            handleTranscriptionError(`Failed to transcribe audio. Server returned status ${res.status}`);
+            handleTranscriptionError(`Failed to transcribe audio: ${data.error || 'Unknown error'}`);
             window.nagState.isUploading = false;
             return;
           }

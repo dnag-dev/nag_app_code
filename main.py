@@ -15,6 +15,7 @@ from enum import Enum
 from fastapi import WebSocketDisconnect
 import json  # Added for JSON handling
 import httpx
+import tempfile
 
 # -------------------- Request Models --------------------
 class ChatMode(str, Enum):
@@ -202,23 +203,48 @@ async def transcribe_audio(file: UploadFile = File(...)):
         content = await file.read()
         logger.info(f"Audio file size: {len(content)} bytes")
 
+        if len(content) < 1000:  # Less than 1KB is probably just noise
+            logger.warning("Audio file too small to process")
+            return JSONResponse(
+                status_code=200,
+                content={"transcription": "undefined", "error": "Audio too short"}
+            )
+
         logger.info("Starting transcription with Whisper...")
 
-        # Transcribe with OpenAI Whisper
-        audio_file = io.BytesIO(content)
-        audio_file.name = file.filename
+        # Create a temporary file to store the audio
+        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1]) as tmp:
+            tmp.write(content)
+            tmp_path = tmp.name
 
-        transcript = await client.audio.transcriptions.create(
-            model="whisper-1",
-            file=audio_file
-        )
+        try:
+            # Transcribe with OpenAI Whisper
+            with open(tmp_path, "rb") as audio_file:
+                transcript = await client.audio.transcribe(
+                    model="whisper-1",
+                    file=audio_file,
+                    language="en"  # Force English language detection
+                )
 
-        logger.info("Transcription completed successfully")
-        return {"transcription": transcript.text}
+            logger.info("Transcription completed successfully")
+            return JSONResponse(
+                status_code=200,
+                content={"transcription": transcript.text}
+            )
+
+        finally:
+            # Clean up the temporary file
+            try:
+                os.unlink(tmp_path)
+            except Exception as e:
+                logger.warning(f"Error cleaning up temp file: {str(e)}")
 
     except Exception as e:
         logger.error(f"Transcription error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        return JSONResponse(
+            status_code=500,
+            content={"transcription": "undefined", "error": str(e)}
+        )
 
 # -------------------- Error Handlers --------------------
 @app.exception_handler(404)
