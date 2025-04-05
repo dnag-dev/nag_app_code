@@ -106,7 +106,25 @@ async def read_root():
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "timestamp": datetime.now().isoformat()}
+    try:
+        api_key_status = "present" if os.getenv("OPENAI_API_KEY") else "missing"
+        logger.info(f"Health check - API key status: {api_key_status}")
+        return {
+            "status": "ok",
+            "timestamp": datetime.now().isoformat(),
+            "api_key_status": api_key_status,
+            "openai_client": {
+                "base_url": client.base_url,
+                "api_key_present": bool(client.api_key)
+            }
+        }
+    except Exception as e:
+        logger.error(f"Health check error: {str(e)}")
+        return {
+            "status": "error",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
