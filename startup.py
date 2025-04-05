@@ -4,32 +4,47 @@ import subprocess
 import logging
 import time
 import platform
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+import uvicorn
 
 # Configure logging
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('/home/LogFiles/startup.log'),
-        logging.StreamHandler()
+        logging.StreamHandler(),
+        logging.FileHandler('startup.log'),
     ]
 )
-logger = logging.getLogger(__name__)
+
+app = FastAPI()
+
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Mount static files
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+@app.get("/")
+async def read_root():
+    return FileResponse('static/index.html')
 
 def create_directories():
-    """Create necessary directories for the application."""
-    logger.info("Creating necessary directories...")
-    
-    # Determine if we're running on Azure or locally
-    is_azure = os.path.exists('/home/site/wwwroot')
-    base_path = '/home/site/wwwroot' if is_azure else os.path.dirname(os.path.abspath(__file__))
-    
-    # Create directories
-    dirs = ['data', 'static', 'cache', 'memory']
-    for dir_name in dirs:
-        dir_path = os.path.join(base_path, dir_name)
-        os.makedirs(dir_path, exist_ok=True)
-        logger.info(f"Created directory: {dir_path}")
+    """Create necessary directories if they don't exist."""
+    try:
+        os.makedirs('static', exist_ok=True)
+        logging.info("Created static directory")
+    except Exception as e:
+        logging.error(f"Failed to create directories: {e}")
 
 def check_and_install_dependencies():
     """Check if required packages are installed and install them if needed."""
@@ -83,7 +98,6 @@ def start_application():
     # Start the application
     try:
         logger.info(f"Starting uvicorn with workers={workers}, port={port}")
-        import uvicorn
         uvicorn.run(
             "main:app",
             host="0.0.0.0",
@@ -99,16 +113,7 @@ def start_application():
         sys.exit(1)
 
 if __name__ == "__main__":
-    logger.info("Starting startup script...")
-    logger.info(f"Python version: {platform.python_version()}")
-    logger.info(f"Current directory: {os.getcwd()}")
-    logger.info(f"PYTHONPATH: {os.environ.get('PYTHONPATH', 'Not set')}")
-    
-    # Create necessary directories
+    logging.info("Starting startup script...")
     create_directories()
-    
-    # Check and install dependencies
-    check_and_install_dependencies()
-    
-    # Start the application
-    start_application() 
+    logging.info("Starting application...")
+    uvicorn.run(app, host="0.0.0.0", port=8000) 
