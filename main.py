@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, UploadFile, File, HTTPException, BackgroundTasks, WebSocket, Form
+from fastapi import FastAPI, Request, UploadFile, File, HTTPException, BackgroundTasks, WebSocket
 from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -175,164 +175,104 @@ async def chat(request_data: dict):
         reply = completion.choices[0].message.content
         
         # Generate audio response from the reply
-        # (This would require integration with a TTS service)
-        audio_url = None
-        # Example of how you might generate an audio URL:
-        # audio_url = await generate_tts(reply)
-        
-        return {
-            "response": reply,
-            "audio_url": audio_url,
-            "request_id": request_data.get('request_id')
-        }
+        try:
+            audio_response = await client.audio.speech.create(
+                model="tts-1",
+                voice="alloy",
+                input=reply
+            )
+            
+            if not audio_response:
+                logger.error("Empty audio response from OpenAI")
+                return {
+                    "response": reply,
+                    "audio": None,
+                    "error": "Failed to generate audio response",
+                    "request_id": request_data.get('request_id')
+                }
+            
+            # Convert audio response to base64
+            audio_data = base64.b64encode(audio_response.content).decode('utf-8')
+            
+            logger.info("Successfully generated text and audio response")
+            return {
+                "response": reply,
+                "audio": audio_data,
+                "error": None,
+                "request_id": request_data.get('request_id')
+            }
+            
+        except Exception as e:
+            logger.error(f"Error generating audio: {str(e)}")
+            logger.exception("Full audio generation error traceback:")
+            # Return text response even if audio fails
+            return {
+                "response": reply,
+                "audio": None,
+                "error": "Failed to generate audio response",
+                "request_id": request_data.get('request_id')
+            }
+            
     except Exception as e:
         logger.exception("Chat error:")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/transcribe")
-async def transcribe_audio(
-    file: UploadFile = File(None),
-    audio_data: str = Form(None),
-    format: str = Form(None)
-):
+async def transcribe_audio(file: UploadFile = File(...)):
     try:
-        content = None
-        file_extension = None
-        is_safari = False
+        logger.info(f"Received audio file: {file.filename}")
+        logger.info(f"Content type: {file.content_type}")
+        logger.info(f"Headers: {file.headers}")
 
-        if file:
-            logger.info(f"Received file upload: {file.filename}")
-            logger.info(f"Content type: {file.content_type}")
-            logger.info(f"Headers: {file.headers}")
-            
-            # Check if this is a Safari request
-            is_safari = any("safari" in str(h).lower() for h in file.headers.values())
-            if is_safari:
-                logger.info("Safari browser detected, applying Safari-specific handling")
-            
-            # Read file in chunks
-            content = b""
-            chunk_size = 1024 * 1024  # 1MB chunks
-            try:
-                while True:
-                    chunk = await file.read(chunk_size)
-                    if not chunk:
-                        break
-                    content += chunk
-            except Exception as e:
-                logger.error(f"Error reading file chunks: {str(e)}")
-                return JSONResponse(
-                    status_code=500,
-                    content={"transcription": "undefined", "error": f"Error reading audio file: {str(e)}"}
-                )
-            
-            file_extension = os.path.splitext(file.filename)[1] or '.wav'
-            
-        elif audio_data:
-            logger.info("Received base64 audio data")
-            try:
-                # Remove the data URL prefix if present
-                if ',' in audio_data:
-                    audio_data = audio_data.split(',')[1]
-                
-                content = base64.b64decode(audio_data)
-                file_extension = f".{format}" if format else '.m4a'  # Default to m4a for Safari
-                is_safari = True  # Assume Safari for base64 data
-                logger.info("Base64 data detected, assuming Safari browser")
-            except Exception as e:
-                logger.error(f"Error decoding base64 data: {str(e)}")
-                return JSONResponse(
-                    status_code=400,
-                    content={"transcription": "undefined", "error": "Invalid base64 audio data"}
-                )
-        else:
+        content_type = file.content_type.lower()
+        if not any(x in content_type for x in ['audio', 'video']):
+            logger.error(f"Invalid content type: {content_type}")
+            raise HTTPException(status_code=400, detail="Invalid file type. Please upload an audio file.")
+
+        content = await file.read()
+        logger.info(f"Audio file size: {len(content)} bytes")
+
+        if len(content) < 1000:  # Less than 1KB is probably just noise
+            logger.warning("Audio file too small to process")
             return JSONResponse(
-                status_code=400,
-                content={"transcription": "undefined", "error": "No audio data provided"}
-            )
-
-        logger.info(f"Audio data size: {len(content)} bytes")
-
-        if len(content) < 1000:  # Minimum size check
-            logger.error("Audio data too small")
-            return JSONResponse(
-                status_code=400,
-                content={"transcription": "undefined", "error": "Audio data too small. Please record a longer message."}
-            )
-
-        if len(content) > 25 * 1024 * 1024:  # 25MB limit
-            logger.error("Audio data too large")
-            return JSONResponse(
-                status_code=400,
-                content={"transcription": "undefined", "error": "Audio data too large. Maximum size is 25MB."}
+                status_code=200,
+                content={"transcription": "undefined", "error": "Audio too short"}
             )
 
         logger.info("Starting transcription with Whisper...")
 
-        # Create a temporary file with the correct extension
-        with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) as tmp_file:
-            tmp_path = tmp_file.name
-            tmp_file.write(content)
+        # Create a temporary file to store the audio
+        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1]) as tmp:
+            tmp.write(content)
+            tmp_path = tmp.name
 
         try:
             # Transcribe with OpenAI Whisper
             with open(tmp_path, "rb") as audio_file:
-                try:
-                    # For Safari, we'll try with slightly higher temperature
-                    temperature = 0.2 if is_safari else 0.0
-                    
-                    transcript = await client.audio.transcriptions.create(
-                        model="whisper-1",
-                        file=audio_file,
-                        language="en",  # Force English language detection
-                        temperature=temperature
-                    )
-                except Exception as e:
-                    logger.error(f"OpenAI API error: {str(e)}")
-                    logger.exception("Full OpenAI API error traceback:")
-                    return JSONResponse(
-                        status_code=500,
-                        content={"transcription": "undefined", "error": f"OpenAI API error: {str(e)}"}
-                    )
-
-            # Clean up temporary file
-            os.unlink(tmp_path)
-
-            if not transcript or not transcript.text:
-                logger.error("Empty transcription received")
-                return JSONResponse(
-                    status_code=500,
-                    content={"transcription": "undefined", "error": "Empty transcription received"}
+                transcript = await client.audio.transcribe(
+                    model="whisper-1",
+                    file=audio_file,
+                    language="en"  # Force English language detection
                 )
 
-            # Check if the transcription is too short
-            if len(transcript.text.strip()) < 3:
-                logger.warning("Transcription too short")
-                return JSONResponse(
-                    status_code=200,
-                    content={"transcription": "undefined", "error": "Message too short. Please speak longer."}
-                )
-
-            logger.info("Transcription successful")
+            logger.info("Transcription completed successfully")
             return JSONResponse(
                 status_code=200,
-                content={"transcription": transcript.text, "error": None}
+                content={"transcription": transcript.text}
             )
 
-        except Exception as e:
-            logger.error(f"Transcription error: {str(e)}")
-            logger.exception("Full error traceback:")
-            return JSONResponse(
-                status_code=500,
-                content={"transcription": "undefined", "error": f"Transcription error: {str(e)}"}
-            )
+        finally:
+            # Clean up the temporary file
+            try:
+                os.unlink(tmp_path)
+            except Exception as e:
+                logger.warning(f"Error cleaning up temp file: {str(e)}")
 
     except Exception as e:
         logger.error(f"Transcription error: {str(e)}")
-        logger.exception("Full error traceback:")
         return JSONResponse(
             status_code=500,
-            content={"transcription": "undefined", "error": f"Transcription error: {str(e)}"}
+            content={"transcription": "undefined", "error": str(e)}
         )
 
 # -------------------- Error Handlers --------------------
