@@ -7,6 +7,12 @@ echo "🔍 Checking environment..."
 echo "Current directory: $(pwd)"
 echo "Python version: $(python3 --version)"
 
+# Install python3-venv if not available
+if ! python3 -c "import venv" 2>/dev/null; then
+    echo "📦 Installing python3-venv..."
+    apt-get update && apt-get install -y python3-venv
+fi
+
 # Create virtual environment if it doesn't exist
 if [ ! -d "antenv" ]; then
     echo "📦 Creating virtual environment..."
