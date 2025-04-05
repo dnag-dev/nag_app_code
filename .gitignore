@@ -54,7 +54,6 @@ output.tar.gz
 !requirements.txt
 !entrypoint.py
 !healthcheck.py
-!startup.sh
 !test_startup.py
 !web.config
 !deploy.sh
@@ -66,3 +65,9 @@ output.tar.gz
 !data/
 !data/**
 archive/NagAppNewPure
+
+# Azure deployment files
+!.deployment
+!web.config
+!deploy.config.json
+!azure.yaml

@@ -13,7 +13,6 @@ zip -r deploy.zip \
     entrypoint.py \
     healthcheck.py \
     startup.py \
-    startup.sh \
     web.config \
     test_startup.py \
     static/ \
@@ -22,7 +21,11 @@ zip -r deploy.zip \
     models/.gitkeep \
     .deployment \
     .github/ \
-    .github/workflows/
+    .github/workflows/ \
+    check_env.py \
+    check_uvicorn.py \
+    azure.yaml \
+    deploy.config.json
 
 echo "✅ Zipping complete: deploy.zip ready"
 
