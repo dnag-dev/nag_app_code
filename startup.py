@@ -5,14 +5,15 @@ import logging
 import time
 import platform
 import uvicorn
+from datetime import datetime
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler('startup.log'),
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler('deployment.log')
     ]
 )
 
@@ -37,22 +38,35 @@ def check_and_install_dependencies():
         subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"])
 
 def start_application():
-    """Start the FastAPI application with uvicorn."""
     try:
-        logger.info("Starting application with uvicorn...")
+        logger.info("Starting application...")
+        logger.info(f"Python version: {sys.version}")
+        logger.info(f"Current working directory: {os.getcwd()}")
+        logger.info(f"Environment variables: {os.environ}")
+        
+        # Log installed packages
+        import pkg_resources
+        installed_packages = [f"{pkg.key}=={pkg.version}" for pkg in pkg_resources.working_set]
+        logger.info(f"Installed packages: {installed_packages}")
+        
+        # Start uvicorn with detailed logging
         uvicorn.run(
             "main:app",
             host="0.0.0.0",
-            port=8000,
+            port=int(os.getenv("PORT", "8000")),
             reload=False,
-            ws='auto',
-            log_level="info"
+            log_level="debug",
+            access_log=True,
+            workers=1
         )
     except Exception as e:
-        logger.error(f"Failed to start application: {e}")
+        logger.error(f"Error starting application: {str(e)}")
+        logger.error(f"Error type: {type(e)}")
+        logger.error(f"Error details: {str(e)}")
         raise
 
 if __name__ == "__main__":
+    logger.info("Starting deployment process...")
     logger.info("Starting startup script...")
     logger.info(f"Python version: {platform.python_version()}")
     logger.info(f"Current directory: {os.getcwd()}")
