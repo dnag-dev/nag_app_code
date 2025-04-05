@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-import openai
+from openai import AsyncOpenAI
 import os
 from dotenv import load_dotenv
 import requests
@@ -43,7 +43,7 @@ logger.info("Starting application...")
 
 # -------------------- Load Environment Variables --------------------
 load_dotenv()
-openai.api_key = os.getenv("OPENAI_API_KEY")
+client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # -------------------- App Setup --------------------
 app = FastAPI(title="Nag - Digital Twin", version="2.0.0")
@@ -122,7 +122,7 @@ async def websocket_endpoint(websocket: WebSocket):
 async def chat(request: ChatRequest):
     try:
         system_message = "You are a helpful assistant."
-        completion = await openai.ChatCompletion.acreate(
+        completion = await client.chat.completions.create(
             model="gpt-4",
             messages=[
                 {"role": "system", "content": system_message},
@@ -140,44 +140,33 @@ async def chat(request: ChatRequest):
 @app.post("/transcribe")
 async def transcribe_audio(file: UploadFile = File(...)):
     try:
-        # Get the file extension based on content type
+        # Log the incoming file
+        logger.info(f"Received audio file: {file.filename}")
+        
+        # Validate file type
         content_type = file.content_type.lower()
-        logger.info(f"Received audio file with content type: {content_type}")
+        if not any(x in content_type for x in ['audio', 'video']):
+            raise HTTPException(status_code=400, detail="Invalid file type. Please upload an audio file.")
         
-        if "mp4" in content_type:
-            ext = "mp4"
-        elif "webm" in content_type:
-            ext = "webm"
-        elif "ogg" in content_type:
-            ext = "ogg"
-        else:
-            ext = "mp3"  # default fallback
-            
-        temp_path = f"temp_{uuid.uuid4().hex}.{ext}"
-        logger.info(f"Transcribing audio file with extension: {ext}")
+        # Read file content
+        content = await file.read()
         
-        async with aiofiles.open(temp_path, "wb") as out_file:
-            content = await file.read()
-            file_size = len(content)
-            logger.info(f"Audio file size: {file_size} bytes")
-            await out_file.write(content)
-            
-        with open(temp_path, "rb") as audio_file:
-            logger.info("Starting transcription with Whisper...")
-            try:
-                transcript = await openai.Audio.atranscribe(
-                    model="whisper-1",
-                    file=audio_file
-                )
-                logger.info(f"Transcription successful: {transcript['text']}")
-            except Exception as e:
-                logger.error(f"Whisper transcription error: {str(e)}")
-                raise
-            
-        os.remove(temp_path)
-        return {"transcription": transcript["text"]}
+        # Log file size
+        file_size = len(content)
+        logger.info(f"Audio file size: {file_size} bytes")
+        
+        # Transcribe
+        logger.info("Starting transcription with Whisper...")
+        transcript = await client.audio.transcriptions.create(
+            model="whisper-1",
+            file=(file.filename, content)
+        )
+        
+        logger.info("Transcription completed successfully")
+        return {"transcription": transcript.text}
+        
     except Exception as e:
-        logger.exception("Transcription error:")
+        logger.error(f"Transcription error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # Error handlers
