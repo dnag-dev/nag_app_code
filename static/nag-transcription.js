@@ -65,6 +65,13 @@ async function processAudioAndTranscribe() {
       return;
     }
     
+    // Check if audio is too large
+    if (blob.size > 25 * 1024 * 1024) { // 25MB limit
+      logDebug("⚠️ Audio too large: " + blob.size + " bytes");
+      handleTranscriptionError("Audio too long. Please keep your message under 25MB.");
+      return;
+    }
+    
     const formData = new FormData();
     
     // Determine file extension based on MIME type
@@ -105,7 +112,13 @@ async function processAudioAndTranscribe() {
         });
         
         // Process response
-        const data = await res.json();
+        let data;
+        try {
+          data = await res.json();
+        } catch (jsonError) {
+          logDebug("❌ Failed to parse JSON response: " + jsonError.message);
+          throw new Error("Invalid server response");
+        }
         
         // If successful, process response
         if (res.ok) {
@@ -155,11 +168,12 @@ async function processAudioAndTranscribe() {
         } else {
           // Handle error response
           attempts++;
+          const errorMessage = data.error || 'Unknown error';
           logDebug(`❌ Transcription request failed (attempt ${attempts}/${maxAttempts}). Status: ${res.status}`);
-          logDebug(`Error details: ${data.error || 'No error details provided'}`);
+          logDebug(`Error details: ${errorMessage}`);
           
           if (attempts >= maxAttempts) {
-            handleTranscriptionError(`Failed to transcribe audio: ${data.error || 'Unknown error'}`);
+            handleTranscriptionError(`Failed to transcribe audio: ${errorMessage}`);
             window.nagState.isUploading = false;
             return;
           }

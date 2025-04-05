@@ -198,9 +198,20 @@ async def transcribe_audio(file: UploadFile = File(...)):
         content_type = file.content_type.lower()
         if not any(x in content_type for x in ['audio', 'video']):
             logger.error(f"Invalid content type: {content_type}")
-            raise HTTPException(status_code=400, detail="Invalid file type. Please upload an audio file.")
+            return JSONResponse(
+                status_code=400,
+                content={"transcription": "undefined", "error": "Invalid file type. Please upload an audio file."}
+            )
 
-        content = await file.read()
+        # Read file in chunks to handle large files
+        content = b""
+        chunk_size = 1024 * 1024  # 1MB chunks
+        while True:
+            chunk = await file.read(chunk_size)
+            if not chunk:
+                break
+            content += chunk
+
         logger.info(f"Audio file size: {len(content)} bytes")
 
         if len(content) < 1000:  # Less than 1KB is probably just noise
@@ -208,6 +219,13 @@ async def transcribe_audio(file: UploadFile = File(...)):
             return JSONResponse(
                 status_code=200,
                 content={"transcription": "undefined", "error": "Audio too short"}
+            )
+
+        if len(content) > 25 * 1024 * 1024:  # 25MB limit
+            logger.error("Audio file too large")
+            return JSONResponse(
+                status_code=400,
+                content={"transcription": "undefined", "error": "Audio file too large. Maximum size is 25MB."}
             )
 
         logger.info("Starting transcription with Whisper...")
@@ -220,11 +238,18 @@ async def transcribe_audio(file: UploadFile = File(...)):
         try:
             # Transcribe with OpenAI Whisper
             with open(tmp_path, "rb") as audio_file:
-                transcript = await client.audio.transcribe(
-                    model="whisper-1",
-                    file=audio_file,
-                    language="en"  # Force English language detection
-                )
+                try:
+                    transcript = await client.audio.transcribe(
+                        model="whisper-1",
+                        file=audio_file,
+                        language="en"  # Force English language detection
+                    )
+                except Exception as e:
+                    logger.error(f"OpenAI API error: {str(e)}")
+                    return JSONResponse(
+                        status_code=500,
+                        content={"transcription": "undefined", "error": f"OpenAI API error: {str(e)}"}
+                    )
 
             logger.info("Transcription completed successfully")
             return JSONResponse(
@@ -241,6 +266,7 @@ async def transcribe_audio(file: UploadFile = File(...)):
 
     except Exception as e:
         logger.error(f"Transcription error: {str(e)}")
+        logger.exception("Full error traceback:")
         return JSONResponse(
             status_code=500,
             content={"transcription": "undefined", "error": str(e)}
