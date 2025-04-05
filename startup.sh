@@ -5,9 +5,7 @@ set -e
 
 # Configure logging
 log_file="/home/LogFiles/startup.log"
-if [ ! -d "/home/LogFiles" ]; then
-    log_file="startup.log"
-fi
+[ ! -d "/home/LogFiles" ] && log_file="startup.log"
 
 log() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a "$log_file"
@@ -16,79 +14,42 @@ log() {
 # Create necessary directories
 create_directories() {
     log "Creating necessary directories..."
-    
-    # Determine if we're running on Azure or locally
-    if [ -d "/home/site/wwwroot" ]; then
-        base_path="/home/site/wwwroot"
-    else
-        base_path="$(pwd)"
-    fi
-    
-    # Create required directories
+
+    base_path="/home/site/wwwroot"
+
     for dir in data static cache memory audio models; do
         dir_path="$base_path/$dir"
         mkdir -p "$dir_path"
-        log "Created directory: $dir_path"
+        log "Ensured directory exists: $dir_path"
     done
 }
 
-# Check and install Python dependencies
+# Install dependencies using Azure’s default Python
 install_dependencies() {
-    log "Checking Python dependencies..."
-    
-    # Check if virtual environment exists
-    if [ ! -d ".venv" ]; then
-        log "Creating virtual environment..."
-        python -m venv .venv
-    fi
-    
-    # Activate virtual environment
-    source .venv/bin/activate
-    
-    # Install required packages
-    log "Installing required packages..."
-    pip install -r requirements.txt
-    
-    # Additional packages needed for deployment
-    pip install uvicorn gunicorn fastapi
+    log "Installing Python dependencies (without venv)..."
+    pip install --upgrade pip
+    pip install --no-cache-dir -r /home/site/wwwroot/requirements.txt
 }
 
-# Start the application
+# Start FastAPI app
 start_application() {
-    log "Starting the application..."
-    
-    # Activate virtual environment
-    source .venv/bin/activate
-    
-    # Set environment variables
-    export PORT=${PORT:-8000}
-    export GUNICORN_WORKERS=${GUNICORN_WORKERS:-2}
-    export GUNICORN_TIMEOUT=${GUNICORN_TIMEOUT:-120}
-    export GUNICORN_MAX_REQUESTS=${GUNICORN_MAX_REQUESTS:-1000}
-    export GUNICORN_MAX_REQUESTS_JITTER=${GUNICORN_MAX_REQUESTS_JITTER:-50}
-    
-    # Start uvicorn
-    log "Starting uvicorn with workers=$GUNICORN_WORKERS, port=$PORT"
+    log "Starting FastAPI app with Uvicorn..."
+
+    cd /home/site/wwwroot || exit 1
+
     uvicorn main:app \
         --host 0.0.0.0 \
-        --port $PORT \
-        --workers $GUNICORN_WORKERS \
-        --timeout-keep-alive $GUNICORN_TIMEOUT \
-        --limit-concurrency $GUNICORN_MAX_REQUESTS \
-        --limit-max-requests $GUNICORN_MAX_REQUESTS_JITTER \
+        --port ${PORT:-8000} \
+        --workers ${GUNICORN_WORKERS:-2} \
+        --timeout-keep-alive ${GUNICORN_TIMEOUT:-120} \
+        --limit-concurrency ${GUNICORN_MAX_REQUESTS:-1000} \
+        --limit-max-requests ${GUNICORN_MAX_REQUESTS_JITTER:-50} \
         --log-level debug
 }
 
-# Main execution
-log "Starting startup script..."
-log "Current directory: $(pwd)"
+log "🚀 Startup script initiated..."
 log "Python version: $(python --version)"
 
-# Create directories
 create_directories
-
-# Install dependencies
 install_dependencies
-
-# Start the application
-start_application 
+start_application

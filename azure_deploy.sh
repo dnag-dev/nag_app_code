@@ -36,4 +36,4 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-echo "Deployment completed successfully. Application will be started by Azure's web.config configuration." 
+echo "Deployment completed successfully. Application will be started by Azure's starup.py 

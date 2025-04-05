@@ -11,7 +11,6 @@ echo "📁 Creating zip package for Azure deployment..."
 zip -r deploy.zip \
     main.py \
     requirements.txt \
-    web.config \
     .deployment \
     check_env.py \
     check_uvicorn.py \
