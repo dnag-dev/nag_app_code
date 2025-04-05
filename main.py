@@ -198,11 +198,17 @@ async def transcribe_audio(
     try:
         content = None
         file_extension = None
+        is_safari = False
 
         if file:
             logger.info(f"Received file upload: {file.filename}")
             logger.info(f"Content type: {file.content_type}")
             logger.info(f"Headers: {file.headers}")
+            
+            # Check if this is a Safari request
+            is_safari = any("safari" in str(h).lower() for h in file.headers.values())
+            if is_safari:
+                logger.info("Safari browser detected, applying Safari-specific handling")
             
             # Read file in chunks
             content = b""
@@ -230,7 +236,9 @@ async def transcribe_audio(
                     audio_data = audio_data.split(',')[1]
                 
                 content = base64.b64decode(audio_data)
-                file_extension = f".{format}" if format else '.wav'
+                file_extension = f".{format}" if format else '.m4a'  # Default to m4a for Safari
+                is_safari = True  # Assume Safari for base64 data
+                logger.info("Base64 data detected, assuming Safari browser")
             except Exception as e:
                 logger.error(f"Error decoding base64 data: {str(e)}")
                 return JSONResponse(
@@ -243,14 +251,14 @@ async def transcribe_audio(
                 content={"transcription": "undefined", "error": "No audio data provided"}
             )
 
-        # Check if this is a Safari request
-        is_safari = False
-        if file:
-            is_safari = any("safari" in str(h).lower() for h in file.headers.values())
-            if is_safari:
-                logger.info("Safari browser detected, applying Safari-specific handling")
-
         logger.info(f"Audio data size: {len(content)} bytes")
+
+        if len(content) < 1000:  # Minimum size check
+            logger.error("Audio data too small")
+            return JSONResponse(
+                status_code=400,
+                content={"transcription": "undefined", "error": "Audio data too small. Please record a longer message."}
+            )
 
         if len(content) > 25 * 1024 * 1024:  # 25MB limit
             logger.error("Audio data too large")
@@ -295,6 +303,14 @@ async def transcribe_audio(
                 return JSONResponse(
                     status_code=500,
                     content={"transcription": "undefined", "error": "Empty transcription received"}
+                )
+
+            # Check if the transcription is too short
+            if len(transcript.text.strip()) < 3:
+                logger.warning("Transcription too short")
+                return JSONResponse(
+                    status_code=200,
+                    content={"transcription": "undefined", "error": "Message too short. Please speak longer."}
                 )
 
             logger.info("Transcription successful")
