@@ -20,23 +20,8 @@ logging.basicConfig(
     ]
 )
 
-app = FastAPI()
-
-# Configure CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Mount static files
-app.mount("/static", StaticFiles(directory="static"), name="static")
-
-@app.get("/")
-async def read_root():
-    return FileResponse('static/index.html')
+# Import the app from main.py
+from main import app
 
 def create_directories():
     """Create necessary directories if they don't exist."""
@@ -98,6 +83,7 @@ def start_application():
     # Start the application
     try:
         logger.info(f"Starting uvicorn with workers={workers}, port={port}")
+        import uvicorn
         uvicorn.run(
             "main:app",
             host="0.0.0.0",
@@ -113,7 +99,16 @@ def start_application():
         sys.exit(1)
 
 if __name__ == "__main__":
-    logging.info("Starting startup script...")
+    logger.info("Starting startup script...")
+    logger.info(f"Python version: {platform.python_version()}")
+    logger.info(f"Current directory: {os.getcwd()}")
+    logger.info(f"PYTHONPATH: {os.environ.get('PYTHONPATH', 'Not set')}")
+    
+    # Create necessary directories
     create_directories()
-    logging.info("Starting application...")
-    uvicorn.run(app, host="0.0.0.0", port=8000) 
+    
+    # Check and install dependencies
+    check_and_install_dependencies()
+    
+    # Start the application
+    start_application() 
