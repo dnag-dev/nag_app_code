@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, UploadFile, File, HTTPException, BackgroundTasks, WebSocket
+from fastapi import FastAPI, Request, UploadFile, File, HTTPException, BackgroundTasks, WebSocket, Form
 from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,6 +16,7 @@ from fastapi import WebSocketDisconnect
 import json  # Added for JSON handling
 import httpx
 import tempfile
+import base64
 
 # -------------------- Request Models --------------------
 class ChatMode(str, Enum):
@@ -189,54 +190,78 @@ async def chat(request_data: dict):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/transcribe")
-async def transcribe_audio(file: UploadFile = File(...)):
+async def transcribe_audio(
+    file: UploadFile = File(None),
+    audio_data: str = Form(None),
+    format: str = Form(None)
+):
     try:
-        logger.info(f"Received transcription request for file: {file.filename}")
-        logger.info(f"Content type: {file.content_type}")
-        logger.info(f"Headers: {file.headers}")
+        content = None
+        file_extension = None
+
+        if file:
+            logger.info(f"Received file upload: {file.filename}")
+            logger.info(f"Content type: {file.content_type}")
+            logger.info(f"Headers: {file.headers}")
+            
+            # Read file in chunks
+            content = b""
+            chunk_size = 1024 * 1024  # 1MB chunks
+            try:
+                while True:
+                    chunk = await file.read(chunk_size)
+                    if not chunk:
+                        break
+                    content += chunk
+            except Exception as e:
+                logger.error(f"Error reading file chunks: {str(e)}")
+                return JSONResponse(
+                    status_code=500,
+                    content={"transcription": "undefined", "error": f"Error reading audio file: {str(e)}"}
+                )
+            
+            file_extension = os.path.splitext(file.filename)[1] or '.wav'
+            
+        elif audio_data:
+            logger.info("Received base64 audio data")
+            try:
+                # Remove the data URL prefix if present
+                if ',' in audio_data:
+                    audio_data = audio_data.split(',')[1]
+                
+                content = base64.b64decode(audio_data)
+                file_extension = f".{format}" if format else '.wav'
+            except Exception as e:
+                logger.error(f"Error decoding base64 data: {str(e)}")
+                return JSONResponse(
+                    status_code=400,
+                    content={"transcription": "undefined", "error": "Invalid base64 audio data"}
+                )
+        else:
+            return JSONResponse(
+                status_code=400,
+                content={"transcription": "undefined", "error": "No audio data provided"}
+            )
 
         # Check if this is a Safari request
-        is_safari = any("safari" in str(h).lower() for h in file.headers.values())
-        if is_safari:
-            logger.info("Safari browser detected, applying Safari-specific handling")
+        is_safari = False
+        if file:
+            is_safari = any("safari" in str(h).lower() for h in file.headers.values())
+            if is_safari:
+                logger.info("Safari browser detected, applying Safari-specific handling")
 
-        content_type = file.content_type.lower()
-        if not any(x in content_type for x in ['audio', 'video']):
-            logger.error(f"Invalid content type: {content_type}")
-            return JSONResponse(
-                status_code=400,
-                content={"transcription": "undefined", "error": "Invalid file type. Please upload an audio file."}
-            )
-
-        # Read file in chunks to handle large files
-        content = b""
-        chunk_size = 1024 * 1024  # 1MB chunks
-        try:
-            while True:
-                chunk = await file.read(chunk_size)
-                if not chunk:
-                    break
-                content += chunk
-        except Exception as e:
-            logger.error(f"Error reading file chunks: {str(e)}")
-            return JSONResponse(
-                status_code=500,
-                content={"transcription": "undefined", "error": f"Error reading audio file: {str(e)}"}
-            )
-
-        logger.info(f"Audio file size: {len(content)} bytes")
+        logger.info(f"Audio data size: {len(content)} bytes")
 
         if len(content) > 25 * 1024 * 1024:  # 25MB limit
-            logger.error("Audio file too large")
+            logger.error("Audio data too large")
             return JSONResponse(
                 status_code=400,
-                content={"transcription": "undefined", "error": "Audio file too large. Maximum size is 25MB."}
+                content={"transcription": "undefined", "error": "Audio data too large. Maximum size is 25MB."}
             )
 
         logger.info("Starting transcription with Whisper...")
 
         # Create a temporary file with the correct extension
-        file_extension = os.path.splitext(file.filename)[1] or '.wav'
         with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) as tmp_file:
             tmp_path = tmp_file.name
             tmp_file.write(content)
