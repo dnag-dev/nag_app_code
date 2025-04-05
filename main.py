@@ -49,14 +49,21 @@ if not api_key:
     logger.error("OPENAI_API_KEY not found in environment variables")
     raise ValueError("OPENAI_API_KEY environment variable is required")
 
-# Initialize OpenAI client with proper configuration
+# Validate API key format
+if not api_key.startswith('sk-'):
+    raise ValueError("Invalid OpenAI API key format. Please use a personal API key starting with 'sk-'")
+
 client = AsyncOpenAI(
     api_key=api_key,
-    http_client=httpx.AsyncClient(
-        timeout=30.0,
-        verify=True
-    )
+    timeout=30.0,  # 30 second timeout
+    max_retries=3  # Retry failed requests up to 3 times
 )
+
+async def validate_api_key():
+    try:
+        await client.models.list()
+    except Exception as e:
+        raise ValueError(f"OpenAI API key validation failed: {str(e)}")
 
 # -------------------- App Setup --------------------
 app = FastAPI(title="Nag - Digital Twin", version="2.0.0")
@@ -192,7 +199,7 @@ async def chat(request_data: dict):
 @app.post("/transcribe")
 async def transcribe_audio(file: UploadFile = File(...)):
     try:
-        logger.info(f"Received audio file: {file.filename}")
+        logger.info(f"Received transcription request for file: {file.filename}")
         logger.info(f"Content type: {file.content_type}")
         logger.info(f"Headers: {file.headers}")
 
@@ -227,13 +234,6 @@ async def transcribe_audio(file: UploadFile = File(...)):
 
         logger.info(f"Audio file size: {len(content)} bytes")
 
-        if len(content) < 1000:  # Less than 1KB is probably just noise
-            logger.warning("Audio file too small to process")
-            return JSONResponse(
-                status_code=200,
-                content={"transcription": "undefined", "error": "Audio too short"}
-            )
-
         if len(content) > 25 * 1024 * 1024:  # 25MB limit
             logger.error("Audio file too large")
             return JSONResponse(
@@ -243,10 +243,10 @@ async def transcribe_audio(file: UploadFile = File(...)):
 
         logger.info("Starting transcription with Whisper...")
 
-        # Create a temporary file to store the audio
-        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1]) as tmp:
-            tmp.write(content)
-            tmp_path = tmp.name
+        # Save to temporary file for OpenAI
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
+            tmp_path = tmp_file.name
+            tmp_file.write(content)
 
         try:
             # Transcribe with OpenAI Whisper
@@ -271,25 +271,36 @@ async def transcribe_audio(file: UploadFile = File(...)):
                         content={"transcription": "undefined", "error": f"OpenAI API error: {str(e)}"}
                     )
 
-            logger.info("Transcription completed successfully")
+            # Clean up temporary file
+            os.unlink(tmp_path)
+
+            if not transcript or not transcript.text:
+                logger.error("Empty transcription received")
+                return JSONResponse(
+                    status_code=500,
+                    content={"transcription": "undefined", "error": "Empty transcription received"}
+                )
+
+            logger.info("Transcription successful")
             return JSONResponse(
                 status_code=200,
-                content={"transcription": transcript.text}
+                content={"transcription": transcript.text, "error": None}
             )
 
-        finally:
-            # Clean up the temporary file
-            try:
-                os.unlink(tmp_path)
-            except Exception as e:
-                logger.warning(f"Error cleaning up temp file: {str(e)}")
+        except Exception as e:
+            logger.error(f"Transcription error: {str(e)}")
+            logger.exception("Full error traceback:")
+            return JSONResponse(
+                status_code=500,
+                content={"transcription": "undefined", "error": f"Transcription error: {str(e)}"}
+            )
 
     except Exception as e:
         logger.error(f"Transcription error: {str(e)}")
         logger.exception("Full error traceback:")
         return JSONResponse(
             status_code=500,
-            content={"transcription": "undefined", "error": str(e)}
+            content={"transcription": "undefined", "error": f"Transcription error: {str(e)}"}
         )
 
 # -------------------- Error Handlers --------------------
