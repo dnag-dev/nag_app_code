@@ -161,9 +161,12 @@ async def chat(request_data: dict):
 async def transcribe_audio(file: UploadFile = File(...)):
     try:
         logger.info(f"Received audio file: {file.filename}")
+        logger.info(f"Content type: {file.content_type}")
+        logger.info(f"Headers: {file.headers}")
 
         content_type = file.content_type.lower()
         if not any(x in content_type for x in ['audio', 'video']):
+            logger.error(f"Invalid content type: {content_type}")
             raise HTTPException(status_code=400, detail="Invalid file type. Please upload an audio file.")
 
         content = await file.read()
