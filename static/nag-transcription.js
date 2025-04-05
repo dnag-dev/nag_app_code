@@ -278,8 +278,13 @@ async function sendToChat(message) {
     logDebug("🧠 Nag: " + data.response);
     orb.classList.remove("thinking");
 
-    if (data.audio_url) {
-      await playAudioResponse(data.audio_url);
+    if (data.audio) {
+      // Create a blob URL from the base64 audio data
+      const audioBlob = base64ToBlob(data.audio, 'audio/mpeg');
+      const audioUrl = URL.createObjectURL(audioBlob);
+      await playAudioResponse(audioUrl);
+      // Clean up the blob URL after playing
+      URL.revokeObjectURL(audioUrl);
     } else {
       logDebug("⚠️ No audio returned.");
       handleChatError();
@@ -289,6 +294,16 @@ async function sendToChat(message) {
     logDebug("❌ Chat error: " + e.message);
     handleChatError();
   }
+}
+
+// Helper function to convert base64 to blob
+function base64ToBlob(base64, type) {
+  const binaryString = window.atob(base64);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return new Blob([bytes], { type: type });
 }
 
 // Handle error when chat fails
