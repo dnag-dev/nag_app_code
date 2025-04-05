@@ -14,6 +14,7 @@ from pydantic import BaseModel, EmailStr
 from enum import Enum
 from fastapi import WebSocketDisconnect
 import json  # Added for JSON handling
+import httpx
 
 # -------------------- Request Models --------------------
 class ChatMode(str, Enum):
@@ -42,7 +43,18 @@ logger.info("Starting application...")
 
 # -------------------- Load Environment Variables --------------------
 load_dotenv()
-client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+api_key = os.getenv("OPENAI_API_KEY")
+if not api_key:
+    logger.error("OPENAI_API_KEY not found in environment variables")
+    raise ValueError("OPENAI_API_KEY environment variable is required")
+
+client = AsyncOpenAI(
+    api_key=api_key,
+    http_client=httpx.AsyncClient(
+        timeout=30.0,
+        verify=True
+    )
+)
 
 # -------------------- App Setup --------------------
 app = FastAPI(title="Nag - Digital Twin", version="2.0.0")
