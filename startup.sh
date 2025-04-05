@@ -7,27 +7,25 @@ echo "🔍 Checking environment..."
 echo "Current directory: $(pwd)"
 echo "Python version: $(python3 --version)"
 
-# Activate virtual environment if it exists
-if [ -d "antenv" ]; then
-    echo "📦 Activating virtual environment..."
-    source antenv/bin/activate
-    echo "Using Python from: $(which python3)"
-else
-    echo "❌ Error: Virtual environment 'antenv' not found"
-    exit 1
+# Create virtual environment if it doesn't exist
+if [ ! -d "antenv" ]; then
+    echo "📦 Creating virtual environment..."
+    python3 -m venv antenv
 fi
 
-# Verify gunicorn installation
-if ! python3 -m pip list | grep -q "gunicorn"; then
-    echo "🔧 Installing gunicorn..."
-    python3 -m pip install gunicorn uvicorn[standard]
-fi
+# Activate virtual environment
+echo "📦 Activating virtual environment..."
+source antenv/bin/activate
+echo "Using Python from: $(which python3)"
 
-# Verify uvicorn installation
-if ! python3 -m pip list | grep -q "uvicorn"; then
-    echo "🔧 Installing uvicorn..."
-    python3 -m pip install uvicorn[standard]
-fi
+# Install/upgrade pip
+echo "🔧 Installing/upgrading pip..."
+python3 -m pip install --upgrade pip
+
+# Install required packages
+echo "🔧 Installing required packages..."
+python3 -m pip install -r requirements.txt
+python3 -m pip install gunicorn uvicorn[standard]
 
 echo "📋 Installed packages:"
 python3 -m pip list
