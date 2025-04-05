@@ -51,10 +51,8 @@ if not api_key:
 
 client = AsyncOpenAI(
     api_key=api_key,
-    http_client=httpx.AsyncClient(
-        timeout=30.0,
-        verify=True
-    )
+    timeout=30.0,  # 30 second timeout
+    max_retries=3  # Retry failed requests up to 3 times
 )
 
 # -------------------- App Setup --------------------
