@@ -13,31 +13,15 @@ jobs:
     - name: 📥 Checkout code
       uses: actions/checkout@v4
 
-    - name: 🧹 Clean cache and build artifacts
+    - name: 🧹 Clean workspace
       run: |
         rm -rf deploy.zip
-        rm -rf __pycache__
-        rm -rf .pytest_cache
-        rm -rf .coverage
         find . -type d -name "__pycache__" -exec rm -rf {} +
         find . -type f -name "*.pyc" -delete
 
-    - name: 🐍 Set up Python 3.11
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
-        cache: 'pip'
-
-    - name: 📦 Create and activate virtual environment
+    - name: 📁 Create deploy.zip (without virtual environment)
       run: |
-        python -m venv antenv
-        source antenv/bin/activate
-        python -m pip install --upgrade pip
-        pip install --no-cache-dir -r requirements.txt
-
-    - name: 📁 Create deploy.zip package
-      run: |
-        zip -r deploy.zip . -x "*.git*" "*.DS_Store*" "__pycache__/*" "node_modules/*" "deploy.sh" "startup.sh"
+        zip -r deploy.zip . -x "*.git*" "*.DS_Store*" "__pycache__/*" "antenv/*" "node_modules/*" "deploy.sh" "startup.sh"
 
     - name: 🚀 Deploy to Azure Web App
       uses: azure/webapps-deploy@v2
