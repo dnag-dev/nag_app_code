@@ -16,6 +16,8 @@ from fastapi import WebSocketDisconnect
 import json  # Added for JSON handling
 import httpx
 import tempfile
+import uuid
+from elevenlabs import generate
 
 # -------------------- Request Models --------------------
 class ChatMode(str, Enum):
@@ -51,8 +53,10 @@ if not api_key:
 
 client = AsyncOpenAI(
     api_key=api_key,
-    timeout=30.0,  # 30 second timeout
-    max_retries=3  # Retry failed requests up to 3 times
+    http_client=httpx.AsyncClient(
+        timeout=30.0,
+        verify=True
+    )
 )
 
 # -------------------- App Setup --------------------
@@ -150,40 +154,40 @@ async def websocket_endpoint(websocket: WebSocket):
         logger.error(f"WebSocket error: {str(e)}")
 
 @app.post("/chat")
-async def chat(request_data: dict):
+async def chat(request: Request):
     try:
-        logger.info(f"Received chat request: {request_data}")
+        data = await request.json()
+        request_id = data.get('request_id')
+        message = data.get('message')
         
-        # Handle both formats: text and message
-        user_message = request_data.get('text') or request_data.get('message')
-        if not user_message:
-            raise HTTPException(status_code=400, detail="Missing 'text' or 'message' field")
+        if not message:
+            raise HTTPException(status_code=400, detail="No message provided")
+            
+        logger.info(f"Received chat request: {message}")
+            
+        # Get GPT response
+        response = await get_gpt_response(message)
+        logger.info(f"Generated GPT response: {response}")
         
-        system_message = "You are Nag, Dinakara Nagalla's digital twin — therapist, companion, unfiltered mirror. Be soulful, wise, blunt, Indian immigrant tone."
-        completion = await client.chat.completions.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": system_message},
-                {"role": "user", "content": user_message}
-            ],
-            temperature=0.7,
-            max_tokens=1000
-        )
-        reply = completion.choices[0].message.content
+        # Generate audio using ElevenLabs
+        audio_url = await generate_tts(response)
         
-        # Generate audio response from the reply
-        # (This would require integration with a TTS service)
-        audio_url = None
-        # Example of how you might generate an audio URL:
-        # audio_url = await generate_tts(reply)
+        if not audio_url:
+            logger.warning("Voice generation failed. No audio_url returned.")
+            # Return response without audio_url
+            return {
+                "response": response,
+                "request_id": request_id
+            }
         
+        logger.info(f"Successfully generated audio URL: {audio_url}")
         return {
-            "response": reply,
+            "response": response,
             "audio_url": audio_url,
-            "request_id": request_data.get('request_id')
+            "request_id": request_id
         }
     except Exception as e:
-        logger.exception("Chat error:")
+        logger.error(f"Error in chat endpoint: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/transcribe")
@@ -218,7 +222,7 @@ async def transcribe_audio(file: UploadFile = File(...)):
         try:
             # Transcribe with OpenAI Whisper
             with open(tmp_path, "rb") as audio_file:
-                transcript = await client.audio.transcriptions.create(
+                transcript = await client.audio.transcribe(
                     model="whisper-1",
                     file=audio_file,
                     language="en"  # Force English language detection
@@ -277,3 +281,44 @@ async def startup_event():
 @app.on_event("shutdown")
 async def shutdown_event():
     logger.info("Application shutdown")
+
+async def generate_tts(text: str) -> str:
+    try:
+        logger.info("Starting TTS generation with ElevenLabs")
+        
+        # Generate audio using ElevenLabs
+        audio = generate(
+            text=text,
+            voice="Nag",
+            model="eleven_monolingual_v1"
+        )
+        
+        if not audio:
+            logger.error("ElevenLabs returned no audio data")
+            return None
+            
+        logger.info(f"Generated audio of length: {len(audio)} bytes")
+        
+        # Save the audio file
+        filename = f"audio_{uuid.uuid4()}.mp3"
+        filepath = os.path.join("static", "audio", filename)
+        
+        # Ensure directory exists
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        
+        # Save the audio file
+        with open(filepath, "wb") as f:
+            f.write(audio)
+            
+        logger.info(f"Saved audio file to: {filepath}")
+        
+        # Return the URL for the audio file
+        audio_url = f"/static/audio/{filename}"
+        logger.info(f"Returning audio URL: {audio_url}")
+        return audio_url
+        
+    except Exception as e:
+        logger.error(f"Error generating TTS: {str(e)}")
+        logger.error(f"Error type: {type(e)}")
+        logger.error(f"Error details: {str(e)}")
+        return None
