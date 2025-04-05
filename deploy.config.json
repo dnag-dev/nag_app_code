@@ -6,7 +6,9 @@
             "deploy.sh",
             "data/",
             "audio/",
-            "static/"
+            "static/",
+            "web.config",
+            ".deployment"
         ],
         "exclude": [
             "NagAppNew/",
@@ -18,7 +20,12 @@
             ".env",
             "*.pyc",
             "__pycache__/",
-            "*.log"
+            "*.log",
+            "archive/",
+            "*.zip",
+            "*.tar.gz",
+            "*.DS_Store",
+            "Thumbs.db"
         ]
     }
 } 

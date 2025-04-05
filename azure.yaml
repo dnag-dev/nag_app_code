@@ -5,7 +5,7 @@ services:
     language: python
     host: appservice
     pythonVersion: '3.8'
-    startupCommand: python -m uvicorn main:app --host 0.0.0.0 --port 8000
+    startupCommand: python -m uvicorn main:app --host 0.0.0.0 --port 8000 --workers 2 --timeout-keep-alive 30
     env:
       - name: PYTHONPATH
         value: /home/site/wwwroot
@@ -14,7 +14,7 @@ services:
       - name: GUNICORN_WORKERS
         value: 2
       - name: GUNICORN_TIMEOUT
-        value: 120
+        value: 30
       - name: GUNICORN_MAX_REQUESTS
         value: 1000
       - name: GUNICORN_MAX_REQUESTS_JITTER
