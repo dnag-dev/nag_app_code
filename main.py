@@ -16,7 +16,6 @@ from fastapi import WebSocketDisconnect
 import json  # Added for JSON handling
 import httpx
 import tempfile
-import base64
 
 # -------------------- Request Models --------------------
 class ChatMode(str, Enum):
@@ -175,44 +174,16 @@ async def chat(request_data: dict):
         reply = completion.choices[0].message.content
         
         # Generate audio response from the reply
-        try:
-            audio_response = await client.audio.speech.create(
-                model="tts-1",
-                voice="alloy",
-                input=reply
-            )
-            
-            if not audio_response:
-                logger.error("Empty audio response from OpenAI")
-                return {
-                    "response": reply,
-                    "audio": None,
-                    "error": "Failed to generate audio response",
-                    "request_id": request_data.get('request_id')
-                }
-            
-            # Convert audio response to base64
-            audio_data = base64.b64encode(audio_response.content).decode('utf-8')
-            
-            logger.info("Successfully generated text and audio response")
-            return {
-                "response": reply,
-                "audio": audio_data,
-                "error": None,
-                "request_id": request_data.get('request_id')
-            }
-            
-        except Exception as e:
-            logger.error(f"Error generating audio: {str(e)}")
-            logger.exception("Full audio generation error traceback:")
-            # Return text response even if audio fails
-            return {
-                "response": reply,
-                "audio": None,
-                "error": "Failed to generate audio response",
-                "request_id": request_data.get('request_id')
-            }
-            
+        # (This would require integration with a TTS service)
+        audio_url = None
+        # Example of how you might generate an audio URL:
+        # audio_url = await generate_tts(reply)
+        
+        return {
+            "response": reply,
+            "audio_url": audio_url,
+            "request_id": request_data.get('request_id')
+        }
     except Exception as e:
         logger.exception("Chat error:")
         raise HTTPException(status_code=500, detail=str(e))
@@ -249,7 +220,7 @@ async def transcribe_audio(file: UploadFile = File(...)):
         try:
             # Transcribe with OpenAI Whisper
             with open(tmp_path, "rb") as audio_file:
-                transcript = await client.audio.transcribe(
+                transcript = await client.audio.transcriptions.create(
                     model="whisper-1",
                     file=audio_file,
                     language="en"  # Force English language detection
