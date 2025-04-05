@@ -6,17 +6,10 @@ from fastapi.middleware.gzip import GZipMiddleware
 from openai import AsyncOpenAI
 import os
 from dotenv import load_dotenv
-import requests
-import uuid
-import aiofiles
 import logging
-from datetime import datetime, timedelta
-import hashlib
-import json
-import asyncio
-from functools import lru_cache
-import time
-from typing import Union, Dict, Any, Optional, List
+from datetime import datetime
+import io
+from typing import Optional, List
 from pydantic import BaseModel, EmailStr
 from enum import Enum
 from fastapi import WebSocketDisconnect
@@ -48,7 +41,7 @@ client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 # -------------------- App Setup --------------------
 app = FastAPI(title="Nag - Digital Twin", version="2.0.0")
 
-# Configure CORS with WebSocket support
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -59,11 +52,11 @@ app.add_middleware(
 )
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
-# Static files configuration
+# Static files
 STATIC_BASE = "static"
 app.mount("/static", StaticFiles(directory=STATIC_BASE), name="static")
 
-# WebSocket connection manager
+# WebSocket manager
 class ConnectionManager:
     def __init__(self):
         self.active_connections: List[WebSocket] = []
@@ -81,6 +74,7 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
+# -------------------- Routes --------------------
 @app.get("/", response_class=HTMLResponse)
 async def read_root():
     try:
@@ -140,36 +134,33 @@ async def chat(request: ChatRequest):
 @app.post("/transcribe")
 async def transcribe_audio(file: UploadFile = File(...)):
     try:
-        # Log the incoming file
         logger.info(f"Received audio file: {file.filename}")
-        
-        # Validate file type
+
         content_type = file.content_type.lower()
         if not any(x in content_type for x in ['audio', 'video']):
             raise HTTPException(status_code=400, detail="Invalid file type. Please upload an audio file.")
-        
-        # Read file content
+
         content = await file.read()
-        
-        # Log file size
-        file_size = len(content)
-        logger.info(f"Audio file size: {file_size} bytes")
-        
-        # Transcribe
+        logger.info(f"Audio file size: {len(content)} bytes")
+
         logger.info("Starting transcription with Whisper...")
+
+        audio_file = io.BytesIO(content)
+        audio_file.name = file.filename  # Required by OpenAI SDK
+
         transcript = await client.audio.transcriptions.create(
             model="whisper-1",
-            file=(file.filename, content)
+            file=audio_file
         )
-        
+
         logger.info("Transcription completed successfully")
         return {"transcription": transcript.text}
-        
+
     except Exception as e:
         logger.error(f"Transcription error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# Error handlers
+# -------------------- Error Handlers --------------------
 @app.exception_handler(404)
 async def not_found_handler(request: Request, exc: HTTPException):
     return JSONResponse(
