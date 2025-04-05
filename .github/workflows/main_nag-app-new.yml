@@ -19,9 +19,12 @@ jobs:
         find . -type d -name "__pycache__" -exec rm -rf {} +
         find . -type f -name "*.pyc" -delete
 
-    - name: 📁 Create deploy.zip (without virtual environment)
+    - name: ✅ Ensure startup.py is executable
+      run: chmod +x startup.py
+
+    - name: 📁 Create deploy.zip (exclude virtual env and web.config)
       run: |
-        zip -r deploy.zip . -x "*.git*" "*.DS_Store*" "__pycache__/*" "antenv/*" "node_modules/*" "deploy.sh" "startup.sh"
+        zip -r deploy.zip . -x "*.git*" "*.DS_Store*" "__pycache__/*" "node_modules/*" "antenv/*" "web.config"
 
     - name: 🚀 Deploy to Azure Web App
       uses: azure/webapps-deploy@v2
