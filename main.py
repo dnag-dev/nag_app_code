@@ -254,7 +254,8 @@ async def transcribe_audio(file: UploadFile = File(...)):
                     # For Safari, we'll try with slightly higher temperature
                     temperature = 0.2 if is_safari else 0.0
                     
-                    transcript = await client.audio.transcribe(
+                    # Use the correct API method
+                    transcript = await client.audio.transcriptions.create(
                         model="whisper-1",
                         file=audio_file,
                         language="en",  # Force English language detection
