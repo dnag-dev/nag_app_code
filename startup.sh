@@ -1,19 +1,24 @@
 #!/bin/bash
 
-# Exit on any error
-set -e
+echo "🚀 Starting Gunicorn with UvicornWorker..."
 
-echo "🚀 Starting Nag app with Gunicorn..."
+# Set default values
+APP_MODULE=${APP_MODULE:-main:app}
+HOST=${HOST:-0.0.0.0}
+PORT=${PORT:-8000}
+WORKERS=${WORKERS:-1}
+TIMEOUT=${TIMEOUT:-600}
 
-# Activate virtual environment if it exists
-if [ -d "antenv" ]; then
-    echo "🔧 Activating virtual environment..."
-    source antenv/bin/activate
+# Activate virtual environment if exists
+if [ -d "antenv/bin" ]; then
+  echo "🔹 Activating virtual environment..."
+  source antenv/bin/activate
 fi
 
-# Set environment variables if needed
-export PORT=8000
-export GUNICORN_CMD_ARGS="--bind=0.0.0.0:$PORT --workers=1 --worker-class=uvicorn.workers.UvicornWorker"
-
-# Start Gunicorn with main:app
-exec gunicorn main:app
+# Run Gunicorn with Uvicorn workers
+exec gunicorn \
+  --bind "${HOST}:${PORT}" \
+  --workers "${WORKERS}" \
+  --timeout "${TIMEOUT}" \
+  --worker-class uvicorn.workers.UvicornWorker \
+  "${APP_MODULE}"
