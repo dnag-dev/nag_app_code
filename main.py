@@ -49,6 +49,7 @@ if not api_key:
     logger.error("OPENAI_API_KEY not found in environment variables")
     raise ValueError("OPENAI_API_KEY environment variable is required")
 
+# Initialize OpenAI client with proper configuration
 client = AsyncOpenAI(
     api_key=api_key,
     http_client=httpx.AsyncClient(
@@ -254,7 +255,8 @@ async def transcribe_audio(file: UploadFile = File(...)):
                     # For Safari, we'll try with slightly higher temperature
                     temperature = 0.2 if is_safari else 0.0
                     
-                    # Use the correct API method
+                    # Use the correct API method with proper file handling
+                    audio_file.name = file.filename  # Set the filename for OpenAI
                     transcript = await client.audio.transcriptions.create(
                         model="whisper-1",
                         file=audio_file,
