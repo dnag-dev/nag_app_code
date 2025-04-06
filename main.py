@@ -16,7 +16,7 @@ import httpx
 import json
 from typing import Optional, List
 from fastapi import WebSocketDisconnect
-from elevenlabs import Client
+from elevenlabs import generate, save
 import ffmpeg
 
 # -------------------- Request Models --------------------
@@ -51,7 +51,7 @@ if not api_key:
     raise ValueError("OPENAI_API_KEY environment variable is required")
 
 client = AsyncOpenAI(api_key=api_key, http_client=httpx.AsyncClient(timeout=30.0, verify=True))
-tts_client = Client(api_key=os.getenv("ELEVENLABS_API_KEY"))
+tts_client = ElevenLabs(api_key=os.getenv("ELEVENLABS_API_KEY"))
 
 # -------------------- App Setup --------------------
 app = FastAPI(title="Nag - Digital Twin", version="2.0.0")
