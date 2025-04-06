@@ -1,5 +1,5 @@
-// Nag Digital Twin v3.5.0 - Core Module
-console.log("Nag Digital Twin v3.5.0 loading...");
+// Nag Digital Twin v3.5.0-dev - Core Module
+console.log("Nag Digital Twin v3.5.0-dev loading...");
 
 // Add global error handler
 window.addEventListener('error', function(event) {
