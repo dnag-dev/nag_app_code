@@ -43,6 +43,14 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 logger.info("Starting application...")
 
+# Check OpenAI SDK version
+try:
+    import openai
+    logger.info(f"OpenAI SDK version: {openai.__version__}")
+except Exception as e:
+    logger.error(f"OpenAI SDK not installed or import failed: {str(e)}")
+    raise
+
 # -------------------- Load Environment Variables --------------------
 load_dotenv()
 api_key = os.getenv("OPENAI_API_KEY")
@@ -180,12 +188,18 @@ async def transcribe_audio(file: UploadFile = File(...)):
             logger.info(f"Saved original audio to: {input_path}, size: {file_size} bytes")
 
         try:
-            # Convert to WAV
+            # Convert to WAV with specific settings for Whisper
             output_path = input_path.replace(".mp4", ".wav")
             logger.info(f"Converting audio to WAV: {output_path}")
             
             try:
-                ffmpeg.input(input_path).output(output_path).run(capture_stdout=True, capture_stderr=True)
+                ffmpeg.input(input_path).output(
+                    output_path,
+                    format='wav',
+                    acodec='pcm_s16le',
+                    ac=1,
+                    ar='16000'
+                ).run(capture_stdout=True, capture_stderr=True)
             except ffmpeg.Error as e:
                 error_msg = e.stderr.decode()
                 logger.error(f"FFmpeg conversion error: {error_msg}")
