@@ -212,9 +212,20 @@ async def chat(request: Request):
             # Generate TTS
             try:
                 tts_url = await generate_tts(assistant_message)
+                if not tts_url:
+                    error_msg = "TTS generation failed"
+                    logger.error("[chat] TTS error", extra={
+                        "error": error_msg
+                    })
+                    return JSONResponse(
+                        status_code=500,
+                        content={"detail": error_msg}
+                    )
+                
                 return {
                     "response": assistant_message,
-                    "tts_url": tts_url
+                    "audio_url": tts_url,
+                    "tts_url": tts_url  # For backward compatibility
                 }
             except Exception as e:
                 error_msg = f"TTS generation failed: {str(e)}"
