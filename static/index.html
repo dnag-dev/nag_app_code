@@ -19,6 +19,44 @@
       display: flex;
       flex-direction: column-reverse;
     }
+    .debug-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .debug-toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .debug-toggle label {
+      font-size: 0.9em;
+      color: #666;
+    }
+    .log-entry {
+      margin: 4px 0;
+      padding: 4px;
+      border-radius: 4px;
+    }
+    .log-entry.info {
+      background-color: #f0f0f0;
+    }
+    .log-entry.debug {
+      background-color: #e8f4f8;
+    }
+    .log-entry.error {
+      background-color: #ffebee;
+      color: #c62828;
+    }
+    .log-entry.success {
+      background-color: #e8f5e9;
+      color: #2e7d32;
+    }
+    .log-entry.warning {
+      background-color: #fff3e0;
+      color: #ef6c00;
+    }
   </style>
 </head>
 <body>
@@ -53,7 +91,13 @@
     <footer>
       <div id="status" class="status">Ready</div>
       <div id="debug" class="debug-container">
-        <h3>Debug Log</h3>
+        <div class="debug-header">
+          <h3>Debug Log</h3>
+          <div class="debug-toggle">
+            <input type="checkbox" id="showAllLogs" />
+            <label for="showAllLogs">Show All Logs</label>
+          </div>
+        </div>
         <div class="debug-content"></div>
       </div>
       <div class="version">v3.5.0</div>
