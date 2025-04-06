@@ -20,13 +20,36 @@
     };
     window.nagElements = {};
   </script>
-  <!-- Load JavaScript files in correct order with defer -->
-  <script src="/static/nag-utils.js" defer></script>
-  <script src="/static/nag-audio.js" defer></script>
-  <script src="/static/nag-recording.js" defer></script>
-  <script src="/static/nag-transcription.js" defer></script>
-  <script src="/static/nag-ui.js" defer></script>
-  <script src="/static/nag-core.js" defer></script>
+  <!-- Load JavaScript files in correct order -->
+  <script src="/static/nag-utils.js"></script>
+  <script src="/static/nag-audio.js"></script>
+  <script src="/static/nag-recording.js"></script>
+  <script src="/static/nag-transcription.js"></script>
+  <script src="/static/nag-ui.js"></script>
+  <script src="/static/nag-core.js"></script>
+  <script>
+    // Track script loading
+    window.scriptLoadOrder = [];
+    const scripts = document.querySelectorAll('script[src]');
+    scripts.forEach(script => {
+      script.onload = () => {
+        window.scriptLoadOrder.push(script.src);
+        console.log(`Loaded: ${script.src}`);
+        window.logMessage(`Script loaded: ${script.src}`, 'debug');
+      };
+    });
+
+    // Initialize app when all scripts are loaded
+    window.addEventListener('load', function() {
+      console.log('All scripts loaded in order:', window.scriptLoadOrder);
+      window.logMessage('All scripts loaded, initializing app...', 'info');
+      if (typeof initializeApp === 'function') {
+        initializeApp();
+      } else {
+        window.logMessage('Error: initializeApp function not found!', 'error');
+      }
+    });
+  </script>
   <style>
     body {
       margin: 0;
@@ -247,8 +270,8 @@
     }
 
     .debug-container {
-      background: rgba(0, 0, 0, 0.95);
-      color: #fff;
+      background: #1a1a1a;
+      color: #e0e0e0;
       padding: 10px;
       font-family: monospace;
       font-size: 12px;
@@ -257,6 +280,7 @@
       display: none;
       border-radius: 8px;
       margin-top: 10px;
+      border: 1px solid #333;
     }
 
     .debug-container.visible {
@@ -268,35 +292,41 @@
       justify-content: space-between;
       align-items: center;
       margin-bottom: 5px;
-      color: #fff;
+      color: #e0e0e0;
       font-weight: bold;
+      border-bottom: 1px solid #333;
+      padding-bottom: 5px;
     }
 
     .debug-content {
       display: flex;
       flex-direction: column;
       gap: 5px;
-      color: #fff;
+      color: #e0e0e0;
     }
 
     .log-entry {
       padding: 5px 10px;
       border-radius: 3px;
       word-break: break-word;
-      color: #fff;
+      color: #e0e0e0;
+      border-left: 3px solid transparent;
     }
 
     .log-entry.info { 
-      background: rgba(0, 150, 255, 0.2);
-      color: #fff;
+      background: rgba(0, 150, 255, 0.1);
+      color: #4da6ff;
+      border-left-color: #4da6ff;
     }
     .log-entry.debug { 
-      background: rgba(100, 100, 100, 0.2);
-      color: #fff;
+      background: rgba(100, 100, 100, 0.1);
+      color: #a0a0a0;
+      border-left-color: #a0a0a0;
     }
     .log-entry.error { 
-      background: rgba(255, 0, 0, 0.2);
-      color: #fff;
+      background: rgba(255, 0, 0, 0.1);
+      color: #ff4d4d;
+      border-left-color: #ff4d4d;
     }
 
     .safari-hint {
