@@ -258,6 +258,8 @@ function initializeLogging() {
 
 // Main initialization function (called after all scripts load)
 function initializeApp() {
+  console.log("Initializing app...");
+  
   // Cache DOM elements
   window.nagElements.orb = document.getElementById("orb");
   window.nagElements.audio = document.getElementById("audio");
@@ -270,6 +272,11 @@ function initializeApp() {
   window.nagElements.statusEl = document.getElementById("status");
   window.nagElements.messagesContainer = document.getElementById("messages");
   window.nagElements.debugToggle = document.getElementById("showAllLogs");
+  
+  // Debug log for button initialization
+  console.log("Toggle button:", window.nagElements.toggleBtn);
+  console.log("Pause button:", window.nagElements.pauseBtn);
+  console.log("Mode toggle:", window.nagElements.modeToggle);
   
   // Initialize mode hint with default text
   if (window.nagElements.modeHint) {
@@ -287,6 +294,7 @@ function initializeApp() {
   
   // Initialize modules only if elements exist
   if (window.nagElements.toggleBtn && window.nagElements.pauseBtn && window.nagElements.modeToggle) {
+    console.log("Setting up event listeners...");
     if (typeof setupUI === 'function') setupUI();
     if (typeof setupWalkieTalkieMode === 'function') setupWalkieTalkieMode();
     if (typeof setupEventListeners === 'function') setupEventListeners();
@@ -296,7 +304,42 @@ function initializeApp() {
     window.nagElements.toggleBtn.textContent = "Start Conversation";
     window.nagElements.pauseBtn.textContent = "Pause";
     window.nagElements.modeToggle.textContent = "Switch to continuous mode";
+    
+    // Add click handlers directly for testing
+    window.nagElements.toggleBtn.onclick = function() {
+      console.log("Toggle button clicked");
+      if (window.nagState.listening) {
+        console.log("Stopping conversation");
+        window.nagElements.toggleBtn.textContent = "Start Conversation";
+      } else {
+        console.log("Starting conversation");
+        window.nagElements.toggleBtn.textContent = "Stop Conversation";
+      }
+    };
+    
+    window.nagElements.pauseBtn.onclick = function() {
+      console.log("Pause button clicked");
+      if (window.nagState.isPaused) {
+        window.nagElements.pauseBtn.textContent = "Pause";
+      } else {
+        window.nagElements.pauseBtn.textContent = "Resume";
+      }
+    };
+    
+    window.nagElements.modeToggle.onclick = function() {
+      console.log("Mode toggle clicked");
+      if (window.nagState.isWalkieTalkieMode) {
+        window.nagElements.modeToggle.textContent = "Switch to continuous mode";
+      } else {
+        window.nagElements.modeToggle.textContent = "Switch to walkie-talkie mode";
+      }
+    };
   } else {
+    console.error("Missing UI elements:", {
+      toggleBtn: !!window.nagElements.toggleBtn,
+      pauseBtn: !!window.nagElements.pauseBtn,
+      modeToggle: !!window.nagElements.modeToggle
+    });
     logMessage("Warning: Some UI elements not found. Some features may be disabled.", "warning");
   }
   

@@ -8,6 +8,8 @@ function setupUI() {
   
   // Setup all event listeners for UI controls
   function setupEventListeners() {
+    console.log("Setting up event listeners...");
+    
     if (!window.nagElements) {
       console.error('nagElements not initialized');
       return;
@@ -18,16 +20,24 @@ function setupUI() {
     const modeToggle = window.nagElements.modeToggle;
     
     if (!toggleBtn || !pauseBtn || !modeToggle) {
-      console.error('Required UI elements not found');
+      console.error('Required UI elements not found:', {
+        toggleBtn: !!toggleBtn,
+        pauseBtn: !!pauseBtn,
+        modeToggle: !!modeToggle
+      });
       return;
     }
     
+    console.log("All UI elements found, setting up event listeners");
+    
     // Toggle button (Start/Stop conversation)
     toggleBtn.addEventListener("click", async () => {
+      console.log("Toggle button clicked");
       try {
         await unlockAudio();
         
         if (window.nagState.listening) {
+          console.log("Stopping conversation...");
           logDebug("⏹️ Stopping conversation...");
           toggleBtn.textContent = "Start Conversation";
           await stopListening();
@@ -35,6 +45,7 @@ function setupUI() {
           window.nagElements.orb.classList.add("idle");
           addMessage("Conversation stopped", true);
         } else {
+          console.log("Starting conversation...");
           logDebug("▶️ Starting conversation...");
           toggleBtn.textContent = "Stop Conversation";
           window.nagState.interrupted = false;
@@ -54,6 +65,7 @@ function setupUI() {
     
     // Pause button
     pauseBtn.addEventListener("click", function() {
+      console.log("Pause button clicked");
       if (!window.nagState.listening) return;
       
       if (window.nagState.isPaused) {
@@ -83,6 +95,7 @@ function setupUI() {
     
     // Mode toggle (Walkie-Talkie/Continuous)
     modeToggle.addEventListener("click", function() {
+      console.log("Mode toggle clicked");
       window.nagState.isWalkieTalkieMode = !window.nagState.isWalkieTalkieMode;
       
       if (window.nagState.isWalkieTalkieMode) {
@@ -105,6 +118,8 @@ function setupUI() {
         }
       }
     });
+    
+    console.log("Event listeners setup complete");
   }
   
   // Setup interruption handling for better UX
