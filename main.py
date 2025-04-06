@@ -397,3 +397,58 @@ async def generate_tts(text: str) -> str:
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)
+
+# Context management
+DINAKARA_CONTEXT = {}
+BOOK_MEMORY = {}
+
+def load_context_files():
+    """Load context from JSON files."""
+    try:
+        # Load Dinakara's context
+        with open('data/dinakara_context_full.json', 'r') as f:
+            global DINAKARA_CONTEXT
+            DINAKARA_CONTEXT = json.load(f)
+            logger.info("Loaded Dinakara's context")
+        
+        # Load book memory
+        with open('data/book_memory.json', 'r') as f:
+            global BOOK_MEMORY
+            BOOK_MEMORY = json.load(f)
+            logger.info("Loaded book memory")
+    except Exception as e:
+        logger.error(f"Error loading context files: {str(e)}")
+        logger.error(traceback.format_exc())
+
+def create_system_prompt():
+    """Create a system prompt based on the loaded context."""
+    try:
+        # Get Dinakara's personality traits
+        personality = DINAKARA_CONTEXT.get('personality', {})
+        traits = personality.get('traits', [])
+        traits_str = ', '.join(traits)
+        
+        # Get Dinakara's background
+        background = DINAKARA_CONTEXT.get('background', {})
+        background_str = background.get('summary', '')
+        
+        # Get recent memories
+        memories = BOOK_MEMORY.get('recent_memories', [])
+        memories_str = '\n'.join([f"- {m}" for m in memories[:5]])  # Last 5 memories
+        
+        # Create the system prompt
+        prompt = f"""You are Dinakara, a digital twin with the following personality traits: {traits_str}
+
+Background: {background_str}
+
+Recent memories:
+{memories_str}
+
+You should respond as Dinakara would, using his personality traits and background to inform your responses. Be authentic to his character while maintaining appropriate boundaries."""
+        
+        logger.info("Created system prompt")
+        return prompt
+    except Exception as e:
+        logger.error(f"Error creating system prompt: {str(e)}")
+        logger.error(traceback.format_exc())
+        return "You are a helpful assistant."  # Fallback prompt
