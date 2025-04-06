@@ -18,7 +18,6 @@ from typing import Optional, List
 from fastapi import WebSocketDisconnect
 from elevenlabs.client import ElevenLabs
 import traceback
-import asyncio
 
 # -------------------- Logging Setup --------------------
 class JSONFormatter(logging.Formatter):
@@ -341,58 +340,6 @@ async def serve_static(file_path: str):
 @app.on_event("startup")
 async def on_startup():
     logger.info("App startup")
-    
-    # Load context files
-    try:
-        load_context_files()
-    except Exception as e:
-        logger.error(f"Error loading context files: {str(e)}")
-        logger.error(traceback.format_exc())
-    
-    # Create static directories if they don't exist
-    for directory in ["static/audio", "static/transcriptions"]:
-        os.makedirs(directory, exist_ok=True)
-        logger.info(f"Created directory: {directory}")
-    
-    # Initialize WebSocket manager
-    manager = WebSocketManager()
-    app.state.websocket_manager = manager
-    logger.info("WebSocket manager initialized")
-    
-    # Initialize transcription service
-    app.state.transcription_service = TranscriptionService()
-    logger.info("Transcription service initialized")
-    
-    # Initialize TTS service
-    app.state.tts_service = TTSService()
-    logger.info("TTS service initialized")
-    
-    # Initialize conversation history
-    app.state.conversation_history = []
-    logger.info("Conversation history initialized")
-    
-    # Initialize audio queue
-    app.state.audio_queue = asyncio.Queue()
-    logger.info("Audio queue initialized")
-    
-    # Start audio processing task
-    app.state.audio_processor = AudioProcessor(app.state.audio_queue)
-    asyncio.create_task(app.state.audio_processor.process_audio())
-    logger.info("Audio processor started")
-    
-    # Start conversation manager
-    app.state.conversation_manager = ConversationManager()
-    logger.info("Conversation manager initialized")
-    
-    # Start conversation processing task
-    asyncio.create_task(app.state.conversation_manager.process_conversations())
-    logger.info("Conversation processor started")
-    
-    # Start cleanup task
-    asyncio.create_task(cleanup_old_files())
-    logger.info("Cleanup task started")
-    
-    logger.info("App startup complete")
 
 @app.on_event("shutdown")
 async def on_shutdown():
