@@ -1,4 +1,3 @@
-
 import os
 import sys
 import subprocess
@@ -7,24 +6,34 @@ import time
 import platform
 import uvicorn
 from datetime import datetime
-
-# Azure logging path
-azure_log_path = '/home/LogFiles/application/app.log'
-
-# Ensure log directory exists in the directory
-os.makedirs(os.path.dirname(azure_log_path), exist_ok=True)
+import json_log_formatter
 
 # Configure logging
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout),
-        logging.FileHandler(azure_log_path, mode='a')
-    ]
-)
+class CustomJSONFormatter(json_log_formatter.JSONFormatter):
+    def json_record(self, message: str, extra: dict, record: logging.LogRecord) -> dict:
+        extra['message'] = message
+        extra['timestamp'] = datetime.utcnow().isoformat()
+        extra['level'] = record.levelname
+        extra['logger'] = record.name
+        if record.exc_info:
+            extra['exc_info'] = self.formatException(record.exc_info)
+        return extra
 
+# Set up logging
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
+# Add JSON handler
+json_handler = logging.StreamHandler(sys.stdout)
+json_handler.setFormatter(CustomJSONFormatter())
+logger.addHandler(json_handler)
+
+# Add regular handler for non-JSON logs
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+logger.addHandler(console_handler)
+
+logger.info("Starting application with debug logging enabled")
 
 def create_directories():
     """Create necessary directories if they don't exist."""
