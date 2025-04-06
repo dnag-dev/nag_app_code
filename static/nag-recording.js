@@ -30,7 +30,12 @@ function setupVolumeVisualization(stream) {
       // Amplify the volume display for better visual feedback
       const volume = Math.min(100, Math.max(0, average * 2.5));
       
-      volumeBar.style.height = `${volume}%`;
+      // Safely update volume bar if it exists
+      const volumeBar = document.querySelector('.volume-bar');
+      if (volumeBar) {
+        volumeBar.style.height = `${volume}%`;
+        volumeBar.style.backgroundColor = `hsl(${120 + (volume * 1.2)}, 70%, 50%)`;
+      }
       
       // Skip voice activity detection in walkie-talkie mode when not active
       if (window.nagState.isWalkieTalkieMode && !window.nagState.walkieTalkieActive) {
@@ -495,4 +500,27 @@ function initializeMediaRecorder(stream) {
   } catch (e) {
     logDebug("❌ Error initializing MediaRecorder: " + e.message);
   }
+}
+
+function updateVolume(analyserNode) {
+  if (!analyserNode) return;
+  
+  const dataArray = new Uint8Array(analyserNode.frequencyBinCount);
+  analyserNode.getByteFrequencyData(dataArray);
+  
+  // Calculate average volume
+  const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+  const volume = Math.min(100, Math.round((average / 255) * 100));
+  
+  // Safely update volume bar if it exists
+  const volumeBar = document.querySelector('.volume-bar');
+  if (volumeBar) {
+    volumeBar.style.width = `${volume}%`;
+    volumeBar.style.backgroundColor = `hsl(${120 + (volume * 1.2)}, 70%, 50%)`;
+  }
+  
+  // Log volume level for debugging
+  logDebug(`Volume level: ${volume}%`);
+  
+  return volume;
 }

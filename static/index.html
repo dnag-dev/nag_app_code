@@ -304,6 +304,17 @@
       z-index: 1000;
       display: none;
     }
+
+    .volume-bar {
+      position: absolute;
+      bottom: -10px;
+      left: 0;
+      width: 0%;
+      height: 4px;
+      background: #00ff00;
+      transition: width 0.1s ease, background-color 0.1s ease;
+      border-radius: 2px;
+    }
   </style>
 </head>
 
@@ -320,6 +331,7 @@
       <div class="main-content">
         <div id="orb-container">
           <div id="orb"></div>
+          <div class="volume-bar"></div>
         </div>
 
         <div class="messages-container" id="messages">
