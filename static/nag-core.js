@@ -432,16 +432,13 @@ function updateButtonStates() {
   // Update toggle button
   if (window.nagElements.toggleBtn) {
     window.nagElements.toggleBtn.textContent = window.nagState.listening ? "Stop Conversation" : "Start Conversation";
+    window.nagElements.toggleBtn.classList.toggle("active", window.nagState.listening);
   }
   
   // Update pause button
   if (window.nagElements.pauseBtn) {
     window.nagElements.pauseBtn.textContent = window.nagState.isPaused ? "Resume" : "Pause";
-    if (window.nagState.isPaused) {
-      window.nagElements.pauseBtn.classList.add("paused");
-    } else {
-      window.nagElements.pauseBtn.classList.remove("paused");
-    }
+    window.nagElements.pauseBtn.classList.toggle("paused", window.nagState.isPaused);
   }
   
   // Update mode toggle
