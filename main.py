@@ -18,6 +18,8 @@ from typing import Optional, List
 from fastapi import WebSocketDisconnect
 from elevenlabs.client import ElevenLabs
 import ffmpeg
+import shutil
+import sys
 
 # -------------------- Request Models --------------------
 class ChatMode(str, Enum):
@@ -37,8 +39,11 @@ class MessageRequest(BaseModel):
 
 # -------------------- Logging Setup --------------------
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.DEBUG,  # Changed to DEBUG for more detailed logs
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)  # Ensure logs go to stdout for container
+    ]
 )
 logger = logging.getLogger(__name__)
 logger.info("Starting application...")
@@ -99,14 +104,22 @@ async def read_root():
 @app.get("/health")
 async def health():
     try:
-        api_key_status = "present" if os.getenv("OPENAI_API_KEY") else "missing"
+        # Check FFmpeg availability
+        ffmpeg_check = "available" if shutil.which("ffmpeg") else "missing"
+        
         return {
             "status": "ok",
             "timestamp": datetime.datetime.now().isoformat(),
-            "api_key_status": api_key_status,
-            "openai_client": {
-                "base_url": client.base_url,
-                "api_key_present": bool(client.api_key)
+            "api_key_status": {
+                "openai": "present" if os.getenv("OPENAI_API_KEY") else "missing",
+                "elevenlabs": "present" if os.getenv("ELEVENLABS_API_KEY") else "missing"
+            },
+            "services": {
+                "ffmpeg": ffmpeg_check,
+                "openai_client": {
+                    "base_url": client.base_url,
+                    "api_key_present": bool(client.api_key)
+                }
             }
         }
     except Exception as e:
@@ -256,7 +269,7 @@ async def transcribe_audio(file: UploadFile = File(...)):
                 ar='16000'
             ).overwrite_output().run(capture_stdout=True, capture_stderr=True)
         except ffmpeg.Error as e:
-            error_msg = f"FFmpeg conversion error: {str(e)}"
+            error_msg = f"FFmpeg conversion error: {str(e.stderr.decode() if e.stderr else str(e))}"
             logger.error(error_msg)
             return JSONResponse(
                 status_code=500,
@@ -297,6 +310,13 @@ async def transcribe_audio(file: UploadFile = File(...)):
                     language="en"
                 )
                 logger.info(f"Transcription response: {transcript}")
+            except httpx.TimeoutException:
+                error_msg = "Transcription timed out"
+                logger.error(error_msg)
+                return JSONResponse(
+                    status_code=504,
+                    content={"error": "Transcription timed out", "details": error_msg}
+                )
             except httpx.HTTPStatusError as http_err:
                 error_msg = f"HTTP error from OpenAI: {http_err.response.status_code} - {http_err.response.text}"
                 logger.error(error_msg)
@@ -335,11 +355,23 @@ async def transcribe_audio(file: UploadFile = File(...)):
 
 @app.get("/{file_path:path}")
 async def serve_static(file_path: str):
-    file_location = os.path.join(STATIC_BASE, file_path)
-    if os.path.isfile(file_location):
-        return FileResponse(file_location)
-    else:
-        raise HTTPException(status_code=404, detail=f"File {file_path} not found")
+    try:
+        # Try to serve the requested file
+        full_path = os.path.join(STATIC_BASE, file_path)
+        if os.path.exists(full_path):
+            return FileResponse(full_path)
+        
+        # If file not found, serve index.html
+        return FileResponse(
+            os.path.join(STATIC_BASE, "index.html"),
+            media_type="text/html"
+        )
+    except Exception as e:
+        logger.error(f"Error serving static file {file_path}: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": "Error serving file", "details": str(e)}
+        )
 
 @app.on_event("startup")
 async def on_startup():
