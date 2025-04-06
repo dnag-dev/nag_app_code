@@ -95,62 +95,99 @@ function setupVolumeVisualization(stream) {
   }
 }
 
-// Setup walkie-talkie mode controls
+// Improved walkie-talkie setup 
 function setupWalkieTalkieMode() {
-  const orb = window.nagElements.orb;
-  
-  // Mouse events for desktop
-  orb.addEventListener("mousedown", function(e) {
-    if (!window.nagState.isWalkieTalkieMode || !window.nagState.listening || 
-        window.nagState.isUploading || window.nagState.isPaused) return;
-    
-    window.nagState.walkieTalkieActive = true;
-    logDebug("🔊 Walkie-talkie active - speak now");
-    orb.classList.add("listening");
-    
-    if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state !== "recording") {
-      startRecording();
+    const orb = window.nagElements.orb;
+    if (!orb) {
+        console.error("Orb element not found for walkie-talkie setup");
+        return;
     }
-  });
-  
-  // Touch events for mobile
-  orb.addEventListener("touchstart", function(e) {
-    if (!window.nagState.isWalkieTalkieMode || !window.nagState.listening || 
-        window.nagState.isUploading || window.nagState.isPaused) return;
-    e.preventDefault(); // Prevent default touch behavior
     
-    window.nagState.walkieTalkieActive = true;
-    logDebug("🔊 Walkie-talkie active (touch) - speak now");
-    orb.classList.add("listening");
+    console.log("Setting up walkie-talkie mode");
     
-    if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state !== "recording") {
-      startRecording();
-    }
-  });
-  
-  // Handler for ending walkie-talkie mode
-  const endWalkieTalkie = function() {
-    if (!window.nagState.walkieTalkieActive) return;
+    // Clear any existing handlers to prevent duplicates
+    const oldMouseDown = orb.onmousedown;
+    const oldMouseUp = orb.onmouseup;
+    const oldTouchStart = orb.ontouchstart;
+    const oldTouchEnd = orb.ontouchend;
     
-    window.nagState.walkieTalkieActive = false;
-    logDebug("🔊 Walkie-talkie released");
+    // Mouse events for desktop
+    orb.addEventListener("mousedown", function walkieTalkieDown(e) {
+        if (!window.nagState.isWalkieTalkieMode || 
+            window.nagState.isUploading || 
+            window.nagState.isPaused) return;
+        
+        console.log("Walkie-talkie activated (mouse)");
+        window.nagState.walkieTalkieActive = true;
+        logDebug("🔊 Walkie-talkie active - speak now");
+        orb.classList.add("listening");
+        
+        // Unlock audio context (important for Safari)
+        unlockAudio().then(() => {
+            if (window.nagState.stream) {
+                if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state !== "recording") {
+                    startRecording();
+                }
+            } else {
+                // If no stream exists yet, create one
+                startListening();
+            }
+        });
+    });
     
-    if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state === "recording") {
-      stopRecording();
-    }
-  };
-  
-  // Add all mouse/touch end events
-  orb.addEventListener("mouseup", endWalkieTalkie);
-  orb.addEventListener("mouseleave", endWalkieTalkie);
-  orb.addEventListener("touchend", function(e) {
-    e.preventDefault();
-    endWalkieTalkie();
-  });
-  orb.addEventListener("touchcancel", function(e) {
-    e.preventDefault();
-    endWalkieTalkie();
-  });
+    // Touch events for mobile (crucial for Safari)
+    orb.addEventListener("touchstart", function walkieTalkieTouch(e) {
+        // Must prevent default on Safari to avoid triggering click
+        e.preventDefault();
+        
+        if (!window.nagState.isWalkieTalkieMode || 
+            window.nagState.isUploading || 
+            window.nagState.isPaused) return;
+        
+        console.log("Walkie-talkie activated (touch)");
+        window.nagState.walkieTalkieActive = true;
+        logDebug("🔊 Walkie-talkie active (touch) - speak now");
+        orb.classList.add("listening");
+        
+        // Unlock audio context (important for Safari)
+        unlockAudio().then(() => {
+            if (window.nagState.stream) {
+                if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state !== "recording") {
+                    startRecording();
+                }
+            } else {
+                // If no stream exists yet, create one
+                startListening();
+            }
+        });
+    }, { passive: false }); // passive: false essential for Safari
+    
+    // Handler for ending walkie-talkie mode
+    const endWalkieTalkie = function() {
+        if (!window.nagState.walkieTalkieActive) return;
+        
+        console.log("Walkie-talkie released");
+        window.nagState.walkieTalkieActive = false;
+        logDebug("🔊 Walkie-talkie released");
+        
+        if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state === "recording") {
+            stopRecording();
+        }
+    };
+    
+    // Add all mouse/touch end events
+    orb.addEventListener("mouseup", endWalkieTalkie);
+    orb.addEventListener("mouseleave", endWalkieTalkie);
+    orb.addEventListener("touchend", function(e) {
+        e.preventDefault(); // Essential for Safari
+        endWalkieTalkie();
+    }, { passive: false });
+    orb.addEventListener("touchcancel", function(e) {
+        e.preventDefault(); // Essential for Safari
+        endWalkieTalkie();
+    }, { passive: false });
+    
+    console.log("Walkie-talkie mode setup complete");
 }
 
 // Start recording audio

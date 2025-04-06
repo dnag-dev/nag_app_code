@@ -166,27 +166,72 @@ async function playAudioResponse(audioUrl) {
 
 // Nag Digital Twin v2.0.0 - Audio Module
 
-// Function to unlock audio context
+// Improved audio unlocking for Safari
 async function unlockAudio() {
-  console.log("Attempting to unlock audio...");
-  try {
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    await audioContext.resume();
+    console.log("Attempting to unlock audio...");
     
-    // Create and play a silent buffer
-    const buffer = audioContext.createBuffer(1, 1, 22050);
-    const source = audioContext.createBufferSource();
-    source.buffer = buffer;
-    source.connect(audioContext.destination);
-    source.start(0);
+    // If already unlocked, don't try again
+    if (window.nagState.audioUnlocked) {
+        console.log("Audio already unlocked");
+        return true;
+    }
     
-    window.nagState.audioUnlocked = true;
-    console.log("Audio unlocked successfully");
-    return true;
-  } catch (error) {
-    console.error("Error unlocking audio:", error);
-    return false;
-  }
+    try {
+        // Create and immediately suspend an audio context
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        
+        // For Safari, we need to resume the context during a user gesture
+        await audioContext.resume();
+        
+        // Create and play a silent buffer (crucial for Safari)
+        const buffer = audioContext.createBuffer(1, 1, 22050);
+        const source = audioContext.createBufferSource();
+        source.buffer = buffer;
+        source.connect(audioContext.destination);
+        
+        // Define a completion function
+        const unlockComplete = () => {
+            window.nagState.audioUnlocked = true;
+            console.log("Audio successfully unlocked");
+            logDebug("🔊 Audio unlocked successfully");
+        };
+        
+        // Start the source and mark as completed
+        source.onended = unlockComplete;
+        source.start(0);
+        
+        // Backup timeout in case onended doesn't fire
+        setTimeout(unlockComplete, 1000);
+        
+        // Also try to play the audio element if it exists
+        if (window.nagElements && window.nagElements.audio) {
+            const audio = window.nagElements.audio;
+            
+            // Set a silent audio source
+            audio.src = "data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAADQgD///////////////////////////////////////////8AAAA8TEFNRTMuMTAwAQAAAAAAAAAAABSAJAJAQgAAgAAAA0L2YLwAAAAAAAAAAAAAAAAAAAAA//sQZAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//sQZB4P8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAEVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU=";
+            
+            // Try to play it (this may fail on first try on Safari)
+            const playPromise = audio.play();
+            
+            // Handle the play promise if supported
+            if (playPromise !== undefined) {
+                playPromise
+                    .then(() => {
+                        console.log("Audio element played successfully");
+                        window.nagState.audioUnlocked = true;
+                    })
+                    .catch(e => {
+                        console.log("Audio play failed, will retry on user interaction:", e);
+                        // This is expected on Safari before user interaction
+                    });
+            }
+        }
+        
+        return true;
+    } catch (error) {
+        console.error("Error unlocking audio:", error);
+        return false;
+    }
 }
 
 // Function to start listening

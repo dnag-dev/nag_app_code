@@ -375,6 +375,38 @@
 </head>
 
 <body>
+  <!-- Safari touch event compatibility -->
+  <script>
+    // Safari touch event compatibility
+    document.addEventListener('touchstart', function() {}, {passive: false});
+    
+    // Ensure nagState is properly initialized
+    window.nagState = window.nagState || {
+      listening: false,
+      isPaused: false,
+      isWalkieTalkieMode: true,
+      interrupted: false,
+      audioUnlocked: false,
+      mediaRecorder: null,
+      stream: null,
+      audioChunks: [],
+      isSafari: /^((?!chrome|android).)*safari/i.test(navigator.userAgent),
+      isiOS: /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+    };
+    
+    // Force unlock audio on any user interaction
+    function tryUnlockAudio() {
+      if (window.unlockAudio) {
+        window.unlockAudio();
+      }
+    }
+    
+    // Add this event to every possible user interaction
+    document.addEventListener('click', tryUnlockAudio, {once: false});
+    document.addEventListener('touchstart', tryUnlockAudio, {once: false});
+  </script>
+
   <div class="device-frame">
     <div id="app-container">
       <div id="status" class="status">Ready</div>

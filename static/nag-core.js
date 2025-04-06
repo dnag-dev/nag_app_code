@@ -256,173 +256,70 @@ function initializeLogging() {
   }
 }
 
+// New helper function to ensure all elements are available
+function allElementsAvailable() {
+    return window.nagElements.orb && 
+           window.nagElements.toggleBtn && 
+           window.nagElements.pauseBtn && 
+           window.nagElements.modeToggle;
+}
+
+// New function to cache all DOM elements in one place
+function cacheAllDOMElements() {
+    window.nagElements = {
+        orb: document.getElementById("orb"),
+        audio: document.getElementById("audio"),
+        volumeBar: document.querySelector(".volume-bar"),
+        toggleBtn: document.getElementById("toggle-btn"),
+        pauseBtn: document.getElementById("pause-btn"),
+        modeToggle: document.getElementById("mode-toggle"),
+        modeHint: document.getElementById("mode-hint"),
+        debugBox: document.getElementById("debug"),
+        statusEl: document.getElementById("status"),
+        messagesContainer: document.getElementById("messages"),
+        debugToggle: document.getElementById("showAllLogs"),
+        debugContent: document.querySelector('.debug-content')
+    };
+    
+    // Debug log for all elements
+    console.log("Checking UI elements:", window.nagElements);
+    Object.entries(window.nagElements).forEach(([key, element]) => {
+        console.log(`Element ${key}: ${element ? "Found" : "Not found"}`);
+    });
+}
+
 // Function to initialize app
 function initializeApp() {
-  console.log("Initializing app...");
-  logMessage("Starting app initialization", "info");
-  
-  // Cache DOM elements
-  window.nagElements = {
-    orb: document.getElementById("orb"),
-    audio: document.getElementById("audio"),
-    volumeBar: document.querySelector(".volume-bar"),
-    toggleBtn: document.getElementById("toggle-btn"),
-    pauseBtn: document.getElementById("pause-btn"),
-    modeToggle: document.getElementById("mode-toggle"),
-    modeHint: document.getElementById("mode-hint"),
-    debugBox: document.getElementById("debug"),
-    statusEl: document.getElementById("status"),
-    messagesContainer: document.getElementById("messages"),
-    debugToggle: document.getElementById("showAllLogs")
-  };
-  
-  // Debug log for all elements
-  logMessage("Checking UI elements:", "debug");
-  Object.entries(window.nagElements).forEach(([key, element]) => {
-    logMessage(`${key}: ${element ? "Found" : "Not found"}`, "debug");
-  });
-  
-  // Initialize mode hint with default text
-  if (window.nagElements.modeHint) {
-    window.nagElements.modeHint.textContent = "Click & hold the orb to use walkie-talkie mode";
-    window.nagElements.modeHint.style.display = "block";
-    logMessage("Mode hint initialized", "debug");
-  }
-  
-  // Initialize debug container visibility
-  if (window.nagElements.debugBox && window.nagElements.debugToggle) {
-    window.nagElements.debugBox.classList.toggle('visible', window.nagElements.debugToggle.checked);
-    logMessage(`Debug container ${window.nagElements.debugToggle.checked ? "shown" : "hidden"}`, "debug");
-  }
-  
-  // Initialize logging
-  initializeLogging();
-  logMessage("Logging system initialized", "debug");
-  
-  // Initialize modules only if elements exist
-  if (window.nagElements.toggleBtn && window.nagElements.pauseBtn && window.nagElements.modeToggle) {
-    logMessage("Setting up event listeners", "debug");
+    console.log("Initializing app...");
+    logMessage("Starting app initialization", "info");
     
-    // Set initial button states
-    updateButtonStates();
+    // FIRST - Cache all DOM elements
+    cacheAllDOMElements();
     
-    // Add orb click handler
-    if (window.nagElements.orb) {
-      window.nagElements.orb.addEventListener('click', function() {
-        logMessage("Orb clicked", "debug");
-        if (!window.nagState.isWalkieTalkieMode) {
-          if (!window.nagState.listening) {
-            logMessage("Starting conversation via orb", "debug");
-            startListening();
-            window.nagState.listening = true;
-            window.nagElements.toggleBtn.textContent = "Stop Conversation";
-            window.nagElements.toggleBtn.classList.add("active");
-            updateButtonStates();
-          } else {
-            logMessage("Stopping conversation via orb", "debug");
-            stopListening();
-            window.nagState.listening = false;
-            window.nagElements.toggleBtn.textContent = "Start Conversation";
-            window.nagElements.toggleBtn.classList.remove("active");
-            updateButtonStates();
-          }
-        }
-      });
-      
-      window.nagElements.orb.addEventListener('mousedown', function() {
-        logMessage("Orb pressed", "debug");
-        if (window.nagState.isWalkieTalkieMode) {
-          startListening();
-          window.nagState.listening = true;
-          window.nagElements.toggleBtn.textContent = "Stop Conversation";
-          window.nagElements.toggleBtn.classList.add("active");
-          updateButtonStates();
-        }
-      });
-      
-      window.nagElements.orb.addEventListener('mouseup', function() {
-        logMessage("Orb released", "debug");
-        if (window.nagState.isWalkieTalkieMode) {
-          stopListening();
-          window.nagState.listening = false;
-          window.nagElements.toggleBtn.textContent = "Start Conversation";
-          window.nagElements.toggleBtn.classList.remove("active");
-          updateButtonStates();
-        }
-      });
+    // SECOND - Initialize logging and UI
+    initializeLogging();
+    
+    // THIRD - Setup all event listeners
+    if (allElementsAvailable()) {
+        setupEventListeners(); 
+        // Only call these if the main setup succeeds
+        if (typeof setupUI === 'function') setupUI();
+        if (typeof setupWalkieTalkieMode === 'function') setupWalkieTalkieMode();
+        if (typeof setupInterruptionHandling === 'function') setupInterruptionHandling();
+    } else {
+        logMessage("Warning: Some UI elements not found. Some features may be disabled.", "warning");
     }
     
-    // Add click handlers directly
-    window.nagElements.toggleBtn.addEventListener('click', async function() {
-      logMessage("Toggle button clicked", "debug");
-      try {
-        if (window.nagState.listening) {
-          logMessage("Stopping conversation", "debug");
-          await stopListening();
-          window.nagState.listening = false;
-          window.nagElements.toggleBtn.textContent = "Start Conversation";
-          window.nagElements.toggleBtn.classList.remove("active");
-        } else {
-          logMessage("Starting conversation", "debug");
-          await startListening();
-          window.nagState.listening = true;
-          window.nagElements.toggleBtn.textContent = "Stop Conversation";
-          window.nagElements.toggleBtn.classList.add("active");
-        }
-        updateButtonStates();
-      } catch (error) {
-        logMessage(`Error in toggle button: ${error.message}`, "error");
-        window.nagState.listening = false;
-        window.nagElements.toggleBtn.textContent = "Start Conversation";
-        window.nagElements.toggleBtn.classList.remove("active");
-        updateButtonStates();
-      }
-    });
+    // FOURTH - Log browser capabilities for debugging
+    if (typeof logBrowserInfo === 'function') {
+        logBrowserInfo();
+        logMessage("Browser info logged", "debug");
+    }
     
-    window.nagElements.pauseBtn.addEventListener('click', function() {
-      logMessage("Pause button clicked", "debug");
-      window.nagState.isPaused = !window.nagState.isPaused;
-      updateButtonStates();
-    });
+    // FINALLY - Connect WebSocket, but continue if it fails
+    connectWebSocket();
     
-    window.nagElements.modeToggle.addEventListener('click', function() {
-      logMessage("Mode toggle clicked", "debug");
-      window.nagState.isWalkieTalkieMode = !window.nagState.isWalkieTalkieMode;
-      updateButtonStates();
-    });
-    
-    // Initialize UI components
-    logMessage("Initializing UI components", "debug");
-    if (typeof setupUI === 'function') {
-      setupUI();
-      logMessage("UI setup completed", "debug");
-    }
-    if (typeof setupWalkieTalkieMode === 'function') {
-      setupWalkieTalkieMode();
-      logMessage("Walkie-talkie mode setup completed", "debug");
-    }
-    if (typeof setupEventListeners === 'function') {
-      setupEventListeners();
-      logMessage("Event listeners setup completed", "debug");
-    }
-    if (typeof setupInterruptionHandling === 'function') {
-      setupInterruptionHandling();
-      logMessage("Interruption handling setup completed", "debug");
-    }
-  } else {
-    logMessage("Warning: Some UI elements not found. Some features may be disabled.", "warning");
-  }
-  
-  // Log browser capabilities for debugging
-  if (typeof logBrowserInfo === 'function') {
-    logBrowserInfo();
-    logMessage("Browser info logged", "debug");
-  }
-  
-  // Try to connect WebSocket, but continue if it fails
-  connectWebSocket();
-  
-  logMessage("Nag Digital Twin v3.5.0-dev initialized and ready", "success");
+    logMessage("Nag Digital Twin v3.5.0-dev initialized and ready", "success");
 }
 
 // Function to update all button states based on current state
