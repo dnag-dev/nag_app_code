@@ -166,6 +166,19 @@ function connectWebSocket() {
   }
 }
 
+// Function to log debug messages
+function logDebug(message) {
+  if (window.nagElements && window.nagElements.debugBox) {
+    const p = document.createElement("p");
+    p.textContent = message;
+    // Add timestamp
+    const timestamp = new Date().toLocaleTimeString();
+    p.textContent = `[${timestamp}] ${message}`;
+    // Add to the beginning of the container
+    window.nagElements.debugBox.querySelector('.debug-content').insertBefore(p, window.nagElements.debugBox.querySelector('.debug-content').firstChild);
+  }
+}
+
 // Main initialization function (called after all scripts load)
 function initializeApp() {
   // Cache DOM elements
