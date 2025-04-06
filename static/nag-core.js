@@ -259,6 +259,7 @@ function initializeLogging() {
 // Function to initialize app
 function initializeApp() {
   console.log("Initializing app...");
+  logMessage("Starting app initialization", "info");
   
   // Cache DOM elements
   window.nagElements = {
@@ -275,98 +276,114 @@ function initializeApp() {
     debugToggle: document.getElementById("showAllLogs")
   };
   
-  // Debug log for button initialization
-  console.log("Toggle button:", window.nagElements.toggleBtn);
-  console.log("Pause button:", window.nagElements.pauseBtn);
-  console.log("Mode toggle:", window.nagElements.modeToggle);
+  // Debug log for all elements
+  logMessage("Checking UI elements:", "debug");
+  Object.entries(window.nagElements).forEach(([key, element]) => {
+    logMessage(`${key}: ${element ? "Found" : "Not found"}`, "debug");
+  });
   
   // Initialize mode hint with default text
   if (window.nagElements.modeHint) {
     window.nagElements.modeHint.textContent = "Click & hold the orb to use walkie-talkie mode";
     window.nagElements.modeHint.style.display = "block";
+    logMessage("Mode hint initialized", "debug");
   }
   
   // Initialize debug container visibility
   if (window.nagElements.debugBox && window.nagElements.debugToggle) {
     window.nagElements.debugBox.classList.toggle('visible', window.nagElements.debugToggle.checked);
+    logMessage(`Debug container ${window.nagElements.debugToggle.checked ? "shown" : "hidden"}`, "debug");
   }
   
   // Initialize logging
   initializeLogging();
+  logMessage("Logging system initialized", "debug");
   
   // Initialize modules only if elements exist
   if (window.nagElements.toggleBtn && window.nagElements.pauseBtn && window.nagElements.modeToggle) {
-    console.log("Setting up event listeners...");
+    logMessage("Setting up event listeners", "debug");
     
     // Set initial button states
     window.nagElements.toggleBtn.textContent = "Start Conversation";
     window.nagElements.pauseBtn.textContent = "Pause";
     window.nagElements.modeToggle.textContent = "Switch to continuous mode";
+    logMessage("Button states initialized", "debug");
     
     // Add click handlers directly
     window.nagElements.toggleBtn.onclick = async function() {
-      console.log("Toggle button clicked");
+      logMessage("Toggle button clicked", "debug");
       try {
         if (window.nagState.listening) {
-          console.log("Stopping conversation");
+          logMessage("Stopping conversation", "debug");
           window.nagElements.toggleBtn.textContent = "Start Conversation";
           await stopListening();
         } else {
-          console.log("Starting conversation");
+          logMessage("Starting conversation", "debug");
           window.nagElements.toggleBtn.textContent = "Stop Conversation";
           await startListening();
         }
       } catch (error) {
-        console.error("Error in toggle button:", error);
+        logMessage(`Error in toggle button: ${error.message}`, "error");
       }
     };
     
     window.nagElements.pauseBtn.onclick = function() {
-      console.log("Pause button clicked");
+      logMessage("Pause button clicked", "debug");
       if (window.nagState.isPaused) {
         window.nagState.isPaused = false;
         window.nagElements.pauseBtn.textContent = "Pause";
         window.nagElements.pauseBtn.classList.remove("paused");
-        console.log("Resuming conversation");
+        logMessage("Resuming conversation", "debug");
       } else {
         window.nagState.isPaused = true;
         window.nagElements.pauseBtn.textContent = "Resume";
         window.nagElements.pauseBtn.classList.add("paused");
-        console.log("Pausing conversation");
+        logMessage("Pausing conversation", "debug");
       }
     };
     
     window.nagElements.modeToggle.onclick = function() {
-      console.log("Mode toggle clicked");
+      logMessage("Mode toggle clicked", "debug");
       window.nagState.isWalkieTalkieMode = !window.nagState.isWalkieTalkieMode;
       
       if (window.nagState.isWalkieTalkieMode) {
         window.nagElements.modeToggle.textContent = "Switch to continuous mode";
         window.nagElements.modeHint.textContent = "Click & hold the orb to use walkie-talkie mode";
-        console.log("Switched to walkie-talkie mode");
+        logMessage("Switched to walkie-talkie mode", "debug");
       } else {
         window.nagElements.modeToggle.textContent = "Switch to walkie-talkie mode";
         window.nagElements.modeHint.textContent = "Nag will listen continuously for your voice";
-        console.log("Switched to continuous mode");
+        logMessage("Switched to continuous mode", "debug");
       }
     };
     
     // Initialize UI components
-    if (typeof setupUI === 'function') setupUI();
-    if (typeof setupWalkieTalkieMode === 'function') setupWalkieTalkieMode();
-    if (typeof setupEventListeners === 'function') setupEventListeners();
-    if (typeof setupInterruptionHandling === 'function') setupInterruptionHandling();
+    logMessage("Initializing UI components", "debug");
+    if (typeof setupUI === 'function') {
+      setupUI();
+      logMessage("UI setup completed", "debug");
+    }
+    if (typeof setupWalkieTalkieMode === 'function') {
+      setupWalkieTalkieMode();
+      logMessage("Walkie-talkie mode setup completed", "debug");
+    }
+    if (typeof setupEventListeners === 'function') {
+      setupEventListeners();
+      logMessage("Event listeners setup completed", "debug");
+    }
+    if (typeof setupInterruptionHandling === 'function') {
+      setupInterruptionHandling();
+      logMessage("Interruption handling setup completed", "debug");
+    }
   } else {
-    console.error("Missing UI elements:", {
-      toggleBtn: !!window.nagElements.toggleBtn,
-      pauseBtn: !!window.nagElements.pauseBtn,
-      modeToggle: !!window.nagElements.modeToggle
-    });
     logMessage("Warning: Some UI elements not found. Some features may be disabled.", "warning");
   }
   
   // Log browser capabilities for debugging
-  if (typeof logBrowserInfo === 'function') logBrowserInfo();
+  if (typeof logBrowserInfo === 'function') {
+    logBrowserInfo();
+    logMessage("Browser info logged", "debug");
+  }
   
   // Try to connect WebSocket, but continue if it fails
   connectWebSocket();
