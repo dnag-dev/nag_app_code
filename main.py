@@ -160,22 +160,35 @@ async def transcribe_audio(file: UploadFile = File(...)):
 
         content = await file.read()
         if len(content) < 1000:
-            return JSONResponse(status_code=200, content={"transcription": "undefined", "error": "Audio too short"})
+            # Return 400 status for short audio instead of 200 with undefined
+            raise HTTPException(status_code=400, detail="Audio too short. Please speak for at least 1 second.")
 
         with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1]) as tmp:
             tmp.write(content)
             tmp_path = tmp.name
 
-        with open(tmp_path, "rb") as audio_file:
-            transcript = await client.audio.transcribe(model="whisper-1", file=audio_file, language="en")
+        try:
+            with open(tmp_path, "rb") as audio_file:
+                transcript = await client.audio.transcribe(model="whisper-1", file=audio_file, language="en")
+            
+            if not transcript or not transcript.text:
+                raise HTTPException(status_code=400, detail="No speech detected in audio")
+                
+            return {"transcription": transcript.text.strip()}
+            
+        finally:
+            # Always clean up the temp file
+            try:
+                os.unlink(tmp_path)
+            except:
+                pass
 
-        os.unlink(tmp_path)
-
-        return {"transcription": transcript.text}
-
+    except HTTPException as e:
+        logger.error(f"Transcription validation error: {str(e)}")
+        raise e
     except Exception as e:
         logger.error(f"Transcription error: {str(e)}")
-        return {"transcription": "undefined", "error": str(e)}
+        raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
 
 @app.get("/{file_path:path}")
 async def serve_static(file_path: str):
