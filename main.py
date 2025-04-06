@@ -17,7 +17,7 @@ import json  # Added for JSON handling
 import httpx
 import tempfile
 import uuid
-from elevenlabs import generate, save
+from elevenlabs import ElevenLabs, Voice, VoiceSettings
 
 # -------------------- Request Models --------------------
 class ChatMode(str, Enum):
