@@ -115,6 +115,8 @@ async function processAudioAndTranscribe() {
         let data;
         try {
           data = await res.json();
+          // Log the full server response for debugging
+          logDebug(`📝 Server response: ${JSON.stringify(data)}`);
         } catch (jsonError) {
           logDebug("❌ Failed to parse JSON response: " + jsonError.message);
           throw new Error("Invalid server response");
@@ -124,8 +126,8 @@ async function processAudioAndTranscribe() {
         if (res.ok) {
           window.nagState.isUploading = false;
           
-          // Get transcribed message
-          const message = (data.transcription || "").trim();
+          // Get transcribed message - handle both transcription and transcript keys
+          const message = (data.transcription || data.transcript || "").trim();
           logDebug("📝 Transcribed: " + (message || "No speech detected"));
           
           // Check for repeated identical transcriptions to avoid loops
