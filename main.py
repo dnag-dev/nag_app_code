@@ -17,7 +17,7 @@ import json  # Added for JSON handling
 import httpx
 import tempfile
 import uuid
-from elevenlabs import ElevenLabs, Voice, VoiceSettings
+from elevenlabs import generate, save
 
 # -------------------- Request Models --------------------
 class ChatMode(str, Enum):
@@ -285,46 +285,28 @@ async def shutdown_event():
 async def generate_tts(text: str) -> str:
     try:
         logger.info("Starting TTS generation with ElevenLabs")
-        
-        # Initialize ElevenLabs client
-        client = ElevenLabs(api_key=os.getenv("ELEVENLABS_API_KEY"))
-        
-        # Generate audio using ElevenLabs
-        audio = client.generate(
+
+        audio = generate(
             text=text,
             voice="Nag",
             model="eleven_monolingual_v1",
-            stream=False
+            api_key=os.getenv("ELEVENLABS_API_KEY")
         )
-        
+
         if not audio:
-            logger.error("ElevenLabs returned no audio data")
+            logger.error("No audio returned from ElevenLabs")
             return None
-            
-        logger.info(f"Generated audio of length: {len(audio)} bytes")
-        
-        # Save the audio file
+
         filename = f"audio_{uuid.uuid4()}.mp3"
         filepath = os.path.join("static", "audio", filename)
-        
-        # Ensure directory exists
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        
-        # Save the audio file
-        with open(filepath, "wb") as f:
-            f.write(audio)
-            
-        logger.info(f"Saved audio file to: {filepath}")
-        
-        # Return the URL for the audio file
-        audio_url = f"/static/audio/{filename}"
-        logger.info(f"Returning audio URL: {audio_url}")
-        return audio_url
-        
+
+        save(audio, filepath)
+
+        return f"/static/audio/{filename}"
+
     except Exception as e:
-        logger.error(f"Error generating TTS: {str(e)}")
-        logger.error(f"Error type: {type(e)}")
-        logger.error(f"Error details: {str(e)}")
+        logger.error(f"TTS generation failed: {str(e)}")
         return None
 
 if __name__ == "__main__":
