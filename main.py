@@ -14,6 +14,7 @@ import tempfile
 import uuid
 import httpx
 import json
+import traceback
 from typing import Optional, List
 from fastapi import WebSocketDisconnect
 from elevenlabs.client import ElevenLabs
@@ -39,10 +40,10 @@ class MessageRequest(BaseModel):
 
 # -------------------- Logging Setup --------------------
 logging.basicConfig(
-    level=logging.DEBUG,  # Changed to DEBUG for more detailed logs
+    level=logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.StreamHandler(sys.stdout)  # Ensure logs go to stdout for container
+        logging.StreamHandler(sys.stdout)
     ]
 )
 logger = logging.getLogger(__name__)
@@ -104,22 +105,14 @@ async def read_root():
 @app.get("/health")
 async def health():
     try:
-        # Check FFmpeg availability
-        ffmpeg_check = "available" if shutil.which("ffmpeg") else "missing"
-        
+        api_key_status = "present" if os.getenv("OPENAI_API_KEY") else "missing"
         return {
             "status": "ok",
             "timestamp": datetime.datetime.now().isoformat(),
-            "api_key_status": {
-                "openai": "present" if os.getenv("OPENAI_API_KEY") else "missing",
-                "elevenlabs": "present" if os.getenv("ELEVENLABS_API_KEY") else "missing"
-            },
-            "services": {
-                "ffmpeg": ffmpeg_check,
-                "openai_client": {
-                    "base_url": client.base_url,
-                    "api_key_present": bool(client.api_key)
-                }
+            "api_key_status": api_key_status,
+            "openai_client": {
+                "base_url": client.base_url,
+                "api_key_present": bool(client.api_key)
             }
         }
     except Exception as e:
@@ -296,6 +289,27 @@ async def transcribe_audio(file: UploadFile = File(...)):
                 content={"error": "Audio file too small", "details": error_msg}
             )
         
+        # Verify audio format
+        try:
+            probe = ffmpeg.probe(output_path)
+            audio_stream = next((stream for stream in probe['streams'] if stream['codec_type'] == 'audio'), None)
+            if audio_stream:
+                logger.info(f"Audio format: {audio_stream['codec_name']}, {audio_stream['sample_rate']}Hz, {audio_stream['channels']} channels")
+                if int(audio_stream['sample_rate']) != 16000 or int(audio_stream['channels']) != 1:
+                    error_msg = f"Invalid audio format: {audio_stream['sample_rate']}Hz, {audio_stream['channels']} channels. Expected 16000Hz mono"
+                    logger.error(error_msg)
+                    return JSONResponse(
+                        status_code=400,
+                        content={"error": "Invalid audio format", "details": error_msg}
+                    )
+        except Exception as e:
+            error_msg = f"Error probing audio file: {str(e)}"
+            logger.error(error_msg)
+            return JSONResponse(
+                status_code=500,
+                content={"error": "Audio validation failed", "details": error_msg}
+            )
+        
         # Log the start of transcription
         logger.info(f"Starting transcription with Whisper...")
         logger.info(f"OpenAI client config: {client.api_key[:5]}...{client.api_key[-5:]}")
@@ -304,6 +318,9 @@ async def transcribe_audio(file: UploadFile = File(...)):
         with open(output_path, "rb") as audio_file:
             try:
                 logger.info(f"Sending WAV to Whisper: {output_path} ({os.path.getsize(output_path)} bytes)")
+                # TEMP: Uncomment this line to test with dummy response
+                # return {"transcript": "hello world - dummy"}
+                
                 transcript = await client.audio.transcriptions.create(
                     model="whisper-1",
                     file=audio_file,
@@ -325,21 +342,21 @@ async def transcribe_audio(file: UploadFile = File(...)):
                     content={"error": "OpenAI API error", "details": error_msg}
                 )
             except Exception as e:
-                error_msg = f"Whisper exception: {str(e)}"
-                logger.error(error_msg)
+                logger.error("Whisper exception:")
+                logger.error(traceback.format_exc())
                 return JSONResponse(
                     status_code=500,
-                    content={"error": "Transcription failed", "details": error_msg}
+                    content={"error": "Transcription failed", "details": str(e)}
                 )
         
         return {"transcript": transcript.text}
         
     except Exception as e:
-        error_msg = f"Unhandled error in transcription: {str(e)}"
-        logger.error(error_msg)
+        logger.error("Unhandled error in transcription:")
+        logger.error(traceback.format_exc())
         return JSONResponse(
             status_code=500,
-            content={"error": "Transcription failed", "details": error_msg}
+            content={"error": "Transcription failed", "details": str(e)}
         )
     finally:
         # Clean up temporary files
@@ -355,23 +372,11 @@ async def transcribe_audio(file: UploadFile = File(...)):
 
 @app.get("/{file_path:path}")
 async def serve_static(file_path: str):
-    try:
-        # Try to serve the requested file
-        full_path = os.path.join(STATIC_BASE, file_path)
-        if os.path.exists(full_path):
-            return FileResponse(full_path)
-        
-        # If file not found, serve index.html
-        return FileResponse(
-            os.path.join(STATIC_BASE, "index.html"),
-            media_type="text/html"
-        )
-    except Exception as e:
-        logger.error(f"Error serving static file {file_path}: {str(e)}")
-        return JSONResponse(
-            status_code=500,
-            content={"error": "Error serving file", "details": str(e)}
-        )
+    file_location = os.path.join(STATIC_BASE, file_path)
+    if os.path.isfile(file_location):
+        return FileResponse(file_location)
+    else:
+        raise HTTPException(status_code=404, detail=f"File {file_path} not found")
 
 @app.on_event("startup")
 async def on_startup():
