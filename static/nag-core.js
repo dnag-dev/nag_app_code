@@ -304,10 +304,7 @@ function initializeApp() {
     logMessage("Setting up event listeners", "debug");
     
     // Set initial button states
-    window.nagElements.toggleBtn.textContent = "Start Conversation";
-    window.nagElements.pauseBtn.textContent = "Pause";
-    window.nagElements.modeToggle.textContent = "Switch to continuous mode";
-    logMessage("Button states initialized", "debug");
+    updateButtonStates();
     
     // Add click handlers directly
     window.nagElements.toggleBtn.onclick = async function() {
@@ -315,13 +312,14 @@ function initializeApp() {
       try {
         if (window.nagState.listening) {
           logMessage("Stopping conversation", "debug");
-          window.nagElements.toggleBtn.textContent = "Start Conversation";
           await stopListening();
+          window.nagState.listening = false;
         } else {
           logMessage("Starting conversation", "debug");
-          window.nagElements.toggleBtn.textContent = "Stop Conversation";
           await startListening();
+          window.nagState.listening = true;
         }
+        updateButtonStates();
       } catch (error) {
         logMessage(`Error in toggle button: ${error.message}`, "error");
       }
@@ -329,32 +327,14 @@ function initializeApp() {
     
     window.nagElements.pauseBtn.onclick = function() {
       logMessage("Pause button clicked", "debug");
-      if (window.nagState.isPaused) {
-        window.nagState.isPaused = false;
-        window.nagElements.pauseBtn.textContent = "Pause";
-        window.nagElements.pauseBtn.classList.remove("paused");
-        logMessage("Resuming conversation", "debug");
-      } else {
-        window.nagState.isPaused = true;
-        window.nagElements.pauseBtn.textContent = "Resume";
-        window.nagElements.pauseBtn.classList.add("paused");
-        logMessage("Pausing conversation", "debug");
-      }
+      window.nagState.isPaused = !window.nagState.isPaused;
+      updateButtonStates();
     };
     
     window.nagElements.modeToggle.onclick = function() {
       logMessage("Mode toggle clicked", "debug");
       window.nagState.isWalkieTalkieMode = !window.nagState.isWalkieTalkieMode;
-      
-      if (window.nagState.isWalkieTalkieMode) {
-        window.nagElements.modeToggle.textContent = "Switch to continuous mode";
-        window.nagElements.modeHint.textContent = "Click & hold the orb to use walkie-talkie mode";
-        logMessage("Switched to walkie-talkie mode", "debug");
-      } else {
-        window.nagElements.modeToggle.textContent = "Switch to walkie-talkie mode";
-        window.nagElements.modeHint.textContent = "Nag will listen continuously for your voice";
-        logMessage("Switched to continuous mode", "debug");
-      }
+      updateButtonStates();
     };
     
     // Initialize UI components
@@ -389,6 +369,38 @@ function initializeApp() {
   connectWebSocket();
   
   logMessage("Nag Digital Twin v3.5.0-dev initialized and ready", "success");
+}
+
+// Function to update all button states based on current state
+function updateButtonStates() {
+  if (!window.nagElements) return;
+  
+  // Update toggle button
+  if (window.nagElements.toggleBtn) {
+    window.nagElements.toggleBtn.textContent = window.nagState.listening ? "Stop Conversation" : "Start Conversation";
+  }
+  
+  // Update pause button
+  if (window.nagElements.pauseBtn) {
+    window.nagElements.pauseBtn.textContent = window.nagState.isPaused ? "Resume" : "Pause";
+    if (window.nagState.isPaused) {
+      window.nagElements.pauseBtn.classList.add("paused");
+    } else {
+      window.nagElements.pauseBtn.classList.remove("paused");
+    }
+  }
+  
+  // Update mode toggle
+  if (window.nagElements.modeToggle) {
+    window.nagElements.modeToggle.textContent = window.nagState.isWalkieTalkieMode ? 
+      "Switch to continuous mode" : "Switch to walkie-talkie mode";
+  }
+  
+  // Update mode hint
+  if (window.nagElements.modeHint) {
+    window.nagElements.modeHint.textContent = window.nagState.isWalkieTalkieMode ?
+      "Click & hold the orb to use walkie-talkie mode" : "Nag will listen continuously for your voice";
+  }
 }
 
 // Initialize app when DOM is ready
