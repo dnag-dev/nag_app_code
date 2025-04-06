@@ -17,6 +17,7 @@ import json
 from typing import Optional, List
 from fastapi import WebSocketDisconnect
 from elevenlabs.client import ElevenLabs
+import ffmpeg
 
 # -------------------- Request Models --------------------
 class ChatMode(str, Enum):
@@ -154,6 +155,10 @@ async def chat(request: Request):
 @app.post("/transcribe")
 async def transcribe_audio(file: UploadFile = File(...)):
     try:
+        # Log incoming file details
+        logger.info(f"Uploaded MIME: {file.content_type}")
+        logger.info(f"Uploaded name: {file.filename}")
+        
         content_type = file.content_type.lower()
         if not any(x in content_type for x in ['audio', 'video']):
             raise HTTPException(status_code=400, detail="Invalid file type.")
@@ -162,16 +167,29 @@ async def transcribe_audio(file: UploadFile = File(...)):
         if len(content) < 1000:
             raise HTTPException(status_code=400, detail="Audio too short. Please speak for at least 1 second.")
 
-        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1]) as tmp:
+        # Save original file
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
             tmp.write(content)
-            tmp_path = tmp.name
+            input_path = tmp.name
 
         try:
-            with open(tmp_path, "rb") as audio_file:
+            # Convert to WAV
+            output_path = input_path.replace(".mp4", ".wav")
+            try:
+                ffmpeg.input(input_path).output(output_path).run(capture_stdout=True, capture_stderr=True)
+            except ffmpeg.Error as e:
+                logger.error(f"FFmpeg conversion error: {e.stderr.decode()}")
+                raise HTTPException(
+                    status_code=500,
+                    detail="Failed to convert audio format. Please try again."
+                )
+
+            # Transcribe the converted WAV file
+            with open(output_path, "rb") as audio_file:
                 try:
                     transcript = await client.audio.transcribe(
-                        model="whisper-1", 
-                        file=audio_file, 
+                        model="whisper-1",
+                        file=audio_file,
                         language="en",
                         response_format="text"
                     )
@@ -186,18 +204,20 @@ async def transcribe_audio(file: UploadFile = File(...)):
                         status_code=500,
                         detail=f"OpenAI API error: {str(e)}"
                     )
-            
+
             if not transcript:
                 raise HTTPException(status_code=400, detail="No speech detected in audio")
-                
+
             return {"transcription": transcript.strip()}
-            
+
         finally:
-            # Always clean up the temp file
+            # Clean up temp files
             try:
-                os.unlink(tmp_path)
-            except:
-                pass
+                os.unlink(input_path)
+                if os.path.exists(output_path):
+                    os.unlink(output_path)
+            except Exception as e:
+                logger.warning(f"Error cleaning up temp files: {str(e)}")
 
     except HTTPException as e:
         logger.error(f"Transcription validation error: {str(e)}")
