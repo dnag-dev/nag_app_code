@@ -162,20 +162,27 @@ async def chat(request: Request):
 
 @app.post("/transcribe")
 async def transcribe_audio(file: UploadFile = File(...)):
+    input_path = None
+    output_path = None
     try:
         # Log incoming file details
-        logger.info(f"Uploaded MIME: {file.content_type}")
-        logger.info(f"Uploaded name: {file.filename}")
+        logger.info(f"Starting transcription request")
+        logger.info(f"Uploaded MIME type: {file.content_type}")
+        logger.info(f"Uploaded filename: {file.filename}")
         
+        # Validate content type
         content_type = file.content_type.lower()
         if not any(x in content_type for x in ['audio', 'video']):
-            raise HTTPException(status_code=400, detail="Invalid file type.")
+            logger.error(f"Invalid content type: {content_type}")
+            raise HTTPException(status_code=400, detail=f"Invalid file type: {content_type}")
 
+        # Read and validate file content
         content = await file.read()
         file_size = len(content)
         logger.info(f"Received audio file size: {file_size} bytes")
         
         if file_size < 1000:
+            logger.error(f"File too small: {file_size} bytes")
             raise HTTPException(
                 status_code=400, 
                 detail=f"Audio too short ({file_size} bytes). Please speak for at least 1 second."
@@ -185,96 +192,92 @@ async def transcribe_audio(file: UploadFile = File(...)):
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
             tmp.write(content)
             input_path = tmp.name
-            logger.info(f"Saved original audio to: {input_path}, size: {file_size} bytes")
+            logger.info(f"Saved original audio to: {input_path}")
+            logger.info(f"Original file size: {os.path.getsize(input_path)} bytes")
+            logger.info(f"Original file exists: {os.path.exists(input_path)}")
 
+        # Convert to WAV with specific settings for Whisper
+        output_path = input_path.replace(".mp4", ".wav")
+        logger.info(f"Preparing to convert audio to WAV: {output_path}")
+        
         try:
-            # Convert to WAV with specific settings for Whisper
-            output_path = input_path.replace(".mp4", ".wav")
-            logger.info(f"Converting audio to WAV: {output_path}")
+            # Log ffmpeg command and settings
+            ffmpeg_cmd = (
+                f"ffmpeg -i {input_path} -f wav -acodec pcm_s16le -ac 1 -ar 16000 {output_path}"
+            )
+            logger.info(f"FFmpeg command: {ffmpeg_cmd}")
             
-            try:
-                # Log ffmpeg command for debugging
-                ffmpeg_cmd = (
-                    f"ffmpeg -i {input_path} -f wav -acodec pcm_s16le -ac 1 -ar 16000 {output_path}"
-                )
-                logger.info(f"Running ffmpeg command: {ffmpeg_cmd}")
-                
-                ffmpeg.input(input_path).output(
-                    output_path,
-                    format='wav',
-                    acodec='pcm_s16le',
-                    ac=1,
-                    ar='16000'
-                ).run(capture_stdout=True, capture_stderr=True)
-                
-                logger.info("FFmpeg conversion completed successfully")
-            except ffmpeg.Error as e:
-                error_msg = e.stderr.decode()
-                logger.error(f"FFmpeg conversion error: {error_msg}")
-                logger.error(f"FFmpeg stdout: {e.stdout.decode() if e.stdout else 'None'}")
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Failed to convert audio format: {error_msg}"
-                )
-
-            # Validate converted file
+            # Run ffmpeg conversion
+            ffmpeg.input(input_path).output(
+                output_path,
+                format='wav',
+                acodec='pcm_s16le',
+                ac=1,
+                ar='16000'
+            ).run(capture_stdout=True, capture_stderr=True)
+            
+            # Verify conversion
             if not os.path.exists(output_path):
-                raise HTTPException(status_code=500, detail="FFmpeg failed: output file not found")
+                logger.error("FFmpeg conversion failed: output file not created")
+                raise HTTPException(status_code=500, detail="Audio conversion failed")
             
             output_size = os.path.getsize(output_path)
             logger.info(f"Converted WAV file size: {output_size} bytes")
+            logger.info(f"Converted file exists: {os.path.exists(output_path)}")
             
             if output_size < 1000:
+                logger.error(f"Converted file too small: {output_size} bytes")
                 raise HTTPException(
                     status_code=500, 
-                    detail=f"FFmpeg failed: output audio too small ({output_size} bytes)"
+                    detail=f"Converted audio too small ({output_size} bytes)"
                 )
 
-            # Transcribe the converted WAV file
-            logger.info(f"Sending audio file to OpenAI Whisper: {output_path} | size: {os.path.getsize(output_path)}")
-            with open(output_path, "rb") as audio_file:
-                try:
-                    # Log OpenAI client configuration
-                    logger.info(f"OpenAI client config: base_url={client.base_url}, api_key_present={bool(client.api_key)}")
-                    
-                    transcript = await client.audio.transcriptions.create(
-                        model="whisper-1",
-                        file=audio_file,
-                        language="en"
-                    )
-                    logger.info(f"OpenAI response: {transcript}")
-                except httpx.TimeoutException:
-                    logger.error("Transcription request timed out")
-                    raise HTTPException(
-                        status_code=504,
-                        detail="Transcription request timed out. Please try again."
-                    )
-                except Exception as e:
-                    logger.error(f"OpenAI transcription error: {str(e)}")
-                    logger.error(f"Error type: {type(e).__name__}")
-                    logger.error(f"Error args: {e.args}")
+        except ffmpeg.Error as e:
+            logger.error(f"FFmpeg conversion error: {str(e)}")
+            logger.error(f"FFmpeg stdout: {e.stdout.decode() if e.stdout else 'None'}")
+            logger.error(f"FFmpeg stderr: {e.stderr.decode() if e.stderr else 'None'}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to convert audio format: {str(e)}"
+            )
+
+        # Transcribe the converted WAV file
+        logger.info(f"Starting OpenAI transcription")
+        logger.info(f"OpenAI client config: base_url={client.base_url}, api_key_present={bool(client.api_key)}")
+        
+        with open(output_path, "rb") as audio_file:
+            try:
+                transcript = await client.audio.transcriptions.create(
+                    model="whisper-1",
+                    file=audio_file,
+                    language="en"
+                )
+                logger.info(f"OpenAI transcription successful")
+                logger.info(f"Transcript length: {len(transcript.text)} characters")
+                
+                if not transcript or not transcript.text:
+                    logger.error("Empty transcription received from OpenAI")
                     raise HTTPException(
                         status_code=500,
-                        detail=f"Transcription failed: {str(e)}"
+                        detail="No transcription returned from OpenAI"
                     )
 
-            if not transcript or not transcript.text:
+                return {"transcription": transcript.text.strip()}
+
+            except httpx.TimeoutException as e:
+                logger.error(f"OpenAI API timeout: {str(e)}")
+                raise HTTPException(
+                    status_code=504,
+                    detail="Transcription request timed out. Please try again."
+                )
+            except Exception as e:
+                logger.error(f"OpenAI API error: {str(e)}")
+                logger.error(f"Error type: {type(e).__name__}")
+                logger.error(f"Error args: {e.args}")
                 raise HTTPException(
                     status_code=500,
-                    detail="No transcription returned from OpenAI"
+                    detail=f"Transcription failed: {str(e)}"
                 )
-
-            return {"transcription": transcript.text.strip()}
-
-        finally:
-            # Clean up temporary files
-            try:
-                if os.path.exists(input_path):
-                    os.unlink(input_path)
-                if os.path.exists(output_path):
-                    os.unlink(output_path)
-            except Exception as e:
-                logger.error(f"Error cleaning up temporary files: {str(e)}")
 
     except HTTPException:
         raise
@@ -286,6 +289,17 @@ async def transcribe_audio(file: UploadFile = File(...)):
             status_code=500,
             detail=f"An unexpected error occurred: {str(e)}"
         )
+    finally:
+        # Clean up temporary files
+        try:
+            if input_path and os.path.exists(input_path):
+                os.unlink(input_path)
+                logger.info(f"Cleaned up input file: {input_path}")
+            if output_path and os.path.exists(output_path):
+                os.unlink(output_path)
+                logger.info(f"Cleaned up output file: {output_path}")
+        except Exception as e:
+            logger.error(f"Error cleaning up temporary files: {str(e)}")
 
 @app.get("/{file_path:path}")
 async def serve_static(file_path: str):
