@@ -20,6 +20,40 @@ from elevenlabs.client import ElevenLabs
 import ffmpeg
 import traceback
 
+# -------------------- Logging Setup --------------------
+class JSONFormatter(logging.Formatter):
+    def format(self, record):
+        log_data = {
+            'timestamp': datetime.datetime.utcnow().isoformat(),
+            'level': record.levelname,
+            'logger': record.name,
+            'message': record.getMessage(),
+        }
+        
+        if record.exc_info:
+            log_data['exc_info'] = self.formatException(record.exc_info)
+            
+        if hasattr(record, 'extra'):
+            log_data.update(record.extra)
+            
+        return json.dumps(log_data)
+
+# Configure logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
+# Add JSON handler
+json_handler = logging.StreamHandler()
+json_handler.setFormatter(JSONFormatter())
+logger.addHandler(json_handler)
+
+# Add regular handler for non-JSON logs
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+logger.addHandler(console_handler)
+
+logger.info("Starting application with debug logging enabled")
+
 # -------------------- Request Models --------------------
 class ChatMode(str, Enum):
     CHAT = "chat"
@@ -35,14 +69,6 @@ class ChatRequest(BaseModel):
 class MessageRequest(BaseModel):
     message: str
     request_id: Optional[str] = None
-
-# -------------------- Logging Setup --------------------
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
-logger.info("Starting application...")
 
 # -------------------- Load Environment Variables --------------------
 load_dotenv()
@@ -211,33 +237,24 @@ async def chat(request: Request):
 async def transcribe_audio(file: UploadFile = File(...)):
     input_path = None
     output_path = None
-    raw_path = None
     try:
-        # Log upload details
-        content = await file.read()
-        file_size = len(content)
-        logger.info("[transcribe] Upload started", extra={
-            "filename": file.filename,
-            "content_type": file.content_type,
-            "size": file_size,
-            "headers": dict(file.headers)
-        })
-        await file.seek(0)  # Reset file pointer
+        # Log the incoming file details
+        logger.info(f"Received file: {file.filename} ({file.content_type})")
         
         # Validate content type with fallback for Safari
         if not file.content_type or not file.content_type.startswith('audio/'):
-            logger.warning("[transcribe] Fallback MIME type logic triggered", extra={
-                "original_type": file.content_type,
-                "fallback_type": "audio/mp4"
-            })
-            file.content_type = "audio/mp4"
+            logger.warning(f"Fallback MIME type logic triggered. Original type: {file.content_type}")
+            file.content_type = "audio/mp4"  # Default for Safari
+            logger.info(f"Using fallback MIME type: {file.content_type}")
+        
+        # Read and validate file content
+        content = await file.read()
+        file_size = len(content)
+        logger.info(f"Received audio file size: {file_size} bytes")
         
         if file_size < 1000:
             error_msg = f"File too small: {file_size} bytes"
-            logger.error("[transcribe] File validation failed", extra={
-                "error": error_msg,
-                "size": file_size
-            })
+            logger.error(error_msg)
             return JSONResponse(
                 status_code=400,
                 content={"error": "File too small", "details": error_msg}
@@ -245,41 +262,22 @@ async def transcribe_audio(file: UploadFile = File(...)):
         
         # Save the uploaded file
         input_path = os.path.join(tempfile.gettempdir(), f"input_{uuid.uuid4()}.mp4")
-        logger.debug("[transcribe] Attempting to write input file", extra={
-            "path": input_path,
-            "size": file_size
-        })
-        
         with open(input_path, "wb") as f:
             f.write(content)
-            logger.debug("[transcribe] File saved successfully", extra={
-                "path": input_path,
-                "actual_size": os.path.getsize(input_path)
-            })
+        logger.info(f"Saved input file: {input_path} ({os.path.getsize(input_path)} bytes)")
         
         # Save raw file for inspection
         raw_path = input_path + ".raw.mp4"
         with open(raw_path, "wb") as f:
             f.write(content)
-        logger.debug("[transcribe] Raw file saved for inspection", extra={
-            "path": raw_path,
-            "size": os.path.getsize(raw_path)
-        })
+        logger.info(f"Saved raw audio file for inspection: {raw_path}")
         
         # Prepare output path
         output_path = os.path.join(tempfile.gettempdir(), f"output_{uuid.uuid4()}.wav")
         
         # Convert to WAV using FFmpeg with detailed error capture
         try:
-            logger.info("[ffmpeg] Starting conversion", extra={
-                "input": input_path,
-                "output": output_path,
-                "format": "wav",
-                "codec": "pcm_s16le",
-                "channels": 1,
-                "sample_rate": 16000
-            })
-            
+            logger.info(f"Converting {input_path} to WAV format...")
             process = (
                 ffmpeg
                 .input(input_path)
@@ -293,18 +291,14 @@ async def transcribe_audio(file: UploadFile = File(...)):
                 .overwrite_output()
             )
             
+            # Capture both stdout and stderr
             out, err = process.run(capture_stdout=True, capture_stderr=True)
-            logger.debug("[ffmpeg] Conversion output", extra={
-                "stdout": out.decode() if out else None,
-                "stderr": err.decode() if err else None
-            })
+            logger.info(f"FFmpeg stdout: {out.decode() if out else 'No output'}")
+            logger.info(f"FFmpeg stderr: {err.decode() if err else 'No errors'}")
             
         except ffmpeg.Error as e:
             error_msg = f"FFmpeg conversion error: {e.stderr.decode() if e.stderr else str(e)}"
-            logger.error("[ffmpeg] Conversion failed", extra={
-                "error": error_msg,
-                "stderr": e.stderr.decode() if e.stderr else None
-            })
+            logger.error(error_msg)
             return JSONResponse(
                 status_code=500,
                 content={"error": "Audio conversion failed", "details": error_msg}
@@ -313,27 +307,18 @@ async def transcribe_audio(file: UploadFile = File(...)):
         # Verify the conversion
         if not os.path.exists(output_path):
             error_msg = f"FFmpeg conversion failed - output file not found: {output_path}"
-            logger.error("[ffmpeg] Output validation failed", extra={
-                "error": error_msg,
-                "path": output_path
-            })
+            logger.error(error_msg)
             return JSONResponse(
                 status_code=500,
                 content={"error": "Audio conversion failed", "details": error_msg}
             )
         
         output_size = os.path.getsize(output_path)
-        logger.info("[ffmpeg] Conversion complete", extra={
-            "path": output_path,
-            "size": output_size
-        })
+        logger.info(f"Converted audio file size: {output_size} bytes")
         
         if output_size < 1000:
             error_msg = f"Converted audio file too small: {output_size} bytes"
-            logger.error("[ffmpeg] Size validation failed", extra={
-                "error": error_msg,
-                "size": output_size
-            })
+            logger.error(error_msg)
             return JSONResponse(
                 status_code=400,
                 content={"error": "Audio file too small", "details": error_msg}
@@ -344,41 +329,30 @@ async def transcribe_audio(file: UploadFile = File(...)):
             probe = ffmpeg.probe(output_path)
             audio_stream = next((stream for stream in probe['streams'] if stream['codec_type'] == 'audio'), None)
             if audio_stream:
-                logger.info("[ffmpeg] Audio format verified", extra={
-                    "codec": audio_stream['codec_name'],
-                    "sample_rate": audio_stream['sample_rate'],
-                    "channels": audio_stream['channels']
-                })
+                logger.info(f"Audio format: {audio_stream['codec_name']}, {audio_stream['sample_rate']}Hz, {audio_stream['channels']} channels")
                 if int(audio_stream['sample_rate']) != 16000 or int(audio_stream['channels']) != 1:
                     error_msg = f"Invalid audio format: {audio_stream['sample_rate']}Hz, {audio_stream['channels']} channels. Expected 16000Hz mono"
-                    logger.error("[ffmpeg] Format validation failed", extra={
-                        "error": error_msg,
-                        "sample_rate": audio_stream['sample_rate'],
-                        "channels": audio_stream['channels']
-                    })
+                    logger.error(error_msg)
                     return JSONResponse(
                         status_code=400,
                         content={"error": "Invalid audio format", "details": error_msg}
                     )
         except Exception as e:
             error_msg = f"Error probing audio file: {str(e)}"
-            logger.error("[ffmpeg] Format verification failed", extra={
-                "error": error_msg,
-                "path": output_path
-            })
+            logger.error(error_msg)
             return JSONResponse(
                 status_code=500,
                 content={"error": "Audio validation failed", "details": error_msg}
             )
         
+        # Log the start of transcription
+        logger.info(f"Starting transcription with Whisper...")
+        logger.info(f"OpenAI client config: {client.api_key[:5]}...{client.api_key[-5:]}")
+        
         # Send to OpenAI Whisper
         with open(output_path, "rb") as audio_file:
             try:
-                logger.info("[whisper] Starting transcription", extra={
-                    "path": output_path,
-                    "size": os.path.getsize(output_path)
-                })
-                
+                logger.info(f"Sending WAV to Whisper: {output_path} ({os.path.getsize(output_path)} bytes)")
                 # TEMP: Uncomment this line to test with dummy response
                 # return {"transcript": "hello world - dummy"}
                 
@@ -387,34 +361,24 @@ async def transcribe_audio(file: UploadFile = File(...)):
                     file=audio_file,
                     language="en"
                 )
-                logger.info("[whisper] Transcription complete", extra={
-                    "text": transcript.text[:100] + "..." if len(transcript.text) > 100 else transcript.text
-                })
+                logger.info(f"Transcription response: {transcript}")
             except httpx.TimeoutException:
                 error_msg = "Transcription timed out"
-                logger.error("[whisper] Transcription timeout", extra={
-                    "error": error_msg
-                })
+                logger.error(error_msg)
                 return JSONResponse(
                     status_code=504,
                     content={"error": "Transcription timed out", "details": error_msg}
                 )
             except httpx.HTTPStatusError as http_err:
                 error_msg = f"HTTP error from OpenAI: {http_err.response.status_code} - {http_err.response.text}"
-                logger.error("[whisper] HTTP error", extra={
-                    "error": error_msg,
-                    "status_code": http_err.response.status_code,
-                    "response": http_err.response.text
-                })
+                logger.error(error_msg)
                 return JSONResponse(
                     status_code=500,
                     content={"error": "OpenAI API error", "details": error_msg}
                 )
             except Exception as e:
-                logger.error("[whisper] Transcription failed", extra={
-                    "error": str(e),
-                    "traceback": traceback.format_exc()
-                })
+                logger.error("Whisper exception:")
+                logger.error(traceback.format_exc())
                 return JSONResponse(
                     status_code=500,
                     content={"error": "Transcription failed", "details": str(e)}
@@ -423,10 +387,8 @@ async def transcribe_audio(file: UploadFile = File(...)):
         return {"transcript": transcript.text}
         
     except Exception as e:
-        logger.error("[transcribe] Unhandled error", extra={
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        })
+        logger.error("Unhandled error in transcription:")
+        logger.error(traceback.format_exc())
         return JSONResponse(
             status_code=500,
             content={"error": "Transcription failed", "details": str(e)}
@@ -436,16 +398,11 @@ async def transcribe_audio(file: UploadFile = File(...)):
         for f in [input_path, output_path, raw_path]:
             try:
                 if f and os.path.exists(f):
-                    logger.debug("[cleanup] Removing temp file", extra={
-                        "path": f,
-                        "size": os.path.getsize(f) if os.path.exists(f) else None
-                    })
                     os.remove(f)
+                    logger.info(f"Cleaned up file: {f}")
             except Exception as e:
-                logger.error("[cleanup] Error removing file", extra={
-                    "path": f,
-                    "error": str(e)
-                })
+                error_msg = f"Error cleaning up file {f}: {str(e)}"
+                logger.error(error_msg)
                 # Don't return error for cleanup failures, just log them
 
 @app.get("/{file_path:path}")

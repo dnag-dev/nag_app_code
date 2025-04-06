@@ -6,26 +6,39 @@ import time
 import platform
 import uvicorn
 from datetime import datetime
-import json_log_formatter
+import json
+
+# Azure logging path
+azure_log_path = '/home/LogFiles/application/app.log'
+
+# Ensure log directory exists in the directory
+os.makedirs(os.path.dirname(azure_log_path), exist_ok=True)
 
 # Configure logging
-class CustomJSONFormatter(json_log_formatter.JSONFormatter):
-    def json_record(self, message: str, extra: dict, record: logging.LogRecord) -> dict:
-        extra['message'] = message
-        extra['timestamp'] = datetime.utcnow().isoformat()
-        extra['level'] = record.levelname
-        extra['logger'] = record.name
+class JSONFormatter(logging.Formatter):
+    def format(self, record):
+        log_data = {
+            'timestamp': datetime.utcnow().isoformat(),
+            'level': record.levelname,
+            'logger': record.name,
+            'message': record.getMessage(),
+        }
+        
         if record.exc_info:
-            extra['exc_info'] = self.formatException(record.exc_info)
-        return extra
+            log_data['exc_info'] = self.formatException(record.exc_info)
+            
+        if hasattr(record, 'extra'):
+            log_data.update(record.extra)
+            
+        return json.dumps(log_data)
 
 # Set up logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 # Add JSON handler
-json_handler = logging.StreamHandler(sys.stdout)
-json_handler.setFormatter(CustomJSONFormatter())
+json_handler = logging.FileHandler(azure_log_path, mode='a')
+json_handler.setFormatter(JSONFormatter())
 logger.addHandler(json_handler)
 
 # Add regular handler for non-JSON logs
