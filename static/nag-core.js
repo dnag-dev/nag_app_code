@@ -261,6 +261,11 @@ function initializeApp() {
   window.nagElements.debugBox = document.getElementById("debug");
   window.nagElements.statusEl = document.getElementById("status");
   
+  // Initialize mode hint with default text
+  if (window.nagElements.modeHint) {
+    window.nagElements.modeHint.textContent = "Click & hold the orb to use walkie-talkie mode";
+  }
+  
   // Initialize logging
   initializeLogging();
   
@@ -375,4 +380,13 @@ function handleTTSResponse(response) {
     logMessage(`TTS playback error: ${error.message}`, "error");
     updateStatus("Error playing audio", "error");
   };
+}
+
+// Helper to safely update mode hint text
+function updateModeHint(text) {
+  if (window.nagElements && window.nagElements.modeHint) {
+    window.nagElements.modeHint.textContent = text;
+  } else {
+    console.warn('Mode hint element not initialized yet');
+  }
 }

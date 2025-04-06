@@ -66,7 +66,7 @@ function setupUI() {
       
       if (window.nagState.isWalkieTalkieMode) {
         modeToggle.textContent = "Switch to continuous mode";
-        window.nagElements.modeHint.textContent = "Click & hold the orb to use walkie-talkie mode";
+        updateModeHint("Click & hold the orb to use walkie-talkie mode");
         logDebug("🎤 Switched to walkie-talkie mode");
         
         if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state === "recording") {
@@ -74,7 +74,7 @@ function setupUI() {
         }
       } else {
         modeToggle.textContent = "Switch to walkie-talkie mode";
-        window.nagElements.modeHint.textContent = "Nag will listen continuously for your voice";
+        updateModeHint("Nag will listen continuously for your voice");
         logDebug("🎤 Switched to continuous mode");
         
         if (window.nagState.listening && !window.nagState.isPaused) {

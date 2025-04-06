@@ -1,43 +1,51 @@
 <!DOCTYPE html>
-<!-- Nag's Digital Twin v3.5.0-dev - Safari Compatible -->
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <title>Nag - The Digital Twin</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <link rel="stylesheet" href="/static/styles.css">
-  <!-- Core script loads all other modules in the correct sequence -->
   <script src="/static/nag-core.js"></script>
   <style>
-    /* Device Frame */
+    body {
+      margin: 0;
+      padding: 0;
+      background: #111;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
     .device-frame {
       position: relative;
-      width: 375px; /* iPhone width */
-      height: 812px; /* iPhone height */
+      width: 375px;
+      height: 812px;
       margin: 20px auto;
       background: #000;
       border-radius: 40px;
       padding: 20px;
       box-shadow: 0 0 20px rgba(0, 0, 0, 0.3);
+      max-width: 100vw;
+      box-sizing: border-box;
       overflow: hidden;
     }
 
-    /* App Container */
     #app-container {
       position: relative;
       width: 100%;
       height: 100%;
       background: #f5f5f5;
       border-radius: 20px;
-      overflow: hidden;
       display: flex;
       flex-direction: column;
+      overflow: hidden;
     }
 
-    /* Header */
     header {
       text-align: center;
-      padding: 20px;
+      padding: 20px 10px 10px;
       background: #fff;
       border-bottom: 1px solid #eee;
     }
@@ -51,28 +59,23 @@
     header .subtitle {
       font-size: 0.9em;
       color: #666;
-      margin: 5px 0 0;
+      margin-top: 5px;
     }
 
-    /* Main Content Area */
     .main-content {
       flex: 1;
       display: flex;
       flex-direction: column;
       overflow: hidden;
-      position: relative;
     }
 
-    /* Orb Container */
     #orb-container {
       position: relative;
       width: 200px;
       height: 200px;
-      margin: 20px auto;
-      perspective: 1000px;
+      margin: 20px auto 10px;
     }
 
-    /* Messages Container */
     .messages-container {
       flex: 1;
       overflow-y: auto;
@@ -81,13 +84,13 @@
       flex-direction: column;
       gap: 10px;
       background: #f5f5f5;
+      max-height: 100%;
     }
 
     .message {
       max-width: 80%;
       padding: 10px 15px;
       border-radius: 15px;
-      margin: 5px 0;
       word-break: break-word;
     }
 
@@ -103,7 +106,6 @@
       color: #000;
     }
 
-    /* Controls */
     .controls-container {
       padding: 15px;
       background: #fff;
@@ -113,35 +115,30 @@
       gap: 10px;
     }
 
-    /* Debug Log */
     .debug-container {
       position: absolute;
       bottom: 0;
       left: 0;
       right: 0;
-      background: rgba(0, 0, 0, 0.9);
+      background: rgba(0, 0, 0, 0.95);
       color: #fff;
       padding: 10px;
       font-family: monospace;
       font-size: 12px;
       max-height: 200px;
       overflow-y: auto;
-      transform: translateY(100%);
-      transition: transform 0.3s ease;
+      display: none;
       z-index: 1000;
     }
 
     .debug-container.visible {
-      transform: translateY(0);
+      display: block;
     }
 
     .debug-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 5px 10px;
-      background: rgba(0, 0, 0, 0.5);
-      border-radius: 5px;
       margin-bottom: 5px;
     }
 
@@ -160,10 +157,7 @@
     .log-entry.info { background: rgba(0, 150, 255, 0.2); }
     .log-entry.debug { background: rgba(100, 100, 100, 0.2); }
     .log-entry.error { background: rgba(255, 0, 0, 0.2); }
-    .log-entry.success { background: rgba(0, 255, 0, 0.2); }
-    .log-entry.warning { background: rgba(255, 165, 0, 0.2); }
 
-    /* Status Bar */
     .status {
       position: absolute;
       top: 0;
@@ -177,186 +171,15 @@
       z-index: 1000;
     }
 
-    /* Ensure scrollbar is always visible */
-    .debug-container::-webkit-scrollbar {
-      width: 8px;
-    }
-
-    .debug-container::-webkit-scrollbar-track {
-      background: rgba(0, 0, 0, 0.3);
-    }
-
-    .debug-container::-webkit-scrollbar-thumb {
-      background: rgba(255, 255, 255, 0.3);
-      border-radius: 4px;
-    }
-
-    .debug-container::-webkit-scrollbar-thumb:hover {
-      background: rgba(255, 255, 255, 0.5);
-    }
-
-    /* Jarvis-like Orb Styles */
     #orb {
-      position: relative;
       width: 100%;
       height: 100%;
       border-radius: 50%;
-      background: radial-gradient(circle at 30% 30%, 
-        rgba(0, 150, 255, 0.8),
-        rgba(0, 50, 150, 0.9));
-      box-shadow: 
-        0 0 60px rgba(0, 150, 255, 0.6),
-        inset 0 0 20px rgba(255, 255, 255, 0.3);
-      transform-style: preserve-3d;
-      transition: all 0.3s ease;
+      background: radial-gradient(circle at 30% 30%, rgba(0, 150, 255, 0.8), rgba(0, 50, 150, 0.9));
+      box-shadow: 0 0 60px rgba(0, 150, 255, 0.6), inset 0 0 20px rgba(255, 255, 255, 0.3);
+      position: relative;
     }
 
-    #orb::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      border-radius: 50%;
-      background: radial-gradient(circle at 30% 30%,
-        rgba(255, 255, 255, 0.1),
-        rgba(255, 255, 255, 0.05));
-      animation: pulse 2s infinite;
-    }
-
-    #orb::after {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      border-radius: 50%;
-      background: radial-gradient(circle at 30% 30%,
-        rgba(255, 255, 255, 0.2),
-        rgba(255, 255, 255, 0.1));
-      animation: rotate 20s linear infinite;
-    }
-
-    #volume-indicator {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 80%;
-      height: 80%;
-      border-radius: 50%;
-      overflow: hidden;
-    }
-
-    .volume-bar {
-      width: 100%;
-      height: 0;
-      background: linear-gradient(to bottom,
-        rgba(255, 255, 255, 0.8),
-        rgba(255, 255, 255, 0.4));
-      transition: height 0.1s ease;
-    }
-
-    /* Cloud Animation */
-    .cloud {
-      position: absolute;
-      background: rgba(255, 255, 255, 0.1);
-      border-radius: 50%;
-      animation: float 8s infinite;
-    }
-
-    .cloud:nth-child(1) {
-      width: 30px;
-      height: 30px;
-      top: 20%;
-      left: 20%;
-      animation-delay: 0s;
-    }
-
-    .cloud:nth-child(2) {
-      width: 40px;
-      height: 40px;
-      top: 40%;
-      left: 60%;
-      animation-delay: 2s;
-    }
-
-    .cloud:nth-child(3) {
-      width: 25px;
-      height: 25px;
-      top: 60%;
-      left: 30%;
-      animation-delay: 4s;
-    }
-
-    .cloud:nth-child(4) {
-      width: 35px;
-      height: 35px;
-      top: 30%;
-      left: 70%;
-      animation-delay: 6s;
-    }
-
-    /* Animations */
-    @keyframes pulse {
-      0% { transform: scale(1); opacity: 0.5; }
-      50% { transform: scale(1.05); opacity: 0.8; }
-      100% { transform: scale(1); opacity: 0.5; }
-    }
-
-    @keyframes rotate {
-      from { transform: rotate(0deg); }
-      to { transform: rotate(360deg); }
-    }
-
-    @keyframes float {
-      0% { transform: translate(0, 0) scale(1); opacity: 0.3; }
-      25% { transform: translate(10px, -10px) scale(1.1); opacity: 0.5; }
-      50% { transform: translate(0, 0) scale(1); opacity: 0.3; }
-      75% { transform: translate(-10px, 10px) scale(0.9); opacity: 0.5; }
-      100% { transform: translate(0, 0) scale(1); opacity: 0.3; }
-    }
-
-    /* Orb States */
-    #orb.listening {
-      background: radial-gradient(circle at 30% 30%, 
-        rgba(0, 200, 255, 0.8),
-        rgba(0, 100, 200, 0.9));
-      box-shadow: 
-        0 0 80px rgba(0, 200, 255, 0.8),
-        inset 0 0 30px rgba(255, 255, 255, 0.4);
-    }
-
-    #orb.thinking {
-      background: radial-gradient(circle at 30% 30%, 
-        rgba(150, 0, 255, 0.8),
-        rgba(100, 0, 200, 0.9));
-      box-shadow: 
-        0 0 80px rgba(150, 0, 255, 0.8),
-        inset 0 0 30px rgba(255, 255, 255, 0.4);
-    }
-
-    #orb.speaking {
-      background: radial-gradient(circle at 30% 30%, 
-        rgba(0, 255, 150, 0.8),
-        rgba(0, 200, 100, 0.9));
-      box-shadow: 
-        0 0 80px rgba(0, 255, 150, 0.8),
-        inset 0 0 30px rgba(255, 255, 255, 0.4);
-    }
-
-    #orb.error {
-      background: radial-gradient(circle at 30% 30%, 
-        rgba(255, 0, 0, 0.8),
-        rgba(200, 0, 0, 0.9));
-      box-shadow: 
-        0 0 80px rgba(255, 0, 0, 0.8),
-        inset 0 0 30px rgba(255, 255, 255, 0.4);
-    }
-
-    /* Safari Hint Styles */
     .safari-hint {
       position: fixed;
       top: 20px;
@@ -370,20 +193,16 @@
       text-align: center;
       box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
       z-index: 1000;
-      animation: fadeIn 0.5s ease-in-out;
-      display: none; /* Hidden by default */
-    }
-
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translate(-50%, -10px); }
-      to { opacity: 1; transform: translate(-50%, 0); }
+      display: none;
     }
   </style>
 </head>
+
 <body>
   <div class="device-frame">
     <div id="app-container">
       <div id="status" class="status">Ready</div>
+
       <header>
         <h1>Nag's Digital Twin 3.5-dev</h1>
         <p class="subtitle">Dinakara's mind — therapist, companion, unfiltered mirror.</p>
@@ -391,36 +210,24 @@
 
       <div class="main-content">
         <div id="orb-container">
-          <div id="orb" class="idle">
-            <div class="cloud"></div>
-            <div class="cloud"></div>
-            <div class="cloud"></div>
-            <div class="cloud"></div>
-            <div id="volume-indicator">
-              <div class="volume-bar" style="height: 0"></div>
-            </div>
-          </div>
+          <div id="orb"></div>
         </div>
 
         <div class="messages-container" id="messages">
-          <!-- Messages will be added here -->
+          <!-- Messages go here -->
         </div>
 
         <div class="controls-container">
-          <div class="button-group">
-            <button id="toggle-btn" class="btn primary">Start Conversation</button>
-            <button id="pause-btn" class="btn secondary" disabled>Pause</button>
-          </div>
-          <button id="mode-toggle" class="btn mode">Switch to continuous mode</button>
+          <button id="toggle-btn" class="btn primary">Start Conversation</button>
+          <label>
+            <input type="checkbox" id="showAllLogs" checked />
+            Show Debug Logs
+          </label>
         </div>
 
-        <div class="debug-container" id="debug">
+        <div class="debug-container visible" id="debug">
           <div class="debug-header">
             <span>Debug Log</span>
-            <label class="debug-toggle">
-              <input type="checkbox" id="showAllLogs">
-              Show All Logs
-            </label>
           </div>
           <div class="debug-content"></div>
         </div>
@@ -428,115 +235,59 @@
     </div>
   </div>
 
+  <div class="safari-hint">Tap the orb to enable audio</div>
   <audio id="audio" hidden></audio>
 
   <script>
-    // Safari detection and audio unlocker
     function isMobileSafari() {
-      return /^((?!chrome|android).)*safari/i.test(navigator.userAgent) && 
+      return /^((?!chrome|android).)*safari/i.test(navigator.userAgent) &&
              /iPhone|iPad|iPod/.test(navigator.userAgent);
     }
 
-    // Safari unlocker: play silent audio on first user tap
     function unlockAudioContext() {
       const audio = new Audio();
-      audio.src = "data:audio/mp3;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAAEAAABIADAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV6urq6urq6urq6urq6urq6urq6urq6urq6v////////////////////////////////8AAAAATGF2YzU4LjMyLjEwMA==";
-      audio.play().catch(() => {
-        console.warn("Audio unlock failed silently");
-      });
-      
-      // Hide the hint after successful unlock
+      audio.src = "data:audio/mp3;base64,//uQx...";
+      audio.play().catch(() => {});
       const hint = document.querySelector('.safari-hint');
-      if (hint) {
-        hint.style.display = 'none';
-      }
+      if (hint) hint.style.display = 'none';
     }
 
-    // Show hint and add unlocker for Safari
     if (isMobileSafari()) {
-      const hint = document.querySelector('.safari-hint');
-      if (hint) {
-        hint.style.display = 'block';
-      }
-      
-      // Add unlocker on first touch
+      document.querySelector('.safari-hint').style.display = 'block';
       document.addEventListener('touchstart', unlockAudioContext, { once: true });
     }
 
-    // Initialize app after DOM is loaded
-    document.addEventListener('DOMContentLoaded', function() {
-      if (typeof initializeApp === 'function') {
-        initializeApp();
-      }
-    });
-
-    // Initialize when the page loads
-    window.addEventListener('load', () => {
-      // Add error handling for static resources
-      document.querySelectorAll('script').forEach(script => {
-        script.onerror = () => {
-          console.error(`Failed to load script: ${script.src}`);
-          if (window.nagElements && window.nagElements.debugBox) {
-            const p = document.createElement("p");
-            p.textContent = `❌ Failed to load: ${script.src}`;
-            p.style.color = "#ff3333";
-            window.nagElements.debugBox.appendChild(p);
-          }
-        };
+    document.addEventListener('DOMContentLoaded', function () {
+      const debugToggle = document.getElementById('showAllLogs');
+      const debugContainer = document.getElementById('debug');
+      if (debugToggle && debugToggle.checked) debugContainer.classList.add('visible');
+      debugToggle.addEventListener('change', () => {
+        debugContainer.classList.toggle('visible', debugToggle.checked);
       });
     });
 
-    // Function to scroll to the top of debug content
-    function scrollToLatest() {
-      const debugContent = document.querySelector('.debug-content');
-      if (debugContent) {
-        debugContent.scrollTop = 0;
-      }
-    }
-
-    // Function to add a message to the chat
     function addMessage(text, isUser = false) {
       const messagesContainer = document.getElementById('messages');
-      if (!messagesContainer) return;
-
       const message = document.createElement('div');
       message.className = `message ${isUser ? 'user' : 'ai'}`;
       message.textContent = text;
-
       messagesContainer.appendChild(message);
       messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }
 
-    // Function to toggle debug log visibility
-    function toggleDebugLog(show) {
-      const debugContainer = document.getElementById('debug');
-      if (debugContainer) {
-        debugContainer.classList.toggle('visible', show);
-      }
-    }
+    const LOG_CONFIG = { showAllLogs: true };
 
-    // Update the logMessage function
-    window.logMessage = function(message, level = 'info') {
-      const debugContent = document.querySelector('.debug-content');
-      if (!debugContent) return;
-
-      // Check if we should show this message
-      if (!LOG_CONFIG.showAllLogs && !isKeyMessage(message)) return;
+    window.logMessage = function (message, level = 'info') {
+      const showAll = document.getElementById('showAllLogs')?.checked;
+      if (!showAll && !["listening", "thinking", "speaking", "transcribed", "tts"].some(k => message.toLowerCase().includes(k))) return;
 
       const entry = document.createElement('div');
       entry.className = `log-entry ${level}`;
-      
       const timestamp = new Date().toLocaleTimeString();
       entry.textContent = `[${timestamp}] [${level.toUpperCase()}] ${message}`;
-      
-      debugContent.appendChild(entry);
-      debugContent.scrollTop = debugContent.scrollHeight;
+      document.querySelector('.debug-content')?.appendChild(entry);
+      document.querySelector('.debug-content').scrollTop = document.querySelector('.debug-content').scrollHeight;
     };
-
-    // Initialize debug log toggle
-    document.getElementById('showAllLogs').addEventListener('change', function(e) {
-      toggleDebugLog(e.target.checked);
-    });
   </script>
 </body>
 </html>
