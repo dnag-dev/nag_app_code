@@ -208,7 +208,7 @@ async def transcribe_audio(file: UploadFile = File(...)):
                 )
 
             # Transcribe the converted WAV file
-            logger.info(f"Transcribing with file: {output_path}, size: {output_size} bytes")
+            logger.info(f"Sending audio file to OpenAI Whisper: {output_path} | size: {os.path.getsize(output_path)}")
             with open(output_path, "rb") as audio_file:
                 try:
                     transcript = await client.audio.transcriptions.create(
@@ -216,7 +216,7 @@ async def transcribe_audio(file: UploadFile = File(...)):
                         file=audio_file,
                         language="en"
                     )
-                    logger.info("Transcription completed successfully")
+                    logger.info(f"OpenAI response: {transcript}")
                 except httpx.TimeoutException:
                     logger.error("Transcription request timed out")
                     raise HTTPException(
