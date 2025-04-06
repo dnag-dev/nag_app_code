@@ -160,17 +160,28 @@ async def websocket_endpoint(websocket: WebSocket):
 @app.post("/chat")
 async def chat(request: Request):
     try:
+        # Parse request body
         data = await request.json()
-        user_message = data.get("message", "")
-        logger.info(f"Received chat message: {user_message[:100]}...")
+        logger.info("[chat] Request received", extra={
+            "data": {k: v for k, v in data.items() if k != "message" and k != "text"}  # Log everything except the message
+        })
         
-        if not user_message:
-            error_msg = "No message provided"
-            logger.error(error_msg)
+        # Get message from either key
+        message = data.get("message") or data.get("text")
+        if not message:
+            logger.error("[chat] No message provided", extra={
+                "data": data
+            })
             return JSONResponse(
                 status_code=400,
-                content={"error": "Invalid request", "details": error_msg}
+                content={"detail": "No message provided"}
             )
+        
+        # Log the message length for debugging
+        logger.info("[chat] Processing message", extra={
+            "message_length": len(message),
+            "mode": data.get("mode", "unknown")
+        })
         
         # Get response from OpenAI
         try:
@@ -178,194 +189,173 @@ async def chat(request: Request):
                 model="gpt-4",
                 messages=[
                     {"role": "system", "content": "You are a helpful assistant."},
-                    {"role": "user", "content": user_message}
+                    {"role": "user", "content": message}
                 ],
                 temperature=0.7
             )
             
             if not response.choices:
                 error_msg = "No response from OpenAI"
-                logger.error(error_msg)
+                logger.error("[chat] OpenAI error", extra={
+                    "error": error_msg
+                })
                 return JSONResponse(
                     status_code=500,
-                    content={"error": "Chat failed", "details": error_msg}
+                    content={"detail": error_msg}
                 )
             
             assistant_message = response.choices[0].message.content
-            logger.info(f"OpenAI response: {assistant_message[:100]}...")
+            logger.info("[chat] Response generated", extra={
+                "response_length": len(assistant_message)
+            })
             
             # Generate TTS
             try:
                 tts_url = await generate_tts(assistant_message)
                 return {
-                    "message": assistant_message,
+                    "response": assistant_message,
                     "tts_url": tts_url
                 }
             except Exception as e:
                 error_msg = f"TTS generation failed: {str(e)}"
-                logger.error(error_msg)
+                logger.error("[chat] TTS error", extra={
+                    "error": error_msg
+                })
                 return JSONResponse(
                     status_code=500,
-                    content={"error": "TTS generation failed", "details": error_msg}
+                    content={"detail": error_msg}
                 )
                 
         except httpx.HTTPStatusError as http_err:
             error_msg = f"HTTP error from OpenAI: {http_err.response.status_code} - {http_err.response.text}"
-            logger.error(error_msg)
+            logger.error("[chat] OpenAI HTTP error", extra={
+                "error": error_msg,
+                "status_code": http_err.response.status_code
+            })
             return JSONResponse(
                 status_code=500,
-                content={"error": "OpenAI API error", "details": error_msg}
+                content={"detail": error_msg}
             )
         except Exception as e:
             error_msg = f"OpenAI API error: {str(e)}"
-            logger.error(error_msg)
+            logger.error("[chat] OpenAI error", extra={
+                "error": error_msg
+            })
             return JSONResponse(
                 status_code=500,
-                content={"error": "Chat failed", "details": error_msg}
+                content={"detail": error_msg}
             )
             
     except Exception as e:
-        error_msg = f"Unhandled error in chat: {str(e)}"
-        logger.error(error_msg)
+        logger.error("[chat] Error processing request", extra={
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        })
         return JSONResponse(
             status_code=500,
-            content={"error": "Chat failed", "details": error_msg}
+            content={"detail": "Error processing chat request"}
         )
 
 @app.post("/transcribe")
 async def transcribe_audio(file: UploadFile = File(...)):
+    temp_file_path = None
     try:
-        # Log upload details
-        logger.info("[transcribe] Upload started", extra={
-            "filename": file.filename,
-            "content_type": file.content_type,
-            "headers": dict(file.headers)
-        })
+        # Log the incoming file details
+        logger.info(f"Received file: {file.filename} ({file.content_type})")
         
         # Validate content type with fallback for Safari
         if not file.content_type or not (file.content_type.startswith('audio/') or file.content_type.startswith('video/')):
-            logger.warning("[transcribe] Fallback MIME type logic triggered", extra={
-                "original_type": file.content_type,
-                "fallback_type": "audio/mp4"
-            })
-            file.content_type = "audio/mp4"
+            logger.warning(f"Fallback MIME type logic triggered. Original type: {file.content_type}")
+            file.content_type = "audio/mp4"  # Default for Safari
+            logger.info(f"Using fallback MIME type: {file.content_type}")
         
         # Read and validate file content
         content = await file.read()
         file_size = len(content)
-        logger.info("[transcribe] File size validated", extra={
-            "size": file_size
-        })
+        logger.info(f"Received audio file size: {file_size} bytes")
         
         if file_size < 1000:
             error_msg = f"File too small: {file_size} bytes"
-            logger.error("[transcribe] File validation failed", extra={
-                "error": error_msg,
-                "size": file_size
-            })
+            logger.error(error_msg)
             return JSONResponse(
                 status_code=400,
                 content={"error": "File too small", "details": error_msg}
             )
         
-        # Get file extension from filename or default to .mp4
-        file_extension = os.path.splitext(file.filename)[1] or ".mp4"
-        temp_file_path = os.path.join(tempfile.gettempdir(), f"temp_{uuid.uuid4()}{file_extension}")
-        
         # Save the uploaded file
+        file_ext = os.path.splitext(file.filename)[1] if file.filename and '.' in file.filename else ".mp4"
+        temp_file_path = os.path.join(tempfile.gettempdir(), f"input_{uuid.uuid4()}{file_ext}")
         with open(temp_file_path, "wb") as f:
             f.write(content)
-            logger.info("[transcribe] File saved", extra={
-                "path": temp_file_path,
-                "size": os.path.getsize(temp_file_path)
-            })
+        logger.info(f"Saved input file: {temp_file_path} ({os.path.getsize(temp_file_path)} bytes)")
         
-        # Create a separate client with longer timeout for Whisper
-        whisper_client = httpx.AsyncClient(
-            base_url="https://api.openai.com/v1",
-            headers={"Authorization": f"Bearer {os.getenv('OPENAI_API_KEY')}"},
-            timeout=60.0  # 60 second timeout for Whisper
+        # Directly use the file with OpenAI Whisper API
+        logger.info(f"Sending audio directly to Whisper API")
+        
+        # Create a client with longer timeout for transcription
+        whisper_client = AsyncOpenAI(
+            api_key=api_key, 
+            http_client=httpx.AsyncClient(timeout=60.0, verify=True)  # Longer timeout
         )
         
         try:
-            # Send to OpenAI Whisper
-            logger.info("[whisper] Starting transcription", extra={
-                "path": temp_file_path,
-                "size": os.path.getsize(temp_file_path)
-            })
-            
             with open(temp_file_path, "rb") as audio_file:
+                # Log API details for debugging
+                logger.info(f"OpenAI API key (first/last 3 chars): {api_key[:3]}...{api_key[-3:]}")
+                logger.info(f"File size being sent to API: {os.path.getsize(temp_file_path)} bytes")
+                
+                # Send to OpenAI Whisper API
                 transcript = await whisper_client.audio.transcriptions.create(
                     model="whisper-1",
                     file=audio_file,
                     language="en"
                 )
                 
-                logger.info("[whisper] Transcription complete", extra={
-                    "text": transcript.text[:100] + "..." if len(transcript.text) > 100 else transcript.text
-                })
+                # Log successful response
+                logger.info(f"Transcription successful. Text length: {len(transcript.text)}")
+                logger.info(f"Transcription text: {transcript.text[:100]}...")
                 
-                # Return both keys to support frontend expectations
-                return {
-                    "transcription": transcript.text.strip(),
-                    "transcript": transcript.text.strip()
-                }
+                return {"transcription": transcript.text.strip()}
                 
         except httpx.TimeoutException:
-            error_msg = "Transcription timed out"
-            logger.error("[whisper] Transcription timeout", extra={
-                "error": error_msg
-            })
+            error_msg = "Transcription request timed out"
+            logger.error(error_msg)
             return JSONResponse(
                 status_code=504,
                 content={"error": "Transcription timed out", "details": error_msg}
             )
         except httpx.HTTPStatusError as http_err:
-            error_msg = f"HTTP error from OpenAI: {http_err.response.status_code} - {http_err.response.text}"
-            logger.error("[whisper] HTTP error", extra={
-                "error": error_msg,
-                "status_code": http_err.response.status_code,
-                "response": http_err.response.text
-            })
+            # This captures HTTP errors with the full response
+            error_msg = f"HTTP error from OpenAI: {http_err.response.status_code}"
+            logger.error(f"{error_msg} - Response: {http_err.response.text}")
             return JSONResponse(
                 status_code=500,
                 content={"error": "OpenAI API error", "details": error_msg}
             )
         except Exception as e:
-            logger.error("[whisper] Transcription failed", extra={
-                "error": str(e),
-                "traceback": traceback.format_exc()
-            })
+            # Log the full exception details
+            logger.error("Error during Whisper API call:")
+            logger.error(traceback.format_exc())
             return JSONResponse(
                 status_code=500,
                 content={"error": "Transcription failed", "details": str(e)}
             )
-        finally:
-            await whisper_client.aclose()
-            
+        
     except Exception as e:
-        logger.error("[transcribe] Unhandled error", extra={
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        })
+        logger.error("Unhandled error in transcription endpoint:")
+        logger.error(traceback.format_exc())
         return JSONResponse(
             status_code=500,
             content={"error": "Transcription failed", "details": str(e)}
         )
     finally:
-        # Clean up temporary file
+        # Clean up temporary files
         try:
-            if os.path.exists(temp_file_path):
+            if temp_file_path and os.path.exists(temp_file_path):
                 os.remove(temp_file_path)
-                logger.info("[cleanup] Removed temporary file", extra={
-                    "path": temp_file_path
-                })
+                logger.info(f"Cleaned up file: {temp_file_path}")
         except Exception as e:
-            logger.error("[cleanup] Error removing file", extra={
-                "path": temp_file_path,
-                "error": str(e)
-            })
-            # Don't return error for cleanup failures, just log them
+            logger.error(f"Error cleaning up file {temp_file_path}: {str(e)}")
 
 @app.get("/{file_path:path}")
 async def serve_static(file_path: str):
