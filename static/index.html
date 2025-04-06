@@ -5,6 +5,7 @@
   <title>Nag - The Digital Twin</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <link rel="stylesheet" href="/static/styles.css" />
+  <!-- Initialize global state before loading scripts -->
   <script>
     // Initialize global state and elements
     window.nagState = {
@@ -19,12 +20,13 @@
     };
     window.nagElements = {};
   </script>
-  <script src="/static/nag-utils.js"></script>
-  <script src="/static/nag-audio.js"></script>
-  <script src="/static/nag-recording.js"></script>
-  <script src="/static/nag-transcription.js"></script>
-  <script src="/static/nag-ui.js"></script>
-  <script src="/static/nag-core.js"></script>
+  <!-- Load JavaScript files in correct order with defer -->
+  <script src="/static/nag-utils.js" defer></script>
+  <script src="/static/nag-audio.js" defer></script>
+  <script src="/static/nag-recording.js" defer></script>
+  <script src="/static/nag-transcription.js" defer></script>
+  <script src="/static/nag-ui.js" defer></script>
+  <script src="/static/nag-core.js" defer></script>
   <style>
     body {
       margin: 0;
