@@ -164,14 +164,20 @@ async def transcribe_audio(file: UploadFile = File(...)):
             raise HTTPException(status_code=400, detail="Invalid file type.")
 
         content = await file.read()
-        if len(content) < 1000:
-            raise HTTPException(status_code=400, detail="Audio too short. Please speak for at least 1 second.")
+        file_size = len(content)
+        logger.info(f"Received audio file size: {file_size} bytes")
+        
+        if file_size < 1000:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Audio too short ({file_size} bytes). Please speak for at least 1 second."
+            )
 
         # Save original file
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
             tmp.write(content)
             input_path = tmp.name
-            logger.info(f"Saved original audio to: {input_path}, size: {len(content)} bytes")
+            logger.info(f"Saved original audio to: {input_path}, size: {file_size} bytes")
 
         try:
             # Convert to WAV
@@ -181,10 +187,11 @@ async def transcribe_audio(file: UploadFile = File(...)):
             try:
                 ffmpeg.input(input_path).output(output_path).run(capture_stdout=True, capture_stderr=True)
             except ffmpeg.Error as e:
-                logger.error(f"FFmpeg conversion error: {e.stderr.decode()}")
+                error_msg = e.stderr.decode()
+                logger.error(f"FFmpeg conversion error: {error_msg}")
                 raise HTTPException(
                     status_code=500,
-                    detail="Failed to convert audio format. Please try again."
+                    detail=f"Failed to convert audio format: {error_msg}"
                 )
 
             # Validate converted file
@@ -195,7 +202,10 @@ async def transcribe_audio(file: UploadFile = File(...)):
             logger.info(f"Converted WAV file size: {output_size} bytes")
             
             if output_size < 1000:
-                raise HTTPException(status_code=500, detail="FFmpeg failed: output audio too small")
+                raise HTTPException(
+                    status_code=500, 
+                    detail=f"FFmpeg failed: output audio too small ({output_size} bytes)"
+                )
 
             # Transcribe the converted WAV file
             logger.info(f"Transcribing with file: {output_path}, size: {output_size} bytes")
@@ -206,7 +216,9 @@ async def transcribe_audio(file: UploadFile = File(...)):
                         file=audio_file,
                         language="en"
                     )
+                    logger.info("Transcription completed successfully")
                 except httpx.TimeoutException:
+                    logger.error("Transcription request timed out")
                     raise HTTPException(
                         status_code=504,
                         detail="Transcription request timed out. Please try again."
@@ -218,13 +230,21 @@ async def transcribe_audio(file: UploadFile = File(...)):
                         detail=f"Transcription failed: {str(e)}"
                     )
 
+            if not transcript or not transcript.text:
+                raise HTTPException(
+                    status_code=500,
+                    detail="No transcription returned from OpenAI"
+                )
+
             return {"transcription": transcript.text.strip()}
 
         finally:
             # Clean up temporary files
             try:
-                os.unlink(input_path)
-                os.unlink(output_path)
+                if os.path.exists(input_path):
+                    os.unlink(input_path)
+                if os.path.exists(output_path):
+                    os.unlink(output_path)
             except Exception as e:
                 logger.error(f"Error cleaning up temporary files: {str(e)}")
 
