@@ -163,3 +163,119 @@ async function playAudioResponse(audioUrl) {
     const hint = document.querySelector(".safari-hint");
     if (hint) hint.remove();
   }
+
+// Nag Digital Twin v2.0.0 - Audio Module
+
+// Function to unlock audio context
+async function unlockAudio() {
+  console.log("Attempting to unlock audio...");
+  try {
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    await audioContext.resume();
+    
+    // Create and play a silent buffer
+    const buffer = audioContext.createBuffer(1, 1, 22050);
+    const source = audioContext.createBufferSource();
+    source.buffer = buffer;
+    source.connect(audioContext.destination);
+    source.start(0);
+    
+    window.nagState.audioUnlocked = true;
+    console.log("Audio unlocked successfully");
+    return true;
+  } catch (error) {
+    console.error("Error unlocking audio:", error);
+    return false;
+  }
+}
+
+// Function to start listening
+async function startListening() {
+  console.log("Starting to listen...");
+  try {
+    if (!window.nagState.audioUnlocked) {
+      await unlockAudio();
+    }
+    
+    window.nagState.listening = true;
+    window.nagElements.orb.classList.remove("idle", "speaking", "thinking");
+    window.nagElements.orb.classList.add("listening");
+    
+    // Start recording if available
+    if (typeof startRecording === 'function') {
+      await startRecording();
+    }
+    
+    return true;
+  } catch (error) {
+    console.error("Error starting to listen:", error);
+    return false;
+  }
+}
+
+// Function to stop listening
+async function stopListening() {
+  console.log("Stopping listening...");
+  try {
+    window.nagState.listening = false;
+    window.nagElements.orb.classList.remove("listening", "speaking", "thinking");
+    window.nagElements.orb.classList.add("idle");
+    
+    // Stop recording if available
+    if (typeof stopRecording === 'function') {
+      await stopRecording();
+    }
+    
+    return true;
+  } catch (error) {
+    console.error("Error stopping listening:", error);
+    return false;
+  }
+}
+
+// Function to start recording
+async function startRecording() {
+  console.log("Starting recording...");
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    window.nagState.stream = stream;
+    
+    const mediaRecorder = new MediaRecorder(stream);
+    window.nagState.mediaRecorder = mediaRecorder;
+    window.nagState.audioChunks = [];
+    
+    mediaRecorder.ondataavailable = (event) => {
+      window.nagState.audioChunks.push(event.data);
+    };
+    
+    mediaRecorder.start();
+    console.log("Recording started");
+    return true;
+  } catch (error) {
+    console.error("Error starting recording:", error);
+    return false;
+  }
+}
+
+// Function to stop recording
+async function stopRecording() {
+  console.log("Stopping recording...");
+  try {
+    if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state === "recording") {
+      window.nagState.mediaRecorder.stop();
+      window.nagState.stream.getTracks().forEach(track => track.stop());
+    }
+    console.log("Recording stopped");
+    return true;
+  } catch (error) {
+    console.error("Error stopping recording:", error);
+    return false;
+  }
+}
+
+// Export functions
+window.unlockAudio = unlockAudio;
+window.startListening = startListening;
+window.stopListening = stopListening;
+window.startRecording = startRecording;
+window.stopRecording = stopRecording;

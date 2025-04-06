@@ -5,6 +5,11 @@
   <title>Nag - The Digital Twin</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <link rel="stylesheet" href="/static/styles.css" />
+  <script src="/static/nag-utils.js" defer></script>
+  <script src="/static/nag-audio.js" defer></script>
+  <script src="/static/nag-recording.js" defer></script>
+  <script src="/static/nag-transcription.js" defer></script>
+  <script src="/static/nag-ui.js" defer></script>
   <script src="/static/nag-core.js" defer></script>
   <style>
     body {
@@ -86,6 +91,51 @@
       background: radial-gradient(circle at 30% 30%, rgba(0, 150, 255, 0.8), rgba(0, 50, 150, 0.9));
       box-shadow: 0 0 60px rgba(0, 150, 255, 0.6), inset 0 0 20px rgba(255, 255, 255, 0.3);
       position: relative;
+      transition: all 0.3s ease;
+    }
+
+    #orb.idle {
+      background: radial-gradient(circle at 30% 30%, rgba(0, 150, 255, 0.8), rgba(0, 50, 150, 0.9));
+      box-shadow: 0 0 60px rgba(0, 150, 255, 0.6), inset 0 0 20px rgba(255, 255, 255, 0.3);
+    }
+
+    #orb.listening {
+      background: radial-gradient(circle at 30% 30%, rgba(0, 255, 0, 0.8), rgba(0, 150, 0, 0.9));
+      box-shadow: 0 0 60px rgba(0, 255, 0, 0.6), inset 0 0 20px rgba(255, 255, 255, 0.3);
+      animation: pulse 1.5s infinite;
+    }
+
+    #orb.speaking {
+      background: radial-gradient(circle at 30% 30%, rgba(255, 150, 0, 0.8), rgba(200, 100, 0, 0.9));
+      box-shadow: 0 0 60px rgba(255, 150, 0, 0.6), inset 0 0 20px rgba(255, 255, 255, 0.3);
+      animation: speak 0.5s infinite;
+    }
+
+    #orb.thinking {
+      background: radial-gradient(circle at 30% 30%, rgba(150, 0, 255, 0.8), rgba(100, 0, 200, 0.9));
+      box-shadow: 0 0 60px rgba(150, 0, 255, 0.6), inset 0 0 20px rgba(255, 255, 255, 0.3);
+      animation: think 2s infinite;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+      100% { transform: scale(1); }
+    }
+
+    @keyframes speak {
+      0% { transform: scale(1); }
+      25% { transform: scale(1.03); }
+      50% { transform: scale(1); }
+      75% { transform: scale(1.03); }
+      100% { transform: scale(1); }
+    }
+
+    @keyframes think {
+      0% { transform: rotate(0deg); }
+      25% { transform: rotate(5deg); }
+      75% { transform: rotate(-5deg); }
+      100% { transform: rotate(0deg); }
     }
 
     .messages-container {
@@ -132,6 +182,9 @@
       font-size: 14px;
       cursor: pointer;
       transition: background-color 0.3s;
+      display: block;
+      width: 100%;
+      text-align: center;
     }
 
     .btn.primary {
@@ -150,6 +203,11 @@
 
     .btn:active {
       opacity: 0.8;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
     }
 
     .debug-container {
