@@ -8,9 +8,19 @@ function setupUI() {
   
   // Setup all event listeners for UI controls
   function setupEventListeners() {
+    if (!window.nagElements) {
+      console.error('nagElements not initialized');
+      return;
+    }
+
     const toggleBtn = window.nagElements.toggleBtn;
     const pauseBtn = window.nagElements.pauseBtn;
     const modeToggle = window.nagElements.modeToggle;
+    
+    if (!toggleBtn || !pauseBtn || !modeToggle) {
+      console.error('Required UI elements not found');
+      return;
+    }
     
     // Toggle button (Start/Stop conversation)
     toggleBtn.addEventListener("click", async () => {
@@ -27,8 +37,10 @@ function setupUI() {
         toggleBtn.textContent = "Stop Conversation";
         window.nagState.interrupted = false;
         window.nagState.isPaused = false;
-        pauseBtn.textContent = "Pause";
-        pauseBtn.classList.remove("paused");
+        if (pauseBtn) {
+          pauseBtn.textContent = "Pause";
+          pauseBtn.classList.remove("paused");
+        }
         await startListening();
       }
     });
@@ -43,6 +55,7 @@ function setupUI() {
         pauseBtn.textContent = "Pause";
         pauseBtn.classList.remove("paused");
         logDebug("▶️ Conversation resumed");
+        addMessage("Conversation resumed", true);
         
         if (!window.nagState.isWalkieTalkieMode) {
           startListening();
@@ -53,6 +66,7 @@ function setupUI() {
         pauseBtn.textContent = "Resume";
         pauseBtn.classList.add("paused");
         logDebug("⏸️ Conversation paused");
+        addMessage("Conversation paused", true);
         
         if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state === "recording") {
           stopRecording();
@@ -68,6 +82,7 @@ function setupUI() {
         modeToggle.textContent = "Switch to continuous mode";
         updateModeHint("Click & hold the orb to use walkie-talkie mode");
         logDebug("🎤 Switched to walkie-talkie mode");
+        addMessage("Switched to walkie-talkie mode", true);
         
         if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state === "recording") {
           stopRecording();
@@ -76,6 +91,7 @@ function setupUI() {
         modeToggle.textContent = "Switch to walkie-talkie mode";
         updateModeHint("Nag will listen continuously for your voice");
         logDebug("🎤 Switched to continuous mode");
+        addMessage("Switched to continuous mode", true);
         
         if (window.nagState.listening && !window.nagState.isPaused) {
           startListening();
@@ -114,4 +130,16 @@ function setupUI() {
         }
       }
     });
+  }
+
+  // Function to add a message to the chat
+  function addMessage(text, isUser = false) {
+    if (!window.nagElements.messagesContainer) return;
+    
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message ${isUser ? 'user' : 'ai'}`;
+    messageDiv.textContent = text;
+    
+    window.nagElements.messagesContainer.appendChild(messageDiv);
+    window.nagElements.messagesContainer.scrollTop = window.nagElements.messagesContainer.scrollHeight;
   }

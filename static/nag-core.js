@@ -1,22 +1,24 @@
 // Nag Digital Twin v3.5.0-dev - Core Module
 console.log("Nag Digital Twin v3.5.0-dev loading...");
 
-// Logging configuration
-const LOG_CONFIG = {
-  showAllLogs: false,
-  keyMessages: [
-    'listening',
-    'thinking',
-    'speaking',
-    'transcribed',
-    'tts',
-    'question:',
-    'transcription:',
-    'error:',
-    'connected',
-    'disconnected'
-  ]
-};
+// Initialize logging configuration
+if (typeof LOG_CONFIG === 'undefined') {
+  window.LOG_CONFIG = {
+    showAllLogs: false,
+    keyMessages: [
+      "Nag Digital Twin",
+      "Connected to server",
+      "Disconnected from server",
+      "Error",
+      "Warning",
+      "Failed",
+      "Exception",
+      "Timeout",
+      "Retry",
+      "Reconnect"
+    ]
+  };
+}
 
 // Function to check if a message is a key message
 function isKeyMessage(message) {
@@ -116,7 +118,9 @@ window.nagElements = {
   modeToggle: null,
   modeHint: null,
   debugBox: null,
-  statusEl: null
+  statusEl: null,
+  messagesContainer: null,
+  debugToggle: null
 };
 
 // Helper to load scripts sequentially with error handling
@@ -233,8 +237,12 @@ function initializeLogging() {
   if (showAllLogsCheckbox) {
     showAllLogsCheckbox.addEventListener('change', function() {
       LOG_CONFIG.showAllLogs = this.checked;
+      // Update debug container visibility
+      if (window.nagElements.debugBox) {
+        window.nagElements.debugBox.classList.toggle('visible', this.checked);
+      }
       // Refresh the log display
-      const debugContent = window.nagElements.debugBox.querySelector('.debug-content');
+      const debugContent = window.nagElements.debugBox?.querySelector('.debug-content');
       if (debugContent) {
         const entries = Array.from(debugContent.children);
         debugContent.innerHTML = '';
@@ -260,20 +268,31 @@ function initializeApp() {
   window.nagElements.modeHint = document.getElementById("mode-hint");
   window.nagElements.debugBox = document.getElementById("debug");
   window.nagElements.statusEl = document.getElementById("status");
+  window.nagElements.messagesContainer = document.getElementById("messages");
+  window.nagElements.debugToggle = document.getElementById("showAllLogs");
   
   // Initialize mode hint with default text
   if (window.nagElements.modeHint) {
     window.nagElements.modeHint.textContent = "Click & hold the orb to use walkie-talkie mode";
   }
   
+  // Initialize debug container visibility
+  if (window.nagElements.debugBox && window.nagElements.debugToggle) {
+    window.nagElements.debugBox.classList.toggle('visible', window.nagElements.debugToggle.checked);
+  }
+  
   // Initialize logging
   initializeLogging();
   
-  // Initialize modules
-  if (typeof setupUI === 'function') setupUI();
-  if (typeof setupWalkieTalkieMode === 'function') setupWalkieTalkieMode();
-  if (typeof setupEventListeners === 'function') setupEventListeners();
-  if (typeof setupInterruptionHandling === 'function') setupInterruptionHandling();
+  // Initialize modules only if elements exist
+  if (window.nagElements.toggleBtn && window.nagElements.pauseBtn && window.nagElements.modeToggle) {
+    if (typeof setupUI === 'function') setupUI();
+    if (typeof setupWalkieTalkieMode === 'function') setupWalkieTalkieMode();
+    if (typeof setupEventListeners === 'function') setupEventListeners();
+    if (typeof setupInterruptionHandling === 'function') setupInterruptionHandling();
+  } else {
+    logMessage("Warning: Some UI elements not found. Some features may be disabled.", "warning");
+  }
   
   // Log browser capabilities for debugging
   if (typeof logBrowserInfo === 'function') logBrowserInfo();
