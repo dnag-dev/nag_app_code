@@ -100,9 +100,9 @@ function updateStatus(message, type = 'info') {
 }
 
 // WebSocket connection with fallback
-let ws = null;
-let reconnectAttempts = 0;
-const MAX_RECONNECT_ATTEMPTS = 3;
+let nagWebSocket = null;
+let nagReconnectAttempts = 0;
+const NAG_MAX_RECONNECT_ATTEMPTS = 3;
 
 function connectWebSocket() {
   // If we already attempted and failed, don't try again
@@ -117,25 +117,25 @@ function connectWebSocket() {
     const wsUrl = `${protocol}//${window.location.host}/ws`;
     console.log(`Attempting WebSocket connection to: ${wsUrl}`);
     
-    ws = new WebSocket(wsUrl);
+    nagWebSocket = new WebSocket(wsUrl);
     
-    ws.onopen = () => {
+    nagWebSocket.onopen = () => {
       console.log('WebSocket connection established');
       window.nagState.isConnected = true;
-      reconnectAttempts = 0;
+      nagReconnectAttempts = 0;
       
       // Update UI to show connected status
       logDebug('✅ Connected to server successfully');
       updateStatus('Connected to server', 'success');
     };
     
-    ws.onclose = () => {
+    nagWebSocket.onclose = () => {
       window.nagState.isConnected = false;
       console.log('WebSocket closed');
       
-      if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-        reconnectAttempts++;
-        logDebug(`🔄 Connection lost. Retrying (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})...`);
+      if (nagReconnectAttempts < NAG_MAX_RECONNECT_ATTEMPTS) {
+        nagReconnectAttempts++;
+        logDebug(`🔄 Connection lost. Retrying (${nagReconnectAttempts}/${NAG_MAX_RECONNECT_ATTEMPTS})...`);
         setTimeout(connectWebSocket, 3000);
       } else {
         logDebug('❌ Failed to establish WebSocket connection. Continuing in offline mode.');
@@ -143,13 +143,13 @@ function connectWebSocket() {
       }
     };
     
-    ws.onerror = (error) => {
+    nagWebSocket.onerror = (error) => {
       console.error('WebSocket error:', error);
       logDebug('⚠️ WebSocket connection error. Continuing in offline mode.');
       updateStatus('Operating in offline mode', 'info');
     };
     
-    ws.onmessage = (event) => {
+    nagWebSocket.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
         if (data.type === 'status') {
