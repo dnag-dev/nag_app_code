@@ -326,3 +326,7 @@ async def generate_tts(text: str) -> str:
         logger.error(f"Error type: {type(e)}")
         logger.error(f"Error details: {str(e)}")
         return None
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)
