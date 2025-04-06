@@ -234,104 +234,138 @@ async def chat(request: Request):
 
 @app.post("/transcribe")
 async def transcribe_audio(file: UploadFile = File(...)):
-    temp_file_path = None
     try:
-        # Log the incoming file details
-        logger.info(f"Received file: {file.filename} ({file.content_type})")
+        # Log upload details
+        logger.info("[transcribe] Upload started", extra={
+            "filename": file.filename,
+            "content_type": file.content_type,
+            "headers": dict(file.headers)
+        })
         
         # Validate content type with fallback for Safari
         if not file.content_type or not (file.content_type.startswith('audio/') or file.content_type.startswith('video/')):
-            logger.warning(f"Fallback MIME type logic triggered. Original type: {file.content_type}")
-            file.content_type = "audio/mp4"  # Default for Safari
-            logger.info(f"Using fallback MIME type: {file.content_type}")
+            logger.warning("[transcribe] Fallback MIME type logic triggered", extra={
+                "original_type": file.content_type,
+                "fallback_type": "audio/mp4"
+            })
+            file.content_type = "audio/mp4"
         
         # Read and validate file content
         content = await file.read()
         file_size = len(content)
-        logger.info(f"Received audio file size: {file_size} bytes")
+        logger.info("[transcribe] File size validated", extra={
+            "size": file_size
+        })
         
         if file_size < 1000:
             error_msg = f"File too small: {file_size} bytes"
-            logger.error(error_msg)
+            logger.error("[transcribe] File validation failed", extra={
+                "error": error_msg,
+                "size": file_size
+            })
             return JSONResponse(
                 status_code=400,
                 content={"error": "File too small", "details": error_msg}
             )
         
+        # Get file extension from filename or default to .mp4
+        file_extension = os.path.splitext(file.filename)[1] or ".mp4"
+        temp_file_path = os.path.join(tempfile.gettempdir(), f"temp_{uuid.uuid4()}{file_extension}")
+        
         # Save the uploaded file
-        file_ext = os.path.splitext(file.filename)[1] if file.filename and '.' in file.filename else ".mp4"
-        temp_file_path = os.path.join(tempfile.gettempdir(), f"input_{uuid.uuid4()}{file_ext}")
         with open(temp_file_path, "wb") as f:
             f.write(content)
-        logger.info(f"Saved input file: {temp_file_path} ({os.path.getsize(temp_file_path)} bytes)")
+            logger.info("[transcribe] File saved", extra={
+                "path": temp_file_path,
+                "size": os.path.getsize(temp_file_path)
+            })
         
-        # Directly use the file with OpenAI Whisper API
-        logger.info(f"Sending audio directly to Whisper API")
-        
-        # Create a client with longer timeout for transcription
-        whisper_client = AsyncOpenAI(
-            api_key=api_key, 
-            http_client=httpx.AsyncClient(timeout=60.0, verify=True)  # Longer timeout
+        # Create a separate client with longer timeout for Whisper
+        whisper_client = httpx.AsyncClient(
+            base_url="https://api.openai.com/v1",
+            headers={"Authorization": f"Bearer {os.getenv('OPENAI_API_KEY')}"},
+            timeout=60.0  # 60 second timeout for Whisper
         )
         
         try:
+            # Send to OpenAI Whisper
+            logger.info("[whisper] Starting transcription", extra={
+                "path": temp_file_path,
+                "size": os.path.getsize(temp_file_path)
+            })
+            
             with open(temp_file_path, "rb") as audio_file:
-                # Log API details for debugging
-                logger.info(f"OpenAI API key (first/last 3 chars): {api_key[:3]}...{api_key[-3:]}")
-                logger.info(f"File size being sent to API: {os.path.getsize(temp_file_path)} bytes")
-                
-                # Send to OpenAI Whisper API
                 transcript = await whisper_client.audio.transcriptions.create(
                     model="whisper-1",
                     file=audio_file,
                     language="en"
                 )
                 
-                # Log successful response
-                logger.info(f"Transcription successful. Text length: {len(transcript.text)}")
-                logger.info(f"Transcription text: {transcript.text[:100]}...")
+                logger.info("[whisper] Transcription complete", extra={
+                    "text": transcript.text[:100] + "..." if len(transcript.text) > 100 else transcript.text
+                })
                 
-                return {"transcription": transcript.text.strip()}
+                # Return both keys to support frontend expectations
+                return {
+                    "transcription": transcript.text.strip(),
+                    "transcript": transcript.text.strip()
+                }
                 
         except httpx.TimeoutException:
-            error_msg = "Transcription request timed out"
-            logger.error(error_msg)
+            error_msg = "Transcription timed out"
+            logger.error("[whisper] Transcription timeout", extra={
+                "error": error_msg
+            })
             return JSONResponse(
                 status_code=504,
                 content={"error": "Transcription timed out", "details": error_msg}
             )
         except httpx.HTTPStatusError as http_err:
-            # This captures HTTP errors with the full response
-            error_msg = f"HTTP error from OpenAI: {http_err.response.status_code}"
-            logger.error(f"{error_msg} - Response: {http_err.response.text}")
+            error_msg = f"HTTP error from OpenAI: {http_err.response.status_code} - {http_err.response.text}"
+            logger.error("[whisper] HTTP error", extra={
+                "error": error_msg,
+                "status_code": http_err.response.status_code,
+                "response": http_err.response.text
+            })
             return JSONResponse(
                 status_code=500,
                 content={"error": "OpenAI API error", "details": error_msg}
             )
         except Exception as e:
-            # Log the full exception details
-            logger.error("Error during Whisper API call:")
-            logger.error(traceback.format_exc())
+            logger.error("[whisper] Transcription failed", extra={
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            })
             return JSONResponse(
                 status_code=500,
                 content={"error": "Transcription failed", "details": str(e)}
             )
-        
+        finally:
+            await whisper_client.aclose()
+            
     except Exception as e:
-        logger.error("Unhandled error in transcription endpoint:")
-        logger.error(traceback.format_exc())
+        logger.error("[transcribe] Unhandled error", extra={
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        })
         return JSONResponse(
             status_code=500,
             content={"error": "Transcription failed", "details": str(e)}
         )
     finally:
-        # Clean up temporary files
+        # Clean up temporary file
         try:
-            if temp_file_path and os.path.exists(temp_file_path):
+            if os.path.exists(temp_file_path):
                 os.remove(temp_file_path)
-                logger.info(f"Cleaned up file: {temp_file_path}")
+                logger.info("[cleanup] Removed temporary file", extra={
+                    "path": temp_file_path
+                })
         except Exception as e:
-            logger.error(f"Error cleaning up file {temp_file_path}: {str(e)}")
+            logger.error("[cleanup] Error removing file", extra={
+                "path": temp_file_path,
+                "error": str(e)
+            })
+            # Don't return error for cleanup failures, just log them
 
 @app.get("/{file_path:path}")
 async def serve_static(file_path: str):
