@@ -195,34 +195,42 @@ async def chat(request: Request):
                 if tts_url:
                     return {
                         "message": assistant_message,
-                        "audio_url": tts_url,  # This is what the frontend expects
-                        "tts_url": tts_url     # For backward compatibility
+                        "tts_url": tts_url,
+                        "audio_url": tts_url  # For compatibility
                     }
                 else:
                     logger.error("[chat] TTS error")
                     return {
                         "message": assistant_message,
                         "error": "TTS generation failed",
-                        "audio_url": None      # Explicitly add this for frontend
+                        "audio_url": None  # Explicitly add this for frontend
                     }
             except Exception as e:
                 logger.error(f"[chat] TTS error: {str(e)}")
                 return {
                     "message": assistant_message,
                     "error": "TTS generation failed",
-                    "audio_url": None          # Explicitly add this for frontend
+                    "audio_url": None  # Explicitly add this for frontend
                 }
         except Exception as e:
             logger.error(f"[chat] OpenAI API error: {str(e)}")
             return JSONResponse(
                 status_code=500,
-                content={"error": "Chat failed", "details": str(e)}
+                content={
+                    "error": "Chat failed",
+                    "details": str(e),
+                    "audio_url": None
+                }
             )
     except Exception as e:
         logger.error(f"[chat] Unhandled error: {str(e)}")
         return JSONResponse(
             status_code=500,
-            content={"error": "Chat failed", "details": str(e)}
+            content={
+                "error": "Chat failed",
+                "details": str(e),
+                "audio_url": None
+            }
         )
 
 @app.post("/transcribe")
@@ -360,19 +368,28 @@ async def generate_tts(text: str) -> str:
         voice_id = os.getenv("DINAKARA_VOICE_ID", "q8zvC54Cb4AB0IZViZqT")
         logger.info(f"Generating TTS with voice ID: {voice_id}")
         
-        audio = tts_client.generate(
+        # Get the audio as a generator
+        audio_generator = tts_client.generate(
             text=text,
             voice=voice_id,
             model="eleven_monolingual_v1",
             stream=False
         )
         
+        # Convert generator to bytes
+        if hasattr(audio_generator, '__iter__'):
+            # It's a generator, convert to bytes
+            audio_bytes = b''.join(chunk for chunk in audio_generator)
+        else:
+            # It's already bytes
+            audio_bytes = audio_generator
+        
         filename = f"audio_{uuid.uuid4()}.mp3"
         filepath = os.path.join("static", "audio", filename)
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         
         with open(filepath, "wb") as f:
-            f.write(audio)
+            f.write(audio_bytes)
         
         audio_url = f"/static/audio/{filename}"
         logger.info(f"TTS audio saved at: {audio_url}")
