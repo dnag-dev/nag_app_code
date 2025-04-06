@@ -1,5 +1,51 @@
-// Nag Digital Twin v3.5.0 - Core Module
-console.log("Nag Digital Twin v3.5.0 loading...");
+// Nag Digital Twin v3.5.0-dev - Core Module
+console.log("Nag Digital Twin v3.5.0-dev loading...");
+
+// Logging configuration
+const LOG_CONFIG = {
+  showAllLogs: false,
+  keyMessages: [
+    'listening',
+    'thinking',
+    'speaking',
+    'transcribed',
+    'tts',
+    'question:',
+    'transcription:',
+    'error:',
+    'connected',
+    'disconnected'
+  ]
+};
+
+// Function to check if a message is a key message
+function isKeyMessage(message) {
+  return LOG_CONFIG.keyMessages.some(keyword => 
+    message.toLowerCase().includes(keyword.toLowerCase())
+  );
+}
+
+// Function to log messages with different levels
+function logMessage(message, level = 'info') {
+  if (!window.nagElements || !window.nagElements.debugBox) return;
+  
+  const debugContent = window.nagElements.debugBox.querySelector('.debug-content');
+  if (!debugContent) return;
+  
+  // Check if we should show this message
+  if (!LOG_CONFIG.showAllLogs && !isKeyMessage(message)) return;
+  
+  // Create log entry
+  const entry = document.createElement('div');
+  entry.className = `log-entry ${level}`;
+  
+  // Add timestamp
+  const timestamp = new Date().toLocaleTimeString();
+  entry.textContent = `[${timestamp}] [${level.toUpperCase()}] ${message}`;
+  
+  // Add to the beginning of the container
+  debugContent.insertBefore(entry, debugContent.firstChild);
+}
 
 // Add global error handler
 window.addEventListener('error', function(event) {
@@ -97,6 +143,8 @@ function updateStatus(message, type = 'info') {
     status.textContent = message;
     status.className = `status ${type}`;
   }
+  // Also log status changes
+  logMessage(message, type);
 }
 
 // WebSocket connection with fallback
@@ -166,6 +214,40 @@ function connectWebSocket() {
   }
 }
 
+// Function to log debug messages
+function logDebug(message) {
+  if (window.nagElements && window.nagElements.debugBox) {
+    const p = document.createElement("p");
+    p.textContent = message;
+    // Add timestamp
+    const timestamp = new Date().toLocaleTimeString();
+    p.textContent = `[${timestamp}] ${message}`;
+    // Add to the beginning of the container
+    window.nagElements.debugBox.querySelector('.debug-content').insertBefore(p, window.nagElements.debugBox.querySelector('.debug-content').firstChild);
+  }
+}
+
+// Initialize logging toggle
+function initializeLogging() {
+  const showAllLogsCheckbox = document.getElementById('showAllLogs');
+  if (showAllLogsCheckbox) {
+    showAllLogsCheckbox.addEventListener('change', function() {
+      LOG_CONFIG.showAllLogs = this.checked;
+      // Refresh the log display
+      const debugContent = window.nagElements.debugBox.querySelector('.debug-content');
+      if (debugContent) {
+        const entries = Array.from(debugContent.children);
+        debugContent.innerHTML = '';
+        entries.forEach(entry => {
+          const message = entry.textContent.split('] ').slice(2).join('] ');
+          const level = entry.className.split(' ')[1];
+          logMessage(message, level);
+        });
+      }
+    });
+  }
+}
+
 // Main initialization function (called after all scripts load)
 function initializeApp() {
   // Cache DOM elements
@@ -179,6 +261,9 @@ function initializeApp() {
   window.nagElements.debugBox = document.getElementById("debug");
   window.nagElements.statusEl = document.getElementById("status");
   
+  // Initialize logging
+  initializeLogging();
+  
   // Initialize modules
   if (typeof setupUI === 'function') setupUI();
   if (typeof setupWalkieTalkieMode === 'function') setupWalkieTalkieMode();
@@ -191,7 +276,7 @@ function initializeApp() {
   // Try to connect WebSocket, but continue if it fails
   connectWebSocket();
   
-  console.log("Nag Digital Twin v2.0.0 initialized and ready");
+  logMessage("Nag Digital Twin v3.5.0-dev initialized and ready", "success");
 }
 
 // Main entry point - load modules in sequence
