@@ -195,20 +195,22 @@ async def chat(request: Request):
                 if tts_url:
                     return {
                         "message": assistant_message,
-                        "tts_url": tts_url,
-                        "audio_url": tts_url  # For compatibility
+                        "audio_url": tts_url,  # This is what the frontend expects
+                        "tts_url": tts_url     # For backward compatibility
                     }
                 else:
                     logger.error("[chat] TTS error")
                     return {
                         "message": assistant_message,
-                        "error": "TTS generation failed"
+                        "error": "TTS generation failed",
+                        "audio_url": None      # Explicitly add this for frontend
                     }
             except Exception as e:
                 logger.error(f"[chat] TTS error: {str(e)}")
                 return {
                     "message": assistant_message,
-                    "error": "TTS generation failed"
+                    "error": "TTS generation failed",
+                    "audio_url": None          # Explicitly add this for frontend
                 }
         except Exception as e:
             logger.error(f"[chat] OpenAI API error: {str(e)}")
