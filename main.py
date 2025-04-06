@@ -160,7 +160,6 @@ async def transcribe_audio(file: UploadFile = File(...)):
 
         content = await file.read()
         if len(content) < 1000:
-            # Return 400 status for short audio instead of 200 with undefined
             raise HTTPException(status_code=400, detail="Audio too short. Please speak for at least 1 second.")
 
         with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1]) as tmp:
@@ -169,12 +168,29 @@ async def transcribe_audio(file: UploadFile = File(...)):
 
         try:
             with open(tmp_path, "rb") as audio_file:
-                transcript = await client.audio.transcribe(model="whisper-1", file=audio_file, language="en")
+                try:
+                    transcript = await client.audio.transcribe(
+                        model="whisper-1", 
+                        file=audio_file, 
+                        language="en",
+                        response_format="text"
+                    )
+                except httpx.TimeoutException:
+                    raise HTTPException(
+                        status_code=504,
+                        detail="Transcription request timed out. Please try again."
+                    )
+                except Exception as e:
+                    logger.error(f"OpenAI API error: {str(e)}")
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"OpenAI API error: {str(e)}"
+                    )
             
-            if not transcript or not transcript.text:
+            if not transcript:
                 raise HTTPException(status_code=400, detail="No speech detected in audio")
                 
-            return {"transcription": transcript.text.strip()}
+            return {"transcription": transcript.strip()}
             
         finally:
             # Always clean up the temp file
