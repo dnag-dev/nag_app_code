@@ -245,56 +245,34 @@ async function sendToChat(message) {
         "Accept": "application/json"
       },
       body: JSON.stringify({ 
-        text: message,
+        message: message,
         mode: "voice",
         request_id: Date.now().toString()
       })
     });
-    window.nagState.isUploading = false;
-
-    if (!res.ok) {
-      const errorText = await res.text();
-      logDebug(`❌ Server error: ${res.status} - ${errorText}`);
-      
-      if (res.status === 422) {
-        logDebug("⚠️ Invalid message format. Please try speaking again.");
-        handleChatError();
-        return;
-      }
-      
-      throw new Error(`Server error: ${res.status} ${res.statusText}`);
-    }
-
-    const rawText = await res.text();
     
-    let data;
-    try {
-      data = JSON.parse(rawText);
-    } catch (jsonErr) {
-      logDebug("❌ Chat response JSON parse failed: " + jsonErr.message);
-      logDebug("Raw response: " + rawText.substring(0, 150) + "...");
-      handleChatError();
-      return;
+    if (!res.ok) {
+      const errorData = await res.json();
+      throw new Error(errorData.detail || "Failed to get response from Nag");
     }
-
-    logDebug("🧠 Nag: " + data.response);
-    orb.classList.remove("thinking");
-
-    if (data.audio) {
-      // Create a blob URL from the base64 audio data
-      const audioBlob = base64ToBlob(data.audio, 'audio/mpeg');
-      const audioUrl = URL.createObjectURL(audioBlob);
-      await playAudioResponse(audioUrl);
-      // Clean up the blob URL after playing
-      URL.revokeObjectURL(audioUrl);
+    
+    const data = await res.json();
+    logDebug("📝 Chat response received");
+    
+    // Process the response
+    if (data.response) {
+      await playResponse(data.response);
     } else {
-      logDebug("⚠️ No audio returned.");
-      handleChatError();
+      throw new Error("No response from Nag");
     }
   } catch (e) {
-    window.nagState.isUploading = false;
     logDebug("❌ Chat error: " + e.message);
-    handleChatError();
+    handleChatError(e.message);
+  } finally {
+    window.nagState.isUploading = false;
+    if (!window.nagState.isWalkieTalkieMode && !window.nagState.isPaused) {
+      startListening();
+    }
   }
 }
 
@@ -309,7 +287,7 @@ function base64ToBlob(base64, type) {
 }
 
 // Handle error when chat fails
-function handleChatError() {
+function handleChatError(message) {
   const orb = window.nagElements.orb;
   
   orb.classList.remove("thinking");
