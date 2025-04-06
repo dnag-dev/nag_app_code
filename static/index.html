@@ -10,52 +10,69 @@
   <script src="/static/nag-core.js"></script>
   <style>
     .debug-container {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: rgba(0, 0, 0, 0.8);
+      color: #fff;
+      padding: 10px;
+      font-family: monospace;
+      font-size: 12px;
       max-height: 200px;
       overflow-y: auto;
+      z-index: 1000;
       display: flex;
-      flex-direction: column-reverse;
+      flex-direction: column;
     }
-    .debug-content {
-      display: flex;
-      flex-direction: column-reverse;
-    }
+
     .debug-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 8px;
+      padding: 5px 10px;
+      background: rgba(0, 0, 0, 0.5);
+      border-radius: 5px;
+      margin-bottom: 5px;
     }
-    .debug-toggle {
+
+    .debug-content {
+      flex: 1;
+      overflow-y: auto;
       display: flex;
-      align-items: center;
-      gap: 8px;
+      flex-direction: column-reverse;
+      scroll-behavior: smooth;
     }
-    .debug-toggle label {
-      font-size: 0.9em;
-      color: #666;
-    }
+
     .log-entry {
-      margin: 4px 0;
-      padding: 4px;
+      padding: 5px 10px;
+      margin: 2px 0;
+      border-radius: 3px;
+      word-break: break-word;
+    }
+
+    .log-entry.info { background: rgba(0, 150, 255, 0.2); }
+    .log-entry.debug { background: rgba(100, 100, 100, 0.2); }
+    .log-entry.error { background: rgba(255, 0, 0, 0.2); }
+    .log-entry.success { background: rgba(0, 255, 0, 0.2); }
+    .log-entry.warning { background: rgba(255, 165, 0, 0.2); }
+
+    /* Ensure scrollbar is always visible */
+    .debug-container::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    .debug-container::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.3);
+    }
+
+    .debug-container::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.3);
       border-radius: 4px;
     }
-    .log-entry.info {
-      background-color: #f0f0f0;
-    }
-    .log-entry.debug {
-      background-color: #e8f4f8;
-    }
-    .log-entry.error {
-      background-color: #ffebee;
-      color: #c62828;
-    }
-    .log-entry.success {
-      background-color: #e8f5e9;
-      color: #2e7d32;
-    }
-    .log-entry.warning {
-      background-color: #fff3e0;
-      color: #ef6c00;
+
+    .debug-container::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.5);
     }
 
     /* Jarvis-like Orb Styles */
@@ -287,15 +304,15 @@
 
     <footer>
       <div id="status" class="status">Ready</div>
-      <div id="debug" class="debug-container">
+      <div class="debug-container">
         <div class="debug-header">
-          <h3>Debug Log</h3>
-          <div class="debug-toggle">
-            <input type="checkbox" id="showAllLogs" />
-            <label for="showAllLogs">Show All Logs</label>
-          </div>
+          <span>Debug Log</span>
+          <label class="debug-toggle">
+            <input type="checkbox" id="showAllLogs">
+            Show All Logs
+          </label>
         </div>
-        <div class="debug-content"></div>
+        <div class="debug-content" id="debug"></div>
       </div>
       <div class="version">v3.5.0</div>
     </footer>
@@ -356,6 +373,39 @@
         };
       });
     });
+
+    // Function to scroll to the top of debug content
+    function scrollToLatest() {
+      const debugContent = document.querySelector('.debug-content');
+      if (debugContent) {
+        debugContent.scrollTop = 0;
+      }
+    }
+
+    // Update the logMessage function in nag-core.js
+    window.logMessage = function(message, level = 'info') {
+      if (!window.nagElements || !window.nagElements.debugBox) return;
+      
+      const debugContent = window.nagElements.debugBox.querySelector('.debug-content');
+      if (!debugContent) return;
+      
+      // Check if we should show this message
+      if (!LOG_CONFIG.showAllLogs && !isKeyMessage(message)) return;
+      
+      // Create log entry
+      const entry = document.createElement('div');
+      entry.className = `log-entry ${level}`;
+      
+      // Add timestamp
+      const timestamp = new Date().toLocaleTimeString();
+      entry.textContent = `[${timestamp}] [${level.toUpperCase()}] ${message}`;
+      
+      // Add to the beginning of the container
+      debugContent.insertBefore(entry, debugContent.firstChild);
+      
+      // Scroll to the latest message
+      scrollToLatest();
+    };
   </script>
 </body>
 </html>
