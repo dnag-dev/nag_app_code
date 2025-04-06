@@ -193,6 +193,12 @@ async def transcribe_audio(file: UploadFile = File(...)):
             logger.info(f"Converting audio to WAV: {output_path}")
             
             try:
+                # Log ffmpeg command for debugging
+                ffmpeg_cmd = (
+                    f"ffmpeg -i {input_path} -f wav -acodec pcm_s16le -ac 1 -ar 16000 {output_path}"
+                )
+                logger.info(f"Running ffmpeg command: {ffmpeg_cmd}")
+                
                 ffmpeg.input(input_path).output(
                     output_path,
                     format='wav',
@@ -200,9 +206,12 @@ async def transcribe_audio(file: UploadFile = File(...)):
                     ac=1,
                     ar='16000'
                 ).run(capture_stdout=True, capture_stderr=True)
+                
+                logger.info("FFmpeg conversion completed successfully")
             except ffmpeg.Error as e:
                 error_msg = e.stderr.decode()
                 logger.error(f"FFmpeg conversion error: {error_msg}")
+                logger.error(f"FFmpeg stdout: {e.stdout.decode() if e.stdout else 'None'}")
                 raise HTTPException(
                     status_code=500,
                     detail=f"Failed to convert audio format: {error_msg}"
@@ -225,6 +234,9 @@ async def transcribe_audio(file: UploadFile = File(...)):
             logger.info(f"Sending audio file to OpenAI Whisper: {output_path} | size: {os.path.getsize(output_path)}")
             with open(output_path, "rb") as audio_file:
                 try:
+                    # Log OpenAI client configuration
+                    logger.info(f"OpenAI client config: base_url={client.base_url}, api_key_present={bool(client.api_key)}")
+                    
                     transcript = await client.audio.transcriptions.create(
                         model="whisper-1",
                         file=audio_file,
@@ -239,6 +251,8 @@ async def transcribe_audio(file: UploadFile = File(...)):
                     )
                 except Exception as e:
                     logger.error(f"OpenAI transcription error: {str(e)}")
+                    logger.error(f"Error type: {type(e).__name__}")
+                    logger.error(f"Error args: {e.args}")
                     raise HTTPException(
                         status_code=500,
                         detail=f"Transcription failed: {str(e)}"
@@ -266,6 +280,8 @@ async def transcribe_audio(file: UploadFile = File(...)):
         raise
     except Exception as e:
         logger.error(f"Unexpected error in transcription: {str(e)}")
+        logger.error(f"Error type: {type(e).__name__}")
+        logger.error(f"Error args: {e.args}")
         raise HTTPException(
             status_code=500,
             detail=f"An unexpected error occurred: {str(e)}"
