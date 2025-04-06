@@ -171,10 +171,13 @@ async def transcribe_audio(file: UploadFile = File(...)):
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
             tmp.write(content)
             input_path = tmp.name
+            logger.info(f"Saved original audio to: {input_path}, size: {len(content)} bytes")
 
         try:
             # Convert to WAV
             output_path = input_path.replace(".mp4", ".wav")
+            logger.info(f"Converting audio to WAV: {output_path}")
+            
             try:
                 ffmpeg.input(input_path).output(output_path).run(capture_stdout=True, capture_stderr=True)
             except ffmpeg.Error as e:
@@ -184,7 +187,18 @@ async def transcribe_audio(file: UploadFile = File(...)):
                     detail="Failed to convert audio format. Please try again."
                 )
 
+            # Validate converted file
+            if not os.path.exists(output_path):
+                raise HTTPException(status_code=500, detail="FFmpeg failed: output file not found")
+            
+            output_size = os.path.getsize(output_path)
+            logger.info(f"Converted WAV file size: {output_size} bytes")
+            
+            if output_size < 1000:
+                raise HTTPException(status_code=500, detail="FFmpeg failed: output audio too small")
+
             # Transcribe the converted WAV file
+            logger.info(f"Sending audio to Whisper: {output_path}, size: {output_size} bytes")
             with open(output_path, "rb") as audio_file:
                 try:
                     transcript = await client.audio.transcribe(
@@ -199,32 +213,30 @@ async def transcribe_audio(file: UploadFile = File(...)):
                         detail="Transcription request timed out. Please try again."
                     )
                 except Exception as e:
-                    logger.error(f"OpenAI API error: {str(e)}")
+                    logger.error(f"OpenAI transcription error: {str(e)}")
                     raise HTTPException(
                         status_code=500,
-                        detail=f"OpenAI API error: {str(e)}"
+                        detail=f"Transcription failed: {str(e)}"
                     )
 
-            if not transcript:
-                raise HTTPException(status_code=400, detail="No speech detected in audio")
-
-            return {"transcription": transcript.strip()}
+            return {"transcript": transcript}
 
         finally:
-            # Clean up temp files
+            # Clean up temporary files
             try:
                 os.unlink(input_path)
-                if os.path.exists(output_path):
-                    os.unlink(output_path)
+                os.unlink(output_path)
             except Exception as e:
-                logger.warning(f"Error cleaning up temp files: {str(e)}")
+                logger.error(f"Error cleaning up temporary files: {str(e)}")
 
-    except HTTPException as e:
-        logger.error(f"Transcription validation error: {str(e)}")
-        raise e
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Transcription error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
+        logger.error(f"Unexpected error in transcription: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"An unexpected error occurred: {str(e)}"
+        )
 
 @app.get("/{file_path:path}")
 async def serve_static(file_path: str):
