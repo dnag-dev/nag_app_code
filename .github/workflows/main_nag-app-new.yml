@@ -15,13 +15,26 @@ jobs:
 
     - name: 🧹 Clean workspace
       run: |
-        rm -rf deploy.zip
+        rm -f deploy.zip
         find . -type d -name "__pycache__" -exec rm -rf {} +
         find . -type f -name "*.pyc" -delete
 
+    - name: 📦 Pin ElevenLabs + OpenAI for faster pip resolution
+      run: |
+        sed -i 's/elevenlabs>=.*/elevenlabs==1.5.0/' requirements.txt
+        sed -i 's/openai>=.*/openai==1.70.0/' requirements.txt
+
+    - name: 📝 Confirm .deployment config for Oryx build
+      run: |
+        echo "[config]" > .deployment
+        echo "SCM_DO_BUILD_DURING_DEPLOYMENT = true" >> .deployment
+        echo "SCM_REBUILD_ALL_DEPENDENCIES = true" >> .deployment
+
     - name: 📁 Create deploy.zip
       run: |
-        zip -r deploy.zip . -x "*.git*" "*.DS_Store*" "__pycache__/*" "antenv/*" "node_modules/*" "deploy.sh" "startup.sh" "web.config"
+        zip -r deploy.zip . \
+          -x "*.git*" "*.DS_Store*" "__pycache__/*" "antenv/*" "node_modules/*" \
+          "deploy.sh" "startup.sh" "web.config"
 
     - name: 🚀 Deploy to Azure Web App
       uses: azure/webapps-deploy@v2
