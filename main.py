@@ -355,17 +355,26 @@ async def get_gpt_response(prompt: str) -> str:
 
 async def generate_tts(text: str) -> str:
     try:
+        voice_id = os.getenv("DINAKARA_VOICE_ID", "q8zvC54Cb4AB0IZViZqT")
+        logger.info(f"Generating TTS with voice ID: {voice_id}")
+        
         audio = tts_client.generate(
             text=text,
-            voice="Nag",
+            voice=voice_id,
             model="eleven_monolingual_v1",
             stream=False
         )
+        
         filename = f"audio_{uuid.uuid4()}.mp3"
         filepath = os.path.join("static", "audio", filename)
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        
         with open(filepath, "wb") as f:
             f.write(audio)
-        return f"/static/audio/{filename}"
+        
+        audio_url = f"/static/audio/{filename}"
+        logger.info(f"TTS audio saved at: {audio_url}")
+        return audio_url
     except Exception as e:
         logger.error(f"TTS generation failed: {str(e)}")
         return None
