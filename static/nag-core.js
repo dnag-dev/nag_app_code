@@ -256,21 +256,9 @@ function initializeLogging() {
   }
 }
 
-// Main initialization function (called after all scripts load)
+// Function to initialize app
 function initializeApp() {
   console.log("Initializing app...");
-  
-  // Initialize global state
-  window.nagState = {
-    listening: false,
-    isPaused: false,
-    isWalkieTalkieMode: true,
-    interrupted: false,
-    audioUnlocked: false,
-    mediaRecorder: null,
-    stream: null,
-    audioChunks: []
-  };
   
   // Cache DOM elements
   window.nagElements = {
@@ -386,22 +374,10 @@ function initializeApp() {
   logMessage("Nag Digital Twin v3.5.0-dev initialized and ready", "success");
 }
 
-// Main entry point - load modules in sequence
+// Initialize app when DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
-  // Load scripts sequentially to ensure proper dependency chain
-  loadScript('/static/nag-utils.js', function() {
-    loadScript('/static/nag-audio.js', function() {
-      loadScript('/static/nag-recording.js', function() {
-        loadScript('/static/nag-ui.js', function() {
-          loadScript('/static/nag-transcription.js', function() {
-            // Initialize app after all scripts are loaded
-            console.log("Nag Digital Twin v2.0.0 - All modules loaded");
-            initializeApp();
-          });
-        });
-      });
-    });
-  });
+  console.log("DOM loaded, initializing app...");
+  initializeApp();
 });
 
 // Function to safely play audio with Safari checks

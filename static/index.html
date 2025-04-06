@@ -5,6 +5,20 @@
   <title>Nag - The Digital Twin</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <link rel="stylesheet" href="/static/styles.css" />
+  <script>
+    // Initialize global state and elements
+    window.nagState = {
+      listening: false,
+      isPaused: false,
+      isWalkieTalkieMode: true,
+      interrupted: false,
+      audioUnlocked: false,
+      mediaRecorder: null,
+      stream: null,
+      audioChunks: []
+    };
+    window.nagElements = {};
+  </script>
   <script src="/static/nag-utils.js"></script>
   <script src="/static/nag-audio.js"></script>
   <script src="/static/nag-recording.js"></script>
