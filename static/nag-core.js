@@ -306,8 +306,40 @@ function initializeApp() {
     // Set initial button states
     updateButtonStates();
     
+    // Add orb click handler
+    if (window.nagElements.orb) {
+      window.nagElements.orb.addEventListener('click', function() {
+        logMessage("Orb clicked", "debug");
+        if (window.nagState.isWalkieTalkieMode) {
+          if (!window.nagState.listening) {
+            startListening();
+            window.nagState.listening = true;
+            updateButtonStates();
+          }
+        }
+      });
+      
+      window.nagElements.orb.addEventListener('mousedown', function() {
+        logMessage("Orb pressed", "debug");
+        if (window.nagState.isWalkieTalkieMode) {
+          startListening();
+          window.nagState.listening = true;
+          updateButtonStates();
+        }
+      });
+      
+      window.nagElements.orb.addEventListener('mouseup', function() {
+        logMessage("Orb released", "debug");
+        if (window.nagState.isWalkieTalkieMode) {
+          stopListening();
+          window.nagState.listening = false;
+          updateButtonStates();
+        }
+      });
+    }
+    
     // Add click handlers directly
-    window.nagElements.toggleBtn.onclick = async function() {
+    window.nagElements.toggleBtn.addEventListener('click', async function() {
       logMessage("Toggle button clicked", "debug");
       try {
         if (window.nagState.listening) {
@@ -323,19 +355,19 @@ function initializeApp() {
       } catch (error) {
         logMessage(`Error in toggle button: ${error.message}`, "error");
       }
-    };
+    });
     
-    window.nagElements.pauseBtn.onclick = function() {
+    window.nagElements.pauseBtn.addEventListener('click', function() {
       logMessage("Pause button clicked", "debug");
       window.nagState.isPaused = !window.nagState.isPaused;
       updateButtonStates();
-    };
+    });
     
-    window.nagElements.modeToggle.onclick = function() {
+    window.nagElements.modeToggle.addEventListener('click', function() {
       logMessage("Mode toggle clicked", "debug");
       window.nagState.isWalkieTalkieMode = !window.nagState.isWalkieTalkieMode;
       updateButtonStates();
-    };
+    });
     
     // Initialize UI components
     logMessage("Initializing UI components", "debug");
