@@ -16,7 +16,7 @@ import httpx
 import json
 from typing import Optional, List
 from fastapi import WebSocketDisconnect
-from elevenlabs import generate, set_api_key
+from elevenlabs import ElevenLabs
 
 # -------------------- Request Models --------------------
 class ChatMode(str, Enum):
@@ -50,6 +50,7 @@ if not api_key:
     raise ValueError("OPENAI_API_KEY environment variable is required")
 
 client = AsyncOpenAI(api_key=api_key, http_client=httpx.AsyncClient(timeout=30.0, verify=True))
+tts_client = ElevenLabs(api_key=os.getenv("ELEVENLABS_API_KEY"))
 
 # -------------------- App Setup --------------------
 app = FastAPI(title="Nag - Digital Twin", version="2.0.0")
@@ -203,16 +204,12 @@ async def get_gpt_response(prompt: str) -> str:
 
 async def generate_tts(text: str) -> str:
     try:
-        set_api_key(os.getenv("ELEVENLABS_API_KEY"))
-        audio = generate(
+        audio = tts_client.generate(
             text=text,
             voice="Nag",
             model="eleven_monolingual_v1",
             stream=False
         )
-
-        if not audio:
-            return None
 
         filename = f"audio_{uuid.uuid4()}.mp3"
         filepath = os.path.join("static", "audio", filename)
