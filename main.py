@@ -135,50 +135,119 @@ async def websocket_endpoint(websocket: WebSocket):
 async def chat(request: Request):
     try:
         data = await request.json()
-        request_id = data.get('request_id')
-        message = data.get('message')
-
-        if not message:
-            raise HTTPException(status_code=400, detail="No message provided")
-
-        response = await get_gpt_response(message)
-        audio_url = await generate_tts(response)
-        if not audio_url:
-            raise HTTPException(status_code=500, detail="TTS audio generation failed")
-
-        return {
-            "response": response,
-            "audio_url": audio_url,
-            "request_id": request_id
-        }
+        user_message = data.get("message", "")
+        logger.info(f"Received chat message: {user_message[:100]}...")
+        
+        if not user_message:
+            error_msg = "No message provided"
+            logger.error(error_msg)
+            return JSONResponse(
+                status_code=400,
+                content={"error": "Invalid request", "details": error_msg}
+            )
+        
+        # Get response from OpenAI
+        try:
+            response = await client.chat.completions.create(
+                model="gpt-4",
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": user_message}
+                ],
+                temperature=0.7
+            )
+            
+            if not response.choices:
+                error_msg = "No response from OpenAI"
+                logger.error(error_msg)
+                return JSONResponse(
+                    status_code=500,
+                    content={"error": "Chat failed", "details": error_msg}
+                )
+            
+            assistant_message = response.choices[0].message.content
+            logger.info(f"OpenAI response: {assistant_message[:100]}...")
+            
+            # Generate TTS
+            try:
+                tts_url = await generate_tts(assistant_message)
+                return {
+                    "message": assistant_message,
+                    "tts_url": tts_url
+                }
+            except Exception as e:
+                error_msg = f"TTS generation failed: {str(e)}"
+                logger.error(error_msg)
+                return JSONResponse(
+                    status_code=500,
+                    content={"error": "TTS generation failed", "details": error_msg}
+                )
+                
+        except httpx.HTTPStatusError as http_err:
+            error_msg = f"HTTP error from OpenAI: {http_err.response.status_code} - {http_err.response.text}"
+            logger.error(error_msg)
+            return JSONResponse(
+                status_code=500,
+                content={"error": "OpenAI API error", "details": error_msg}
+            )
+        except Exception as e:
+            error_msg = f"OpenAI API error: {str(e)}"
+            logger.error(error_msg)
+            return JSONResponse(
+                status_code=500,
+                content={"error": "Chat failed", "details": error_msg}
+            )
+            
     except Exception as e:
-        logger.error(f"Chat endpoint error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        error_msg = f"Unhandled error in chat: {str(e)}"
+        logger.error(error_msg)
+        return JSONResponse(
+            status_code=500,
+            content={"error": "Chat failed", "details": error_msg}
+        )
 
 @app.post("/transcribe")
 async def transcribe_audio(file: UploadFile = File(...)):
+    input_path = None
+    output_path = None
     try:
-        logger.info(f"Uploaded MIME: {file.content_type}, name: {file.filename}")
-        content = await file.read()
-        file_size = len(content)
-
-        if file_size < 1000:
+        # Log the incoming file details
+        logger.info(f"Received file: {file.filename} ({file.content_type})")
+        
+        # Validate content type
+        if not file.content_type or not file.content_type.startswith('audio/'):
+            error_msg = f"Invalid content type: {file.content_type}. Expected audio/*"
+            logger.error(error_msg)
             return JSONResponse(
                 status_code=400,
-                content={"error": "Audio too short", "bytes": file_size}
+                content={"error": "Invalid file type", "details": error_msg}
             )
-
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
-            tmp.write(content)
-            input_path = tmp.name
-        output_path = input_path.replace(".mp4", ".wav")
-
+        
+        # Read and validate file content
+        content = await file.read()
+        file_size = len(content)
+        logger.info(f"Received audio file size: {file_size} bytes")
+        
+        if file_size < 1000:
+            error_msg = f"File too small: {file_size} bytes"
+            logger.error(error_msg)
+            return JSONResponse(
+                status_code=400,
+                content={"error": "File too small", "details": error_msg}
+            )
+        
+        # Save the uploaded file
+        input_path = os.path.join(tempfile.gettempdir(), f"input_{uuid.uuid4()}.mp4")
+        with open(input_path, "wb") as f:
+            f.write(content)
+        logger.info(f"Saved input file: {input_path} ({os.path.getsize(input_path)} bytes)")
+        
+        # Prepare output path
+        output_path = os.path.join(tempfile.gettempdir(), f"output_{uuid.uuid4()}.wav")
+        
+        # Convert to WAV using FFmpeg
         try:
-            logger.info(f"Probing {input_path} for metadata...")
-            probe = ffmpeg.probe(input_path)
-            logger.info(json.dumps(probe, indent=2))
-
-            logger.info(f"Converting to WAV: {output_path}")
+            logger.info(f"Converting {input_path} to WAV format...")
             ffmpeg.input(input_path).output(
                 output_path,
                 format='wav',
@@ -186,50 +255,83 @@ async def transcribe_audio(file: UploadFile = File(...)):
                 ac=1,
                 ar='16000'
             ).overwrite_output().run(capture_stdout=True, capture_stderr=True)
-
-            if not os.path.exists(output_path) or os.path.getsize(output_path) < 1000:
-                raise Exception("Output file too small or missing")
-
-            wav_size = os.path.getsize(output_path)
-            logger.info(f"Final WAV file ready: {output_path} ({wav_size} bytes)")
-
-            with open(output_path, "rb") as audio_file:
-                try:
-                    logger.info("Sending audio to OpenAI Whisper API...")
-                    transcript = await client.audio.transcriptions.create(
-                        model="whisper-1",
-                        file=audio_file,
-                        language="en"
-                    )
-                    logger.info(f"Transcription response: {transcript}")
-                except httpx.TimeoutException:
-                    logger.error("Timeout while calling OpenAI Whisper")
-                    raise HTTPException(status_code=504, detail="Transcription timed out")
-                except Exception as e:
-                    logger.error(f"OpenAI Whisper API error: {str(e)}")
-                    raise HTTPException(status_code=500, detail=f"OpenAI Whisper failed: {str(e)}")
-
-            if not transcript or not transcript.text:
-                return JSONResponse(status_code=500, content={"error": "No transcription returned"})
-
-            return {"transcription": transcript.text.strip()}
-
         except ffmpeg.Error as e:
-            error_msg = e.stderr.decode() if e.stderr else str(e)
-            logger.error(f"FFmpeg error: {error_msg}")
-            return JSONResponse(status_code=500, content={"error": "FFmpeg conversion failed miserably ", "details": error_msg})
-        except Exception as e:
-            logger.error(f"Transcription processing error: {str(e)}")
-            return JSONResponse(status_code=500, content={"error": "Transcription failed", "details": str(e)})
-        finally:
-            for f in [input_path, output_path]:
-                try:
-                    if os.path.exists(f): os.remove(f)
-                except Exception as e:
-                    logger.warning(f"File cleanup failed: {f} - {str(e)}")
+            error_msg = f"FFmpeg conversion error: {str(e)}"
+            logger.error(error_msg)
+            return JSONResponse(
+                status_code=500,
+                content={"error": "Audio conversion failed", "details": error_msg}
+            )
+        
+        # Verify the conversion
+        if not os.path.exists(output_path):
+            error_msg = f"FFmpeg conversion failed - output file not found: {output_path}"
+            logger.error(error_msg)
+            return JSONResponse(
+                status_code=500,
+                content={"error": "Audio conversion failed", "details": error_msg}
+            )
+        
+        output_size = os.path.getsize(output_path)
+        logger.info(f"Converted audio file size: {output_size} bytes")
+        
+        if output_size < 1000:
+            error_msg = f"Converted audio file too small: {output_size} bytes"
+            logger.error(error_msg)
+            return JSONResponse(
+                status_code=400,
+                content={"error": "Audio file too small", "details": error_msg}
+            )
+        
+        # Log the start of transcription
+        logger.info(f"Starting transcription with Whisper...")
+        logger.info(f"OpenAI client config: {client.api_key[:5]}...{client.api_key[-5:]}")
+        
+        # Send to OpenAI Whisper
+        with open(output_path, "rb") as audio_file:
+            try:
+                logger.info(f"Sending WAV to Whisper: {output_path} ({os.path.getsize(output_path)} bytes)")
+                transcript = await client.audio.transcriptions.create(
+                    model="whisper-1",
+                    file=audio_file,
+                    language="en"
+                )
+                logger.info(f"Transcription response: {transcript}")
+            except httpx.HTTPStatusError as http_err:
+                error_msg = f"HTTP error from OpenAI: {http_err.response.status_code} - {http_err.response.text}"
+                logger.error(error_msg)
+                return JSONResponse(
+                    status_code=500,
+                    content={"error": "OpenAI API error", "details": error_msg}
+                )
+            except Exception as e:
+                error_msg = f"Whisper exception: {str(e)}"
+                logger.error(error_msg)
+                return JSONResponse(
+                    status_code=500,
+                    content={"error": "Transcription failed", "details": error_msg}
+                )
+        
+        return {"transcript": transcript.text}
+        
     except Exception as e:
-        logger.error(f"Unhandled error in transcription: {str(e)}")
-        return JSONResponse(status_code=500, content={"error": "Unexpected failure", "details": str(e)})
+        error_msg = f"Unhandled error in transcription: {str(e)}"
+        logger.error(error_msg)
+        return JSONResponse(
+            status_code=500,
+            content={"error": "Transcription failed", "details": error_msg}
+        )
+    finally:
+        # Clean up temporary files
+        for f in [input_path, output_path]:
+            try:
+                if f and os.path.exists(f):
+                    os.remove(f)
+                    logger.info(f"Cleaned up file: {f}")
+            except Exception as e:
+                error_msg = f"Error cleaning up file {f}: {str(e)}"
+                logger.error(error_msg)
+                # Don't return error for cleanup failures, just log them
 
 @app.get("/{file_path:path}")
 async def serve_static(file_path: str):
