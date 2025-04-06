@@ -16,7 +16,7 @@ import httpx
 import json
 from typing import Optional, List
 from fastapi import WebSocketDisconnect
-from elevenlabs.client import ElevenLabs
+from elevenlabs import Client
 import ffmpeg
 
 # -------------------- Request Models --------------------
@@ -51,7 +51,7 @@ if not api_key:
     raise ValueError("OPENAI_API_KEY environment variable is required")
 
 client = AsyncOpenAI(api_key=api_key, http_client=httpx.AsyncClient(timeout=30.0, verify=True))
-tts_client = ElevenLabs(api_key=os.getenv("ELEVENLABS_API_KEY"))
+tts_client = Client(api_key=os.getenv("ELEVENLABS_API_KEY"))
 
 # -------------------- App Setup --------------------
 app = FastAPI(title="Nag - Digital Twin", version="2.0.0")
@@ -190,12 +190,24 @@ async def transcribe_audio(file: UploadFile = File(...)):
             if not os.path.exists(output_path) or os.path.getsize(output_path) < 1000:
                 raise Exception("Output file too small or missing")
 
+            wav_size = os.path.getsize(output_path)
+            logger.info(f"Final WAV file ready: {output_path} ({wav_size} bytes)")
+
             with open(output_path, "rb") as audio_file:
-                transcript = await client.audio.transcriptions.create(
-                    model="whisper-1",
-                    file=audio_file,
-                    language="en"
-                )
+                try:
+                    logger.info("Sending audio to OpenAI Whisper API...")
+                    transcript = await client.audio.transcriptions.create(
+                        model="whisper-1",
+                        file=audio_file,
+                        language="en"
+                    )
+                    logger.info(f"Transcription response: {transcript}")
+                except httpx.TimeoutException:
+                    logger.error("Timeout while calling OpenAI Whisper")
+                    raise HTTPException(status_code=504, detail="Transcription timed out")
+                except Exception as e:
+                    logger.error(f"OpenAI Whisper API error: {str(e)}")
+                    raise HTTPException(status_code=500, detail=f"OpenAI Whisper failed: {str(e)}")
 
             if not transcript or not transcript.text:
                 return JSONResponse(status_code=500, content={"error": "No transcription returned"})
@@ -207,7 +219,7 @@ async def transcribe_audio(file: UploadFile = File(...)):
             logger.error(f"FFmpeg error: {error_msg}")
             return JSONResponse(status_code=500, content={"error": "FFmpeg conversion failed", "details": error_msg})
         except Exception as e:
-            logger.error(f"Transcription error: {str(e)}")
+            logger.error(f"Transcription processing error: {str(e)}")
             return JSONResponse(status_code=500, content={"error": "Transcription failed", "details": str(e)})
         finally:
             for f in [input_path, output_path]:
