@@ -14,13 +14,11 @@ import tempfile
 import uuid
 import httpx
 import json
-import traceback
 from typing import Optional, List
 from fastapi import WebSocketDisconnect
 from elevenlabs.client import ElevenLabs
 import ffmpeg
-import shutil
-import sys
+import traceback
 
 # -------------------- Request Models --------------------
 class ChatMode(str, Enum):
@@ -40,11 +38,8 @@ class MessageRequest(BaseModel):
 
 # -------------------- Logging Setup --------------------
 logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout)
-    ]
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 logger.info("Starting application...")
@@ -220,14 +215,11 @@ async def transcribe_audio(file: UploadFile = File(...)):
         # Log the incoming file details
         logger.info(f"Received file: {file.filename} ({file.content_type})")
         
-        # Validate content type
+        # Validate content type with fallback for Safari
         if not file.content_type or not file.content_type.startswith('audio/'):
-            error_msg = f"Invalid content type: {file.content_type}. Expected audio/*"
-            logger.error(error_msg)
-            return JSONResponse(
-                status_code=400,
-                content={"error": "Invalid file type", "details": error_msg}
-            )
+            logger.warning(f"Fallback MIME type logic triggered. Original type: {file.content_type}")
+            file.content_type = "audio/mp4"  # Default for Safari
+            logger.info(f"Using fallback MIME type: {file.content_type}")
         
         # Read and validate file content
         content = await file.read()
@@ -248,21 +240,38 @@ async def transcribe_audio(file: UploadFile = File(...)):
             f.write(content)
         logger.info(f"Saved input file: {input_path} ({os.path.getsize(input_path)} bytes)")
         
+        # Save raw file for inspection
+        raw_path = input_path + ".raw.mp4"
+        with open(raw_path, "wb") as f:
+            f.write(content)
+        logger.info(f"Saved raw audio file for inspection: {raw_path}")
+        
         # Prepare output path
         output_path = os.path.join(tempfile.gettempdir(), f"output_{uuid.uuid4()}.wav")
         
-        # Convert to WAV using FFmpeg
+        # Convert to WAV using FFmpeg with detailed error capture
         try:
             logger.info(f"Converting {input_path} to WAV format...")
-            ffmpeg.input(input_path).output(
-                output_path,
-                format='wav',
-                acodec='pcm_s16le',
-                ac=1,
-                ar='16000'
-            ).overwrite_output().run(capture_stdout=True, capture_stderr=True)
+            process = (
+                ffmpeg
+                .input(input_path)
+                .output(
+                    output_path,
+                    format='wav',
+                    acodec='pcm_s16le',
+                    ac=1,
+                    ar='16000'
+                )
+                .overwrite_output()
+            )
+            
+            # Capture both stdout and stderr
+            out, err = process.run(capture_stdout=True, capture_stderr=True)
+            logger.info(f"FFmpeg stdout: {out.decode() if out else 'No output'}")
+            logger.info(f"FFmpeg stderr: {err.decode() if err else 'No errors'}")
+            
         except ffmpeg.Error as e:
-            error_msg = f"FFmpeg conversion error: {str(e.stderr.decode() if e.stderr else str(e))}"
+            error_msg = f"FFmpeg conversion error: {e.stderr.decode() if e.stderr else str(e)}"
             logger.error(error_msg)
             return JSONResponse(
                 status_code=500,
@@ -360,7 +369,7 @@ async def transcribe_audio(file: UploadFile = File(...)):
         )
     finally:
         # Clean up temporary files
-        for f in [input_path, output_path]:
+        for f in [input_path, output_path, raw_path]:
             try:
                 if f and os.path.exists(f):
                     os.remove(f)
