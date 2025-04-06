@@ -198,14 +198,13 @@ async def transcribe_audio(file: UploadFile = File(...)):
                 raise HTTPException(status_code=500, detail="FFmpeg failed: output audio too small")
 
             # Transcribe the converted WAV file
-            logger.info(f"Sending audio to Whisper: {output_path}, size: {output_size} bytes")
+            logger.info(f"Transcribing with file: {output_path}, size: {output_size} bytes")
             with open(output_path, "rb") as audio_file:
                 try:
-                    transcript = await client.audio.transcribe(
+                    transcript = await client.audio.transcriptions.create(
                         model="whisper-1",
                         file=audio_file,
-                        language="en",
-                        response_format="text"
+                        language="en"
                     )
                 except httpx.TimeoutException:
                     raise HTTPException(
@@ -219,7 +218,7 @@ async def transcribe_audio(file: UploadFile = File(...)):
                         detail=f"Transcription failed: {str(e)}"
                     )
 
-            return {"transcript": transcript}
+            return {"transcription": transcript.text.strip()}
 
         finally:
             # Clean up temporary files
