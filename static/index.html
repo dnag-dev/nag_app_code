@@ -9,21 +9,119 @@
   <!-- Core script loads all other modules in the correct sequence -->
   <script src="/static/nag-core.js"></script>
   <style>
+    /* Device Frame */
+    .device-frame {
+      position: relative;
+      width: 375px; /* iPhone width */
+      height: 812px; /* iPhone height */
+      margin: 20px auto;
+      background: #000;
+      border-radius: 40px;
+      padding: 20px;
+      box-shadow: 0 0 20px rgba(0, 0, 0, 0.3);
+      overflow: hidden;
+    }
+
+    /* App Container */
+    #app-container {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      background: #f5f5f5;
+      border-radius: 20px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Header */
+    header {
+      text-align: center;
+      padding: 20px;
+      background: #fff;
+      border-bottom: 1px solid #eee;
+    }
+
+    header h1 {
+      font-size: 1.2em;
+      margin: 0;
+      color: #333;
+    }
+
+    header .subtitle {
+      font-size: 0.9em;
+      color: #666;
+      margin: 5px 0 0;
+    }
+
+    /* Orb Container */
+    #orb-container {
+      position: relative;
+      width: 200px;
+      height: 200px;
+      margin: 20px auto;
+      perspective: 1000px;
+    }
+
+    /* Messages Container */
+    .messages-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .message {
+      max-width: 80%;
+      padding: 10px 15px;
+      border-radius: 15px;
+      margin: 5px 0;
+      word-break: break-word;
+    }
+
+    .message.user {
+      align-self: flex-end;
+      background: #007AFF;
+      color: white;
+    }
+
+    .message.ai {
+      align-self: flex-start;
+      background: #E9E9EB;
+      color: #000;
+    }
+
+    /* Controls */
+    .controls-container {
+      padding: 15px;
+      background: #fff;
+      border-top: 1px solid #eee;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    /* Debug Log */
     .debug-container {
-      position: fixed;
+      position: absolute;
       bottom: 0;
       left: 0;
       right: 0;
-      background: rgba(0, 0, 0, 0.8);
+      background: rgba(0, 0, 0, 0.9);
       color: #fff;
       padding: 10px;
       font-family: monospace;
       font-size: 12px;
       max-height: 200px;
       overflow-y: auto;
-      z-index: 1000;
-      display: flex;
-      flex-direction: column;
+      transform: translateY(100%);
+      transition: transform 0.3s ease;
+    }
+
+    .debug-container.visible {
+      transform: translateY(0);
     }
 
     .debug-header {
@@ -37,16 +135,13 @@
     }
 
     .debug-content {
-      flex: 1;
-      overflow-y: auto;
       display: flex;
-      flex-direction: column-reverse;
-      scroll-behavior: smooth;
+      flex-direction: column;
+      gap: 5px;
     }
 
     .log-entry {
       padding: 5px 10px;
-      margin: 2px 0;
       border-radius: 3px;
       word-break: break-word;
     }
@@ -56,6 +151,20 @@
     .log-entry.error { background: rgba(255, 0, 0, 0.2); }
     .log-entry.success { background: rgba(0, 255, 0, 0.2); }
     .log-entry.warning { background: rgba(255, 165, 0, 0.2); }
+
+    /* Status Bar */
+    .status {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      padding: 5px;
+      text-align: center;
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      font-size: 12px;
+      z-index: 1000;
+    }
 
     /* Ensure scrollbar is always visible */
     .debug-container::-webkit-scrollbar {
@@ -76,14 +185,6 @@
     }
 
     /* Jarvis-like Orb Styles */
-    #orb-container {
-      position: relative;
-      width: 200px;
-      height: 200px;
-      margin: 0 auto;
-      perspective: 1000px;
-    }
-
     #orb {
       position: relative;
       width: 100%;
@@ -269,14 +370,14 @@
   </style>
 </head>
 <body>
-  <div id="app-container">
-    <div class="safari-hint">Tap the orb once to enable audio</div>
-    <header>
-      <h1>Nag's Digital Twin  3.5-dev</h1>
-      <p class="subtitle">Dinakara's mind — therapist, companion, unfiltered mirror.</p>
-    </header>
+  <div class="device-frame">
+    <div id="app-container">
+      <div id="status" class="status">Ready</div>
+      <header>
+        <h1>Nag's Digital Twin 3.5-dev</h1>
+        <p class="subtitle">Dinakara's mind — therapist, companion, unfiltered mirror.</p>
+      </header>
 
-    <main>
       <div id="orb-container">
         <div id="orb" class="idle">
           <div class="cloud"></div>
@@ -289,9 +390,11 @@
         </div>
       </div>
 
-      <audio id="audio" hidden></audio>
+      <div class="messages-container" id="messages">
+        <!-- Messages will be added here -->
+      </div>
 
-      <div id="controls" class="controls-container">
+      <div class="controls-container">
         <div class="button-group">
           <button id="toggle-btn" class="btn primary">Start Conversation</button>
           <button id="pause-btn" class="btn secondary" disabled>Pause</button>
@@ -299,12 +402,7 @@
         <button id="mode-toggle" class="btn mode">Switch to continuous mode</button>
       </div>
 
-      <div class="walkie-talkie-hint" id="mode-hint">Click &amp; hold the orb to use walkie-talkie mode</div>
-    </main>
-
-    <footer>
-      <div id="status" class="status">Ready</div>
-      <div class="debug-container">
+      <div class="debug-container" id="debug">
         <div class="debug-header">
           <span>Debug Log</span>
           <label class="debug-toggle">
@@ -312,11 +410,12 @@
             Show All Logs
           </label>
         </div>
-        <div class="debug-content" id="debug"></div>
+        <div class="debug-content"></div>
       </div>
-      <div class="version">v3.5.0</div>
-    </footer>
+    </div>
   </div>
+
+  <audio id="audio" hidden></audio>
 
   <script>
     // Safari detection and audio unlocker
@@ -382,30 +481,49 @@
       }
     }
 
-    // Update the logMessage function in nag-core.js
+    // Function to add a message to the chat
+    function addMessage(text, isUser = false) {
+      const messagesContainer = document.getElementById('messages');
+      if (!messagesContainer) return;
+
+      const message = document.createElement('div');
+      message.className = `message ${isUser ? 'user' : 'ai'}`;
+      message.textContent = text;
+
+      messagesContainer.appendChild(message);
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+
+    // Function to toggle debug log visibility
+    function toggleDebugLog(show) {
+      const debugContainer = document.getElementById('debug');
+      if (debugContainer) {
+        debugContainer.classList.toggle('visible', show);
+      }
+    }
+
+    // Update the logMessage function
     window.logMessage = function(message, level = 'info') {
-      if (!window.nagElements || !window.nagElements.debugBox) return;
-      
-      const debugContent = window.nagElements.debugBox.querySelector('.debug-content');
+      const debugContent = document.querySelector('.debug-content');
       if (!debugContent) return;
-      
+
       // Check if we should show this message
       if (!LOG_CONFIG.showAllLogs && !isKeyMessage(message)) return;
-      
-      // Create log entry
+
       const entry = document.createElement('div');
       entry.className = `log-entry ${level}`;
       
-      // Add timestamp
       const timestamp = new Date().toLocaleTimeString();
       entry.textContent = `[${timestamp}] [${level.toUpperCase()}] ${message}`;
       
-      // Add to the beginning of the container
-      debugContent.insertBefore(entry, debugContent.firstChild);
-      
-      // Scroll to the latest message
-      scrollToLatest();
+      debugContent.appendChild(entry);
+      debugContent.scrollTop = debugContent.scrollHeight;
     };
+
+    // Initialize debug log toggle
+    document.getElementById('showAllLogs').addEventListener('change', function(e) {
+      toggleDebugLog(e.target.checked);
+    });
   </script>
 </body>
 </html>
