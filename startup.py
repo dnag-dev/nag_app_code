@@ -8,15 +8,18 @@ import platform
 import uvicorn
 from datetime import datetime
 
+# Azure logging path
+azure_log_path = '/home/LogFiles/application/app.log'
+
+# Ensure log directory exists in the directory
+os.makedirs(os.path.dirname(azure_log_path), exist_ok=True)
+
 # Configure logging
-azure_log_path = "/home/LogFiles/application/app.log"
 logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.StreamHandler(sys.stderr),
-        logging.FileHandler('deployment.log', mode='a'),
         logging.FileHandler(azure_log_path, mode='a')
     ]
 )
@@ -24,18 +27,24 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 def create_directories():
+    """Create necessary directories if they don't exist."""
     try:
-        os.makedirs('static/audio', exist_ok=True)
-        logger.info("Created static/audio directory")
+        os.makedirs('static', exist_ok=True)
+        os.makedirs(os.path.join('static', 'audio'), exist_ok=True)
+        logger.info("Created static directories")
     except Exception as e:
-        logger.exception(f"Failed to create directories: {e}", exc_info=True)
+        logger.error(f"Failed to create directories: {e}")
 
 def check_and_install_dependencies():
+    """Check if required packages are installed and install them if needed."""
     try:
         import fastapi
         import openai
         import elevenlabs
         import ffmpeg
+        import dotenv
+        import uvicorn
+        import aiofiles
         logger.info("All required packages are installed")
     except ImportError as e:
         logger.error(f"Missing dependency: {e}")
@@ -48,10 +57,15 @@ def start_application():
         logger.info(f"Current working directory: {os.getcwd()}")
         logger.info(f"Environment variables: {os.environ}")
 
-        import pkg_resources
-        installed_packages = [f"{pkg.key}=={pkg.version}" for pkg in pkg_resources.working_set]
-        logger.info(f"Installed packages: {installed_packages}")
+        # Log installed packages
+        try:
+            import pkg_resources
+            installed_packages = [f"{pkg.key}=={pkg.version}" for pkg in pkg_resources.working_set]
+            logger.debug(f"Installed packages: {installed_packages}")
+        except Exception as pkg_err:
+            logger.warning(f"Could not log installed packages: {pkg_err}")
 
+        # Start uvicorn
         uvicorn.run(
             "main:app",
             host="0.0.0.0",
@@ -62,14 +76,12 @@ def start_application():
             workers=1
         )
     except Exception as e:
-        logger.exception("Error during application startup", exc_info=True)
-        sys.stdout.flush()
-        sys.stderr.flush()
+        logger.error(f"Error starting application: {str(e)}", exc_info=True)
         raise
 
 if __name__ == "__main__":
     logger.info("Starting deployment process...")
-    logger.info("Starting startup script...")
+    logger.info("Running startup script...")
     logger.info(f"Python version: {platform.python_version()}")
     logger.info(f"Current directory: {os.getcwd()}")
     logger.info(f"PYTHONPATH: {os.environ.get('PYTHONPATH', 'Not set')}")
