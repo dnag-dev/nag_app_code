@@ -80,7 +80,7 @@ client = AsyncOpenAI(api_key=api_key, http_client=httpx.AsyncClient(timeout=30.0
 tts_client = ElevenLabs(api_key=os.getenv("ELEVENLABS_API_KEY"))
 
 # -------------------- App Setup --------------------
-app = FastAPI(title="Nag - Digital Twin", version="2.0.0")
+app = FastAPI(title="Nag - Digital Twin", version="3.0.0")
 
 app.add_middleware(
     CORSMiddleware,
