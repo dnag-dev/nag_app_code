@@ -24,24 +24,31 @@ function setupUI() {
     
     // Toggle button (Start/Stop conversation)
     toggleBtn.addEventListener("click", async () => {
-      await unlockAudio();
-      
-      if (window.nagState.listening) {
-        logDebug("⏹️ Stopping conversation...");
-        toggleBtn.textContent = "Resume Conversation";
-        await stopListening();
-        window.nagElements.orb.classList.remove("listening", "speaking", "thinking");
-        window.nagElements.orb.classList.add("idle");
-      } else {
-        logDebug("▶️ Starting conversation...");
-        toggleBtn.textContent = "Stop Conversation";
-        window.nagState.interrupted = false;
-        window.nagState.isPaused = false;
-        if (pauseBtn) {
-          pauseBtn.textContent = "Pause";
-          pauseBtn.classList.remove("paused");
+      try {
+        await unlockAudio();
+        
+        if (window.nagState.listening) {
+          logDebug("⏹️ Stopping conversation...");
+          toggleBtn.textContent = "Start Conversation";
+          await stopListening();
+          window.nagElements.orb.classList.remove("listening", "speaking", "thinking");
+          window.nagElements.orb.classList.add("idle");
+          addMessage("Conversation stopped", true);
+        } else {
+          logDebug("▶️ Starting conversation...");
+          toggleBtn.textContent = "Stop Conversation";
+          window.nagState.interrupted = false;
+          window.nagState.isPaused = false;
+          if (pauseBtn) {
+            pauseBtn.textContent = "Pause";
+            pauseBtn.classList.remove("paused");
+          }
+          await startListening();
+          addMessage("Conversation started", true);
         }
-        await startListening();
+      } catch (error) {
+        console.error("Error in toggle button:", error);
+        logDebug("❌ Error: " + error.message);
       }
     });
     

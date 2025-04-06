@@ -178,6 +178,22 @@
       z-index: 1000;
       display: none;
     }
+
+    .mode-hint {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 150, 255, 0.9);
+      color: white;
+      padding: 10px 20px;
+      border-radius: 20px;
+      font-size: 14px;
+      text-align: center;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+      z-index: 1000;
+      display: none;
+    }
   </style>
 </head>
 
@@ -202,6 +218,9 @@
 
         <div class="controls-container">
           <button id="toggle-btn" class="btn primary">Start Conversation</button>
+          <button id="pause-btn" class="btn secondary">Pause</button>
+          <button id="mode-toggle" class="btn secondary">Switch to continuous mode</button>
+          <div id="mode-hint" class="mode-hint">Click & hold the orb to use walkie-talkie mode</div>
           <label>
             <input type="checkbox" id="showAllLogs" checked />
             Show Debug Logs

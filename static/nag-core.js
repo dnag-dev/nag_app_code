@@ -274,6 +274,7 @@ function initializeApp() {
   // Initialize mode hint with default text
   if (window.nagElements.modeHint) {
     window.nagElements.modeHint.textContent = "Click & hold the orb to use walkie-talkie mode";
+    window.nagElements.modeHint.style.display = "block";
   }
   
   // Initialize debug container visibility
@@ -290,6 +291,11 @@ function initializeApp() {
     if (typeof setupWalkieTalkieMode === 'function') setupWalkieTalkieMode();
     if (typeof setupEventListeners === 'function') setupEventListeners();
     if (typeof setupInterruptionHandling === 'function') setupInterruptionHandling();
+    
+    // Set initial button states
+    window.nagElements.toggleBtn.textContent = "Start Conversation";
+    window.nagElements.pauseBtn.textContent = "Pause";
+    window.nagElements.modeToggle.textContent = "Switch to continuous mode";
   } else {
     logMessage("Warning: Some UI elements not found. Some features may be disabled.", "warning");
   }
