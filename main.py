@@ -16,7 +16,7 @@ import httpx
 import json
 from typing import Optional, List
 from fastapi import WebSocketDisconnect
-from elevenlabs import generate, save
+from elevenlabs.client import ElevenLabs
 import ffmpeg
 
 # -------------------- Request Models --------------------
@@ -217,7 +217,7 @@ async def transcribe_audio(file: UploadFile = File(...)):
         except ffmpeg.Error as e:
             error_msg = e.stderr.decode() if e.stderr else str(e)
             logger.error(f"FFmpeg error: {error_msg}")
-            return JSONResponse(status_code=500, content={"error": "FFmpeg conversion failed", "details": error_msg})
+            return JSONResponse(status_code=500, content={"error": "FFmpeg conversion failed miserably ", "details": error_msg})
         except Exception as e:
             logger.error(f"Transcription processing error: {str(e)}")
             return JSONResponse(status_code=500, content={"error": "Transcription failed", "details": str(e)})
