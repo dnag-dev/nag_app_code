@@ -17,7 +17,7 @@ import json  # Added for JSON handling
 import httpx
 import tempfile
 import uuid
-from elevenlabs import generate
+from elevenlabs import ElevenLabs, Voice, VoiceSettings
 
 # -------------------- Request Models --------------------
 class ChatMode(str, Enum):
@@ -286,11 +286,15 @@ async def generate_tts(text: str) -> str:
     try:
         logger.info("Starting TTS generation with ElevenLabs")
         
+        # Initialize ElevenLabs client
+        client = ElevenLabs(api_key=os.getenv("ELEVENLABS_API_KEY"))
+        
         # Generate audio using ElevenLabs
-        audio = generate(
+        audio = client.generate(
             text=text,
             voice="Nag",
-            model="eleven_monolingual_v1"
+            model="eleven_monolingual_v1",
+            stream=False
         )
         
         if not audio:
