@@ -160,28 +160,20 @@ async def websocket_endpoint(websocket: WebSocket):
 @app.post("/chat")
 async def chat(request: Request):
     try:
-        # Parse request body
         data = await request.json()
-        logger.info("[chat] Request received", extra={
-            "data": {k: v for k, v in data.items() if k != "message" and k != "text"}  # Log everything except the message
-        })
+        logger.info("[chat] Request received")
         
-        # Get message from either key
-        message = data.get("message") or data.get("text")
-        if not message:
-            logger.error("[chat] No message provided", extra={
-                "data": data
-            })
+        # Get message from either "message" or "text" parameter
+        user_message = data.get("message", data.get("text", ""))
+        logger.info("[chat] Processing message")
+        
+        if not user_message:
+            error_msg = "No message provided"
+            logger.error(error_msg)
             return JSONResponse(
                 status_code=400,
-                content={"detail": "No message provided"}
+                content={"error": "Invalid request", "details": error_msg}
             )
-        
-        # Log the message length for debugging
-        logger.info("[chat] Processing message", extra={
-            "message_length": len(message),
-            "mode": data.get("mode", "unknown")
-        })
         
         # Get response from OpenAI
         try:
@@ -189,82 +181,46 @@ async def chat(request: Request):
                 model="gpt-4",
                 messages=[
                     {"role": "system", "content": "You are a helpful assistant."},
-                    {"role": "user", "content": message}
+                    {"role": "user", "content": user_message}
                 ],
                 temperature=0.7
             )
             
-            if not response.choices:
-                error_msg = "No response from OpenAI"
-                logger.error("[chat] OpenAI error", extra={
-                    "error": error_msg
-                })
-                return JSONResponse(
-                    status_code=500,
-                    content={"detail": error_msg}
-                )
-            
             assistant_message = response.choices[0].message.content
-            logger.info("[chat] Response generated", extra={
-                "response_length": len(assistant_message)
-            })
+            logger.info("[chat] Response generated")
             
             # Generate TTS
             try:
                 tts_url = await generate_tts(assistant_message)
-                if not tts_url:
-                    error_msg = "TTS generation failed"
-                    logger.error("[chat] TTS error", extra={
-                        "error": error_msg
-                    })
-                    return JSONResponse(
-                        status_code=500,
-                        content={"detail": error_msg}
-                    )
-                
-                return {
-                    "response": assistant_message,
-                    "audio_url": tts_url,
-                    "tts_url": tts_url  # For backward compatibility
-                }
+                if tts_url:
+                    return {
+                        "message": assistant_message,
+                        "tts_url": tts_url,
+                        "audio_url": tts_url  # For compatibility
+                    }
+                else:
+                    logger.error("[chat] TTS error")
+                    return {
+                        "message": assistant_message,
+                        "error": "TTS generation failed"
+                    }
             except Exception as e:
-                error_msg = f"TTS generation failed: {str(e)}"
-                logger.error("[chat] TTS error", extra={
-                    "error": error_msg
-                })
-                return JSONResponse(
-                    status_code=500,
-                    content={"detail": error_msg}
-                )
-                
-        except httpx.HTTPStatusError as http_err:
-            error_msg = f"HTTP error from OpenAI: {http_err.response.status_code} - {http_err.response.text}"
-            logger.error("[chat] OpenAI HTTP error", extra={
-                "error": error_msg,
-                "status_code": http_err.response.status_code
-            })
-            return JSONResponse(
-                status_code=500,
-                content={"detail": error_msg}
-            )
+                logger.error(f"[chat] TTS error: {str(e)}")
+                return {
+                    "message": assistant_message,
+                    "error": "TTS generation failed"
+                }
         except Exception as e:
-            error_msg = f"OpenAI API error: {str(e)}"
-            logger.error("[chat] OpenAI error", extra={
-                "error": error_msg
-            })
+            logger.error(f"[chat] OpenAI API error: {str(e)}")
             return JSONResponse(
                 status_code=500,
-                content={"detail": error_msg}
+                content={"error": "Chat failed", "details": str(e)}
             )
-            
     except Exception as e:
-        logger.error("[chat] Error processing request", extra={
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        })
+        logger.error(f"[chat] Unhandled error: {str(e)}")
         return JSONResponse(
             status_code=500,
-            content={"detail": "Error processing chat request"}
+            content={"error": "Chat failed", "details": str(e)}
         )
 
 @app.post("/transcribe")
