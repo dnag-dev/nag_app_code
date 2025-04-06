@@ -296,3 +296,83 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
 });
+
+// Function to safely play audio with Safari checks
+function safePlayAudio(audioElement) {
+  if (!audioElement) return;
+  
+  // Check if we're on mobile Safari
+  const isSafariMobile = /^((?!chrome|android).)*safari/i.test(navigator.userAgent) && 
+                        /iPhone|iPad|iPod/.test(navigator.userAgent);
+  
+  if (isSafariMobile) {
+    // For Safari, ensure we're in a user gesture context
+    audioElement.play().catch(error => {
+      logMessage(`Audio playback error: ${error.message}`, 'error');
+      // Show hint again if audio fails
+      const hint = document.querySelector('.safari-hint');
+      if (hint) {
+        hint.style.display = 'block';
+      }
+    });
+  } else {
+    // For other browsers, proceed normally
+    audioElement.play().catch(error => {
+      logMessage(`Audio playback error: ${error.message}`, 'error');
+    });
+  }
+}
+
+// Update the setupWalkieTalkieMode function
+function setupWalkieTalkieMode() {
+  if (!window.nagElements || !window.nagElements.modeToggle) return;
+  
+  const modeToggle = window.nagElements.modeToggle;
+  const modeHint = window.nagElements.modeHint;
+  
+  modeToggle.addEventListener('change', function() {
+    if (this.checked) {
+      modeHint.textContent = "Walkie-Talkie Mode: Hold to speak";
+      modeHint.style.display = "block";
+      
+      // Initialize audio only after user interaction
+      if (window.nagElements.audio) {
+        safePlayAudio(window.nagElements.audio);
+      }
+    } else {
+      modeHint.textContent = "Continuous Mode: Click to start/stop";
+      modeHint.style.display = "block";
+    }
+  });
+}
+
+// Update the handleTTSResponse function
+function handleTTSResponse(response) {
+  if (!response || !response.audio_url) {
+    logMessage("No audio URL in TTS response", "error");
+    return;
+  }
+
+  const audio = window.nagElements.audio;
+  if (!audio) {
+    logMessage("Audio element not found", "error");
+    return;
+  }
+
+  audio.src = response.audio_url;
+  audio.onloadeddata = () => {
+    logMessage("TTS audio loaded and ready", "success");
+    updateStatus("Speaking...", "speaking");
+    safePlayAudio(audio);
+  };
+  
+  audio.onended = () => {
+    updateStatus("Ready", "idle");
+    logMessage("TTS playback completed", "info");
+  };
+  
+  audio.onerror = (error) => {
+    logMessage(`TTS playback error: ${error.message}`, "error");
+    updateStatus("Error playing audio", "error");
+  };
+}

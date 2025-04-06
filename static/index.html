@@ -226,10 +226,34 @@
         0 0 80px rgba(255, 0, 0, 0.8),
         inset 0 0 30px rgba(255, 255, 255, 0.4);
     }
+
+    /* Safari Hint Styles */
+    .safari-hint {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 150, 255, 0.9);
+      color: white;
+      padding: 10px 20px;
+      border-radius: 20px;
+      font-size: 14px;
+      text-align: center;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+      z-index: 1000;
+      animation: fadeIn 0.5s ease-in-out;
+      display: none; /* Hidden by default */
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translate(-50%, -10px); }
+      to { opacity: 1; transform: translate(-50%, 0); }
+    }
   </style>
 </head>
 <body>
   <div id="app-container">
+    <div class="safari-hint">Tap the orb once to enable audio</div>
     <header>
       <h1>Nag 3.5-dev</h1>
       <p class="subtitle">Dinakara's mind — therapist, companion, unfiltered mirror.</p>
@@ -278,6 +302,45 @@
   </div>
 
   <script>
+    // Safari detection and audio unlocker
+    function isMobileSafari() {
+      return /^((?!chrome|android).)*safari/i.test(navigator.userAgent) && 
+             /iPhone|iPad|iPod/.test(navigator.userAgent);
+    }
+
+    // Safari unlocker: play silent audio on first user tap
+    function unlockAudioContext() {
+      const audio = new Audio();
+      audio.src = "data:audio/mp3;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAAEAAABIADAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV6urq6urq6urq6urq6urq6urq6urq6urq6v////////////////////////////////8AAAAATGF2YzU4LjMyLjEwMA==";
+      audio.play().catch(() => {
+        console.warn("Audio unlock failed silently");
+      });
+      
+      // Hide the hint after successful unlock
+      const hint = document.querySelector('.safari-hint');
+      if (hint) {
+        hint.style.display = 'none';
+      }
+    }
+
+    // Show hint and add unlocker for Safari
+    if (isMobileSafari()) {
+      const hint = document.querySelector('.safari-hint');
+      if (hint) {
+        hint.style.display = 'block';
+      }
+      
+      // Add unlocker on first touch
+      document.addEventListener('touchstart', unlockAudioContext, { once: true });
+    }
+
+    // Initialize app after DOM is loaded
+    document.addEventListener('DOMContentLoaded', function() {
+      if (typeof initializeApp === 'function') {
+        initializeApp();
+      }
+    });
+
     // Initialize when the page loads
     window.addEventListener('load', () => {
       // Add error handling for static resources
