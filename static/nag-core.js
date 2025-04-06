@@ -310,10 +310,20 @@ function initializeApp() {
     if (window.nagElements.orb) {
       window.nagElements.orb.addEventListener('click', function() {
         logMessage("Orb clicked", "debug");
-        if (window.nagState.isWalkieTalkieMode) {
+        if (!window.nagState.isWalkieTalkieMode) {
           if (!window.nagState.listening) {
+            logMessage("Starting conversation via orb", "debug");
             startListening();
             window.nagState.listening = true;
+            window.nagElements.toggleBtn.textContent = "Stop Conversation";
+            window.nagElements.toggleBtn.classList.add("active");
+            updateButtonStates();
+          } else {
+            logMessage("Stopping conversation via orb", "debug");
+            stopListening();
+            window.nagState.listening = false;
+            window.nagElements.toggleBtn.textContent = "Start Conversation";
+            window.nagElements.toggleBtn.classList.remove("active");
             updateButtonStates();
           }
         }
@@ -324,6 +334,8 @@ function initializeApp() {
         if (window.nagState.isWalkieTalkieMode) {
           startListening();
           window.nagState.listening = true;
+          window.nagElements.toggleBtn.textContent = "Stop Conversation";
+          window.nagElements.toggleBtn.classList.add("active");
           updateButtonStates();
         }
       });
@@ -333,6 +345,8 @@ function initializeApp() {
         if (window.nagState.isWalkieTalkieMode) {
           stopListening();
           window.nagState.listening = false;
+          window.nagElements.toggleBtn.textContent = "Start Conversation";
+          window.nagElements.toggleBtn.classList.remove("active");
           updateButtonStates();
         }
       });
@@ -346,14 +360,22 @@ function initializeApp() {
           logMessage("Stopping conversation", "debug");
           await stopListening();
           window.nagState.listening = false;
+          window.nagElements.toggleBtn.textContent = "Start Conversation";
+          window.nagElements.toggleBtn.classList.remove("active");
         } else {
           logMessage("Starting conversation", "debug");
           await startListening();
           window.nagState.listening = true;
+          window.nagElements.toggleBtn.textContent = "Stop Conversation";
+          window.nagElements.toggleBtn.classList.add("active");
         }
         updateButtonStates();
       } catch (error) {
         logMessage(`Error in toggle button: ${error.message}`, "error");
+        window.nagState.listening = false;
+        window.nagElements.toggleBtn.textContent = "Start Conversation";
+        window.nagElements.toggleBtn.classList.remove("active");
+        updateButtonStates();
       }
     });
     
