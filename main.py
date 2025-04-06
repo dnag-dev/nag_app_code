@@ -16,7 +16,7 @@ import httpx
 import json
 from typing import Optional, List
 from fastapi import WebSocketDisconnect
-from elevenlabs import ElevenLabs
+from elevenlabs.client import ElevenLabs
 
 # -------------------- Request Models --------------------
 class ChatMode(str, Enum):
