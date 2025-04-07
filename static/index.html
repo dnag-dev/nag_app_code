@@ -29,7 +29,8 @@
       modeToggle: document.getElementById('modeToggle'),
       modeHint: document.getElementById('modeHint'),
       debugPanel: document.getElementById('debugPanel'),
-      debugToggle: document.getElementById('debugToggle')
+      debugToggle: document.getElementById('debugToggle'),
+      audio: document.getElementById('audio')
     };
   </script>
   <!-- Load JavaScript files in correct order -->
@@ -340,6 +341,9 @@
 </head>
 
 <body>
+  <!-- Add hidden audio element -->
+  <audio id="audio" hidden></audio>
+
   <!-- Safari touch event compatibility -->
   <script>
     // Safari touch event compatibility
