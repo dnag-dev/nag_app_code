@@ -242,72 +242,68 @@ function startRecording() {
 
 // Stop recording audio
 async function stopRecording() {
-  if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state === "recording") {
-    try {
-      logDebug("🛑 Attempting to stop MediaRecorder...");
-      
-      // For Safari, request final data before stopping
-      if (window.nagState.isSafari) {
-        // Request data multiple times to ensure we get all chunks
-        for (let i = 0; i < 5; i++) {
-          window.nagState.mediaRecorder.requestData();
-          await new Promise(resolve => setTimeout(resolve, 50));
-        }
-        
-        // Wait a short time to ensure the data is processed
-        setTimeout(() => {
-          window.nagState.mediaRecorder.stop();
-          logDebug("✅ MediaRecorder stopped successfully");
-          
-          // Log the state of audio chunks
-          logDebug(`📊 Audio chunks collected: ${window.nagState.audioChunks.length}`);
-          if (window.nagState.audioChunks.length > 0) {
-            logDebug(`📊 First chunk size: ${window.nagState.audioChunks[0].size} bytes`);
-            logDebug(`📊 Last chunk size: ${window.nagState.audioChunks[window.nagState.audioChunks.length - 1].size} bytes`);
-            
-            // Calculate total size
-            const totalSize = window.nagState.audioChunks.reduce((sum, chunk) => sum + chunk.size, 0);
-            logDebug(`📊 Total audio size: ${totalSize} bytes`);
-          }
-          
-          // Log MediaRecorder state
-          logDebug(`📊 MediaRecorder state after stop: ${window.nagState.mediaRecorder.state}`);
-          
-          // Log stream state
-          if (window.nagState.stream) {
-            const tracks = window.nagState.stream.getTracks();
-            logDebug(`📊 Active tracks: ${tracks.length}`);
-            tracks.forEach(track => {
-              logDebug(`📊 Track ${track.kind} state: ${track.readyState}`);
-            });
-          }
-        }, 300);
-      } else {
-        window.nagState.mediaRecorder.stop();
-        logDebug("✅ MediaRecorder stopped successfully");
-      }
-    } catch (e) {
-      logDebug("❌ Error stopping recording: " + e.message);
-      logDebug("❌ Error stack: " + e.stack);
-      
-      // Force cleanup in case of error
-      if (window.nagState.stream) {
-        logDebug("🔄 Forcing stream cleanup...");
-        window.nagState.stream.getTracks().forEach(track => {
-          logDebug(`🔄 Stopping ${track.kind} track`);
-          track.stop();
-        });
-      }
-      
-      // Restart process after error
-      if (!window.nagState.isWalkieTalkieMode && !window.nagState.isPaused && !window.nagState.interrupted) {
-        logDebug("🔄 Scheduling restart after error...");
-        setTimeout(() => startListening(), 1000);
-      }
+  try {
+    if (!window.nagState.mediaRecorder) {
+      logDebug("⚠️ Cannot stop recording - MediaRecorder not initialized");
+      return;
     }
-  } else {
-    logDebug("⚠️ Cannot stop recording - MediaRecorder not in recording state");
-    logDebug(`📊 MediaRecorder state: ${window.nagState.mediaRecorder ? window.nagState.mediaRecorder.state : 'null'}`);
+
+    if (window.nagState.mediaRecorder.state !== "recording") {
+      logDebug("⚠️ Cannot stop recording - MediaRecorder not in recording state");
+      return;
+    }
+
+    logDebug("🛑 Attempting to stop MediaRecorder...");
+    
+    // For Safari, request final data before stopping
+    if (window.nagState.isSafari) {
+      // Request data multiple times to ensure we get all chunks
+      for (let i = 0; i < 5; i++) {
+        window.nagState.mediaRecorder.requestData();
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+      
+      // Wait a short time to ensure the data is processed
+      await new Promise(resolve => setTimeout(resolve, 300));
+    }
+    
+    // Stop the recorder
+    window.nagState.mediaRecorder.stop();
+    logDebug("✅ MediaRecorder stopped successfully");
+    
+    // Clean up stream if it exists
+    if (window.nagState.stream) {
+      window.nagState.stream.getTracks().forEach(track => track.stop());
+      window.nagState.stream = null;
+    }
+    
+    // Reset state
+    window.nagState.mediaRecorder = null;
+    window.nagState.audioChunks = [];
+    
+  } catch (e) {
+    logDebug("❌ Error stopping recording: " + e.message);
+    logDebug("❌ Error stack: " + e.stack);
+    
+    // Force cleanup in case of error
+    if (window.nagState.stream) {
+      logDebug("🔄 Forcing stream cleanup...");
+      window.nagState.stream.getTracks().forEach(track => {
+        logDebug(`🔄 Stopping ${track.kind} track`);
+        track.stop();
+      });
+      window.nagState.stream = null;
+    }
+    
+    // Reset state
+    window.nagState.mediaRecorder = null;
+    window.nagState.audioChunks = [];
+    
+    // Restart process after error
+    if (!window.nagState.isWalkieTalkieMode && !window.nagState.isPaused && !window.nagState.interrupted) {
+      logDebug("🔄 Scheduling restart after error...");
+      setTimeout(() => startListening(), 1000);
+    }
   }
 }
 

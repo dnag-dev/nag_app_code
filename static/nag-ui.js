@@ -90,6 +90,7 @@ function handlePauseClick() {
     // Resume conversation
     window.nagState.isPaused = false;
     if (window.nagElements.pauseBtn) {
+      cleanupButtonAttributes(window.nagElements.pauseBtn);
       window.nagElements.pauseBtn.textContent = "Pause";
       window.nagElements.pauseBtn.classList.remove("paused");
     }
@@ -103,6 +104,7 @@ function handlePauseClick() {
     // Pause conversation
     window.nagState.isPaused = true;
     if (window.nagElements.pauseBtn) {
+      cleanupButtonAttributes(window.nagElements.pauseBtn);
       window.nagElements.pauseBtn.textContent = "Resume";
       window.nagElements.pauseBtn.classList.add("paused");
     }
