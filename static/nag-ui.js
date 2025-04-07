@@ -11,6 +11,7 @@ function handleToggleClick() {
       if (window.logDebug) window.logDebug("⏹️ Stopping conversation...");
       if (window.nagElements.toggleBtn) {
         window.nagElements.toggleBtn.textContent = "Start Conversation";
+        window.nagElements.toggleBtn.classList.remove("active");
       }
       if (window.stopListening) window.stopListening();
       if (window.nagElements.orb) {
@@ -23,6 +24,7 @@ function handleToggleClick() {
       if (window.logDebug) window.logDebug("▶️ Starting conversation...");
       if (window.nagElements.toggleBtn) {
         window.nagElements.toggleBtn.textContent = "Stop Conversation";
+        window.nagElements.toggleBtn.classList.add("active");
       }
       window.nagState.interrupted = false;
       window.nagState.isPaused = false;
