@@ -10,19 +10,14 @@ function handleToggleClick() {
       console.log("Stopping conversation...");
       if (window.logDebug) window.logDebug("⏹️ Stopping conversation...");
       if (window.nagElements.toggleBtn) {
-        // Remove all icon-related attributes and styles
-        window.nagElements.toggleBtn.removeAttribute("iconName");
-        window.nagElements.toggleBtn.removeAttribute("layoutTraits");
-        window.nagElements.toggleBtn.removeAttribute("src");
-        window.nagElements.toggleBtn.removeAttribute("icon");
-        window.nagElements.toggleBtn.removeAttribute("data-icon");
-        window.nagElements.toggleBtn.removeAttribute("style");
-        window.nagElements.toggleBtn.removeAttribute("data-icon-name");
-        window.nagElements.toggleBtn.removeAttribute("data-icon-src");
-        window.nagElements.toggleBtn.removeAttribute("data-icon-type");
-        window.nagElements.toggleBtn.removeAttribute("data-icon-size");
+        // Remove all icon-related attributes
+        const attrsToRemove = [
+          "iconName", "layoutTraits", "src", "icon", "data-icon", "style",
+          "data-icon-name", "data-icon-src", "data-icon-type", "data-icon-size"
+        ];
+        attrsToRemove.forEach(attr => window.nagElements.toggleBtn.removeAttribute(attr));
         
-        // Set basic styles for Safari compatibility
+        // Set basic styles
         window.nagElements.toggleBtn.style.cssText = `
           display: block;
           padding: 10px;
@@ -46,19 +41,14 @@ function handleToggleClick() {
       if (window.nagElements.orb) {
         window.nagElements.orb.classList.remove("listening", "speaking", "thinking");
         window.nagElements.orb.classList.add("idle");
-        // Remove all icon-related attributes and styles from orb
-        window.nagElements.orb.removeAttribute("iconName");
-        window.nagElements.orb.removeAttribute("layoutTraits");
-        window.nagElements.orb.removeAttribute("src");
-        window.nagElements.orb.removeAttribute("icon");
-        window.nagElements.orb.removeAttribute("data-icon");
-        window.nagElements.orb.removeAttribute("style");
-        window.nagElements.orb.removeAttribute("data-icon-name");
-        window.nagElements.orb.removeAttribute("data-icon-src");
-        window.nagElements.orb.removeAttribute("data-icon-type");
-        window.nagElements.orb.removeAttribute("data-icon-size");
+        // Remove all icon-related attributes from orb
+        const attrsToRemove = [
+          "iconName", "layoutTraits", "src", "icon", "data-icon", "style",
+          "data-icon-name", "data-icon-src", "data-icon-type", "data-icon-size"
+        ];
+        attrsToRemove.forEach(attr => window.nagElements.orb.removeAttribute(attr));
         
-        // Set basic styles for Safari compatibility
+        // Set basic styles
         window.nagElements.orb.style.cssText = `
           display: block;
           width: 100px;
@@ -76,19 +66,14 @@ function handleToggleClick() {
       console.log("Starting conversation...");
       if (window.logDebug) window.logDebug("▶️ Starting conversation...");
       if (window.nagElements.toggleBtn) {
-        // Remove all icon-related attributes and styles
-        window.nagElements.toggleBtn.removeAttribute("iconName");
-        window.nagElements.toggleBtn.removeAttribute("layoutTraits");
-        window.nagElements.toggleBtn.removeAttribute("src");
-        window.nagElements.toggleBtn.removeAttribute("icon");
-        window.nagElements.toggleBtn.removeAttribute("data-icon");
-        window.nagElements.toggleBtn.removeAttribute("style");
-        window.nagElements.toggleBtn.removeAttribute("data-icon-name");
-        window.nagElements.toggleBtn.removeAttribute("data-icon-src");
-        window.nagElements.toggleBtn.removeAttribute("data-icon-type");
-        window.nagElements.toggleBtn.removeAttribute("data-icon-size");
+        // Remove all icon-related attributes
+        const attrsToRemove = [
+          "iconName", "layoutTraits", "src", "icon", "data-icon", "style",
+          "data-icon-name", "data-icon-src", "data-icon-type", "data-icon-size"
+        ];
+        attrsToRemove.forEach(attr => window.nagElements.toggleBtn.removeAttribute(attr));
         
-        // Set basic styles for Safari compatibility
+        // Set basic styles
         window.nagElements.toggleBtn.style.cssText = `
           display: block;
           padding: 10px;
@@ -111,19 +96,14 @@ function handleToggleClick() {
       window.nagState.interrupted = false;
       window.nagState.isPaused = false;
       if (window.nagElements.pauseBtn) {
-        // Remove all icon-related attributes and styles
-        window.nagElements.pauseBtn.removeAttribute("iconName");
-        window.nagElements.pauseBtn.removeAttribute("layoutTraits");
-        window.nagElements.pauseBtn.removeAttribute("src");
-        window.nagElements.pauseBtn.removeAttribute("icon");
-        window.nagElements.pauseBtn.removeAttribute("data-icon");
-        window.nagElements.pauseBtn.removeAttribute("style");
-        window.nagElements.pauseBtn.removeAttribute("data-icon-name");
-        window.nagElements.pauseBtn.removeAttribute("data-icon-src");
-        window.nagElements.pauseBtn.removeAttribute("data-icon-type");
-        window.nagElements.pauseBtn.removeAttribute("data-icon-size");
+        // Remove all icon-related attributes
+        const attrsToRemove = [
+          "iconName", "layoutTraits", "src", "icon", "data-icon", "style",
+          "data-icon-name", "data-icon-src", "data-icon-type", "data-icon-size"
+        ];
+        attrsToRemove.forEach(attr => window.nagElements.pauseBtn.removeAttribute(attr));
         
-        // Set basic styles for Safari compatibility
+        // Set basic styles
         window.nagElements.pauseBtn.style.cssText = `
           display: block;
           padding: 10px;
@@ -201,19 +181,14 @@ function handleModeToggleClick() {
     
     // Update mode toggle button
     if (window.nagElements.modeToggle) {
-      // Remove all icon-related attributes and styles
-      window.nagElements.modeToggle.removeAttribute("iconName");
-      window.nagElements.modeToggle.removeAttribute("layoutTraits");
-      window.nagElements.modeToggle.removeAttribute("src");
-      window.nagElements.modeToggle.removeAttribute("icon");
-      window.nagElements.modeToggle.removeAttribute("data-icon");
-      window.nagElements.modeToggle.removeAttribute("style");
-      window.nagElements.modeToggle.removeAttribute("data-icon-name");
-      window.nagElements.modeToggle.removeAttribute("data-icon-src");
-      window.nagElements.modeToggle.removeAttribute("data-icon-type");
-      window.nagElements.modeToggle.removeAttribute("data-icon-size");
+      // Remove all icon-related attributes
+      const attrsToRemove = [
+        "iconName", "layoutTraits", "src", "icon", "data-icon", "style",
+        "data-icon-name", "data-icon-src", "data-icon-type", "data-icon-size"
+      ];
+      attrsToRemove.forEach(attr => window.nagElements.modeToggle.removeAttribute(attr));
       
-      // Set basic styles for Safari compatibility
+      // Set basic styles
       window.nagElements.modeToggle.style.cssText = `
         display: block;
         padding: 10px;
