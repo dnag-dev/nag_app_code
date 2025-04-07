@@ -210,9 +210,26 @@ window.setupUI = function() {
   console.log("Setting up UI components...");
   
   // Prevent recursive initialization
-  if (window.nagState.initialized) {
+  if (window.nagState && window.nagState.initialized) {
     console.log("UI already initialized, skipping...");
     return;
+  }
+  
+  // Ensure DOM is ready
+  if (document.readyState !== 'complete') {
+    console.log("DOM not ready, waiting...");
+    return;
+  }
+  
+  // Initialize state if not exists
+  if (!window.nagState) {
+    window.nagState = {
+      initialized: false,
+      listening: false,
+      isPaused: false,
+      isWalkieTalkieMode: false,
+      interrupted: false
+    };
   }
   
   // Cache DOM elements
@@ -332,10 +349,10 @@ window.handleOrbTouchEnd = handleOrbTouchEnd;
 // Initialize UI when the script loads
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', function() {
-    if (!window.nagState.initialized) {
+    if (!window.nagState || !window.nagState.initialized) {
       setupUI();
     }
   });
-} else if (!window.nagState.initialized) {
+} else if (!window.nagState || !window.nagState.initialized) {
   setupUI();
 }
