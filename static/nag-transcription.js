@@ -204,22 +204,29 @@ async function processAudioAndTranscribe() {
 }
 
 // Update the handleTranscriptionError function to show messages
-function handleTranscriptionError(message) {
-  const orb = window.nagElements.orb;
-  const statusText = window.nagElements.statusText;
+function handleTranscriptionError(error) {
+  console.error("Transcription error:", error);
+  if (window.logDebug) window.logDebug("❌ Transcription error: " + error.message);
   
-  orb.classList.remove("listening", "thinking");
-  orb.classList.add("idle");
-  
-  if (statusText) {
-    statusText.textContent = message;
-    statusText.style.display = "block";
-    
-    // Hide the message after 3 seconds
+  // Update UI to show error
+  if (window.nagElements && window.nagElements.modeHint) {
+    window.nagElements.modeHint.textContent = "Error transcribing audio. Please try again.";
+    window.nagElements.modeHint.style.display = "block";
     setTimeout(() => {
-      statusText.style.display = "none";
-    }, 3000);
+      if (window.nagElements.modeHint) {
+        window.nagElements.modeHint.style.display = "none";
+      }
+    }, 5000);
   }
+  
+  // Reset state
+  if (window.nagState) {
+    window.nagState.isUploading = false;
+    window.nagState.listening = false;
+  }
+  
+  // Update button states
+  if (window.updateButtonStates) window.updateButtonStates();
 }
 
 // Send message to chat endpoint
@@ -298,3 +305,85 @@ function handleChatError() {
     }, 1000);
   }
 }
+
+// Function to transcribe audio
+async function transcribeAudio(audioBlob) {
+  try {
+    if (!audioBlob || audioBlob.size === 0) {
+      throw new Error("Invalid audio data");
+    }
+    
+    // Create form data
+    const formData = new FormData();
+    formData.append('audio', audioBlob, 'recording.webm');
+    
+    // Add retry logic
+    let retries = 3;
+    let lastError = null;
+    
+    while (retries > 0) {
+      try {
+        const response = await fetch('/transcribe', {
+          method: 'POST',
+          body: formData
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Server responded with status ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (!data || !data.text) {
+          throw new Error("Invalid response from server");
+        }
+        
+        return data.text;
+      } catch (error) {
+        lastError = error;
+        retries--;
+        
+        if (retries > 0) {
+          console.log(`Retrying transcription (${retries} attempts left)...`);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+    }
+    
+    throw lastError || new Error("Transcription failed after multiple attempts");
+  } catch (error) {
+    handleTranscriptionError(error);
+    throw error;
+  }
+}
+
+// Function to handle transcription response
+function handleTranscriptionResponse(text) {
+  try {
+    if (!text || text.trim() === '') {
+      console.log("Empty transcription received");
+      return;
+    }
+    
+    // Update UI with transcription
+    if (window.addMessage) {
+      window.addMessage(text, true);
+    }
+    
+    // Reset state
+    if (window.nagState) {
+      window.nagState.isUploading = false;
+    }
+    
+    // Update button states
+    if (window.updateButtonStates) window.updateButtonStates();
+  } catch (error) {
+    console.error("Error handling transcription response:", error);
+    handleTranscriptionError(error);
+  }
+}
+
+// Export functions for global use
+window.transcribeAudio = transcribeAudio;
+window.handleTranscriptionResponse = handleTranscriptionResponse;
+window.handleTranscriptionError = handleTranscriptionError;
