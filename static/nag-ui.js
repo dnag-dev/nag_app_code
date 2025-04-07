@@ -1,188 +1,212 @@
 // Nag Digital Twin v2.0.0 - UI and Event Handling
 
-// Define handler functions at the top level so they're available before use
-async function handleToggleClick() {
+// Define handler functions for global use
+window.handleToggleClick = async function() {
   console.log("Toggle button clicked");
   try {
-    await unlockAudio();
+    if (window.unlockAudio) await window.unlockAudio();
     
     if (window.nagState.listening) {
       console.log("Stopping conversation...");
-      logDebug("⏹️ Stopping conversation...");
-      window.nagElements.toggleBtn.textContent = "Start Conversation";
-      await stopListening();
-      window.nagElements.orb.classList.remove("listening", "speaking", "thinking");
-      window.nagElements.orb.classList.add("idle");
-      addMessage("Conversation stopped", true);
+      if (window.logDebug) window.logDebug("⏹️ Stopping conversation...");
+      if (window.nagElements.toggleBtn) {
+        window.nagElements.toggleBtn.textContent = "Start Conversation";
+      }
+      if (window.stopListening) await window.stopListening();
+      if (window.nagElements.orb) {
+        window.nagElements.orb.classList.remove("listening", "speaking", "thinking");
+        window.nagElements.orb.classList.add("idle");
+      }
+      if (window.addMessage) window.addMessage("Conversation stopped", true);
     } else {
       console.log("Starting conversation...");
-      logDebug("▶️ Starting conversation...");
-      window.nagElements.toggleBtn.textContent = "Stop Conversation";
+      if (window.logDebug) window.logDebug("▶️ Starting conversation...");
+      if (window.nagElements.toggleBtn) {
+        window.nagElements.toggleBtn.textContent = "Stop Conversation";
+      }
       window.nagState.interrupted = false;
       window.nagState.isPaused = false;
       if (window.nagElements.pauseBtn) {
         window.nagElements.pauseBtn.textContent = "Pause";
         window.nagElements.pauseBtn.classList.remove("paused");
       }
-      await startListening();
-      addMessage("Conversation started", true);
+      if (window.startListening) await window.startListening();
+      if (window.addMessage) window.addMessage("Conversation started", true);
     }
-    updateButtonStates();
+    if (window.updateButtonStates) window.updateButtonStates();
   } catch (error) {
     console.error("Error in toggle button:", error);
-    logDebug("❌ Error: " + error.message);
+    if (window.logDebug) window.logDebug("❌ Error: " + error.message);
   }
-}
+};
 
-function handlePauseClick() {
+window.handlePauseClick = function() {
   console.log("Pause button clicked");
   if (!window.nagState.listening) return;
   
   if (window.nagState.isPaused) {
     // Resume conversation
     window.nagState.isPaused = false;
-    window.nagElements.pauseBtn.textContent = "Pause";
-    window.nagElements.pauseBtn.classList.remove("paused");
-    logDebug("▶️ Conversation resumed");
-    addMessage("Conversation resumed", true);
+    if (window.nagElements.pauseBtn) {
+      window.nagElements.pauseBtn.textContent = "Pause";
+      window.nagElements.pauseBtn.classList.remove("paused");
+    }
+    if (window.logDebug) window.logDebug("▶️ Conversation resumed");
+    if (window.addMessage) window.addMessage("Conversation resumed", true);
     
-    if (!window.nagState.isWalkieTalkieMode) {
-      startListening();
+    if (!window.nagState.isWalkieTalkieMode && window.startListening) {
+      window.startListening();
     }
   } else {
     // Pause conversation
     window.nagState.isPaused = true;
-    window.nagElements.pauseBtn.textContent = "Resume";
-    window.nagElements.pauseBtn.classList.add("paused");
-    logDebug("⏸️ Conversation paused");
-    addMessage("Conversation paused", true);
+    if (window.nagElements.pauseBtn) {
+      window.nagElements.pauseBtn.textContent = "Resume";
+      window.nagElements.pauseBtn.classList.add("paused");
+    }
+    if (window.logDebug) window.logDebug("⏸️ Conversation paused");
+    if (window.addMessage) window.addMessage("Conversation paused", true);
     
-    if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state === "recording") {
-      stopRecording();
+    if (window.nagState.mediaRecorder && 
+        window.nagState.mediaRecorder.state === "recording" && 
+        window.stopRecording) {
+      window.stopRecording();
     }
   }
-}
+};
 
-function handleModeToggleClick() {
+window.handleModeToggleClick = function() {
   console.log("Mode toggle clicked");
   window.nagState.isWalkieTalkieMode = !window.nagState.isWalkieTalkieMode;
   
   if (window.nagState.isWalkieTalkieMode) {
-    window.nagElements.modeToggle.textContent = "Switch to Continuous";
-    updateModeHint("Click & hold the orb to use walkie-talkie mode");
-    logDebug("🎤 Switched to walkie-talkie mode");
-    addMessage("Switched to walkie-talkie mode", true);
+    if (window.nagElements.modeToggle) {
+      window.nagElements.modeToggle.textContent = "Switch to Continuous";
+    }
+    if (window.updateModeHint) {
+      window.updateModeHint("Click & hold the orb to use walkie-talkie mode");
+    }
+    if (window.logDebug) window.logDebug("🎤 Switched to walkie-talkie mode");
+    if (window.addMessage) window.addMessage("Switched to walkie-talkie mode", true);
     
-    if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state === "recording") {
-      stopRecording();
+    if (window.nagState.mediaRecorder && 
+        window.nagState.mediaRecorder.state === "recording" && 
+        window.stopRecording) {
+      window.stopRecording();
     }
   } else {
-    window.nagElements.modeToggle.textContent = "Switch to Walkie-Talkie";
-    updateModeHint("Nag will listen continuously for your voice");
-    logDebug("🎤 Switched to continuous mode");
-    addMessage("Switched to continuous mode", true);
+    if (window.nagElements.modeToggle) {
+      window.nagElements.modeToggle.textContent = "Switch to Walkie-Talkie";
+    }
+    if (window.updateModeHint) {
+      window.updateModeHint("Nag will listen continuously for your voice");
+    }
+    if (window.logDebug) window.logDebug("🎤 Switched to continuous mode");
+    if (window.addMessage) window.addMessage("Switched to continuous mode", true);
     
-    if (window.nagState.listening && !window.nagState.isPaused) {
-      startListening();
+    if (window.nagState.listening && !window.nagState.isPaused && window.startListening) {
+      window.startListening();
     }
   }
-}
+};
 
 // Handler functions for orb interactions
-function handleOrbClick(e) {
+window.handleOrbClick = function(e) {
   console.log("Orb clicked", e);
-  logDebug("Orb clicked");
+  if (window.logDebug) window.logDebug("Orb clicked");
   
   // Only handle click in continuous mode
   if (!window.nagState.isWalkieTalkieMode) {
     if (!window.nagState.listening) {
-      logDebug("Starting conversation via orb");
-      startListening();
+      if (window.logDebug) window.logDebug("Starting conversation via orb");
+      if (window.startListening) window.startListening();
       window.nagState.listening = true;
       if (window.nagElements.toggleBtn) {
         window.nagElements.toggleBtn.textContent = "Stop Conversation";
         window.nagElements.toggleBtn.classList.add("active");
       }
     } else {
-      logDebug("Stopping conversation via orb");
-      stopListening();
+      if (window.logDebug) window.logDebug("Stopping conversation via orb");
+      if (window.stopListening) window.stopListening();
       window.nagState.listening = false;
       if (window.nagElements.toggleBtn) {
         window.nagElements.toggleBtn.textContent = "Start Conversation";
         window.nagElements.toggleBtn.classList.remove("active");
       }
     }
-    updateButtonStates();
+    if (window.updateButtonStates) window.updateButtonStates();
   }
-}
+};
 
-function handleOrbDown(e) {
+window.handleOrbDown = function(e) {
   console.log("Orb pressed (mouse)");
-  logDebug("Orb pressed");
+  if (window.logDebug) window.logDebug("Orb pressed");
   
   if (window.nagState.isWalkieTalkieMode) {
-    startListening();
+    if (window.startListening) window.startListening();
     window.nagState.listening = true;
     if (window.nagElements.toggleBtn) {
       window.nagElements.toggleBtn.textContent = "Stop Conversation";
       window.nagElements.toggleBtn.classList.add("active");
     }
-    updateButtonStates();
+    if (window.updateButtonStates) window.updateButtonStates();
   }
-}
+};
 
-function handleOrbUp(e) {
+window.handleOrbUp = function(e) {
   console.log("Orb released (mouse)");
-  logDebug("Orb released");
+  if (window.logDebug) window.logDebug("Orb released");
   
   if (window.nagState.isWalkieTalkieMode) {
-    stopListening();
+    if (window.stopListening) window.stopListening();
     window.nagState.listening = false;
     if (window.nagElements.toggleBtn) {
       window.nagElements.toggleBtn.textContent = "Start Conversation";
       window.nagElements.toggleBtn.classList.remove("active");
     }
-    updateButtonStates();
+    if (window.updateButtonStates) window.updateButtonStates();
   }
-}
+};
 
-function handleOrbTouchStart(e) {
+window.handleOrbTouchStart = function(e) {
   console.log("Orb touched (touchstart)");
-  e.preventDefault(); // Essential for Safari
-  logDebug("Orb touched");
+  if (e && e.preventDefault) e.preventDefault(); // Essential for Safari
+  if (window.logDebug) window.logDebug("Orb touched");
   
   // Unlock audio on first touch (critical for Safari)
-  unlockAudio();
+  if (window.unlockAudio) window.unlockAudio();
   
   if (window.nagState.isWalkieTalkieMode) {
-    startListening();
+    if (window.startListening) window.startListening();
     window.nagState.listening = true;
+    window.nagState.walkieTalkieActive = true;
     if (window.nagElements.toggleBtn) {
       window.nagElements.toggleBtn.textContent = "Stop Conversation";
       window.nagElements.toggleBtn.classList.add("active");
     }
-    updateButtonStates();
+    if (window.updateButtonStates) window.updateButtonStates();
   }
-}
+};
 
-function handleOrbTouchEnd(e) {
+window.handleOrbTouchEnd = function(e) {
   console.log("Orb touch released (touchend)");
-  e.preventDefault(); // Essential for Safari
-  logDebug("Orb touch released");
+  if (e && e.preventDefault) e.preventDefault(); // Essential for Safari
+  if (window.logDebug) window.logDebug("Orb touch released");
   
-  if (window.nagState.isWalkieTalkieMode) {
-    stopListening();
+  if (window.nagState.isWalkieTalkieMode && window.nagState.walkieTalkieActive) {
+    window.nagState.walkieTalkieActive = false;
+    if (window.stopListening) window.stopListening();
     window.nagState.listening = false;
     if (window.nagElements.toggleBtn) {
       window.nagElements.toggleBtn.textContent = "Start Conversation";
       window.nagElements.toggleBtn.classList.remove("active");
     }
-    updateButtonStates();
+    if (window.updateButtonStates) window.updateButtonStates();
   }
-}
+};
 
 // Initialize UI elements
-function setupUI() {
+window.setupUI = function() {
   console.log("Setting up UI components...");
   
   // Initialize mode hint with default text
@@ -199,7 +223,9 @@ function setupUI() {
   }, 5000);
   
   // Add initial welcome message
-  addMessage("Welcome to Nag's Digital Twin. How can I help you today?", false);
+  if (window.addMessage) {
+    window.addMessage("Welcome to Nag's Digital Twin. How can I help you today?", false);
+  }
   
   // Make sure debug container is properly set up
   const debugToggle = document.getElementById('showAllLogs');
@@ -210,16 +236,16 @@ function setupUI() {
     debugContainer.classList.toggle('visible', debugToggle.checked);
     
     // Debug visibility toggle
-    debugToggle.addEventListener('change', function() {
+    debugToggle.onclick = function() {
       debugContainer.classList.toggle('visible', this.checked);
-    });
+    };
     
     console.log("Debug panel setup complete");
   }
-}
+};
 
 // Improved Safari-compatible orb interaction setup
-function setupOrbInteractions(orb) {
+window.setupOrbInteractions = function(orb) {
   if (!orb) {
     console.error("Orb element not found for interaction setup");
     return;
@@ -228,24 +254,158 @@ function setupOrbInteractions(orb) {
   console.log("Setting up orb interactions");
   
   // Clean any existing listeners first
-  const oldClick = orb.onclick;
-  const oldMouseDown = orb.onmousedown;
-  const oldMouseUp = orb.onmouseup;
-  const oldTouchStart = orb.ontouchstart;
-  const oldTouchEnd = orb.ontouchend;
-  
-  if (oldClick) orb.onclick = null;
-  if (oldMouseDown) orb.onmousedown = null;
-  if (oldMouseUp) orb.onmouseup = null;
-  if (oldTouchStart) orb.ontouchstart = null;
-  if (oldTouchEnd) orb.ontouchend = null;
+  orb.onclick = null;
+  orb.onmousedown = null;
+  orb.onmouseup = null;
+  orb.onmouseleave = null;
+  orb.ontouchstart = null;
+  orb.ontouchend = null;
   
   // Now add our direct handlers - more reliable than addEventListener for iOS
-  orb.onclick = handleOrbClick;
-  orb.onmousedown = handleOrbDown;
-  orb.onmouseup = handleOrbUp;
-  orb.ontouchstart = handleOrbTouchStart;
-  orb.ontouchend = handleOrbTouchEnd;
+  orb.onclick = window.handleOrbClick;
+  orb.onmousedown = window.handleOrbDown;
+  orb.onmouseup = window.handleOrbUp;
+  orb.ontouchstart = window.handleOrbTouchStart;
+  orb.ontouchend = window.handleOrbTouchEnd;
   
   console.log("Orb interactions setup complete");
-}
+};
+
+// Setup all event listeners for UI controls
+window.setupEventListeners = function() {
+  console.log("Setting up event listeners...");
+  
+  if (!window.nagElements) {
+    console.error('nagElements not initialized');
+    return;
+  }
+
+  const toggleBtn = window.nagElements.toggleBtn;
+  const pauseBtn = window.nagElements.pauseBtn;
+  const modeToggle = window.nagElements.modeToggle;
+  const orb = window.nagElements.orb;
+  
+  if (!toggleBtn || !pauseBtn || !modeToggle || !orb) {
+    console.error('Required UI elements not found:', {
+      toggleBtn: !!toggleBtn,
+      pauseBtn: !!pauseBtn,
+      modeToggle: !!modeToggle,
+      orb: !!orb
+    });
+    return;
+  }
+  
+  console.log("All UI elements found, setting up event listeners");
+  
+  // Use direct assignment for most reliable event handling on iOS/Safari
+  toggleBtn.onclick = window.handleToggleClick;
+  pauseBtn.onclick = window.handlePauseClick;
+  modeToggle.onclick = window.handleModeToggleClick;
+  
+  // Add special debugging to verify button event handlers
+  console.log("Verifying event handlers assigned:", {
+    toggleBtn: typeof toggleBtn.onclick === 'function',
+    pauseBtn: typeof pauseBtn.onclick === 'function',
+    modeToggle: typeof modeToggle.onclick === 'function'
+  });
+  
+  // Set up Safari-friendly orb interactions
+  window.setupOrbInteractions(orb);
+  
+  // Test click to ensure handlers are working
+  setTimeout(() => {
+    console.log("Event binding test complete");
+    if (window.logDebug) window.logDebug("Event listeners configured successfully");
+  }, 500);
+  
+  console.log("Event listeners setup complete");
+};
+
+// Setup interruption handling for better UX
+window.setupInterruptionHandling = function() {
+  console.log("Setting up interruption handling");
+  
+  // Create a function for the interruption handler
+  function handleInterruptionClick(e) {
+    // Don't interrupt if clicking on controls
+    const target = e.target;
+    
+    if (target === window.nagElements.toggleBtn || 
+        target === window.nagElements.pauseBtn ||
+        target === window.nagElements.modeToggle ||
+        target === window.nagElements.orb ||
+        target.id === 'showAllLogs' ||
+        (window.nagState.currentPlayButton && 
+         (target === window.nagState.currentPlayButton || 
+          window.nagState.currentPlayButton.contains(target)))) {
+      return;
+    }
+    
+    // If orb is speaking, interrupt it
+    const orb = window.nagElements.orb;
+    const audio = window.nagElements.audio;
+    
+    if (orb && orb.classList.contains("speaking")) {
+      if (window.logDebug) window.logDebug("🔄 Interrupting AI response...");
+      if (audio) {
+        audio.pause();
+        audio.currentTime = 0;
+      }
+      orb.classList.remove("speaking");
+      orb.classList.add("idle");
+      
+      if (!window.nagState.isWalkieTalkieMode && !window.nagState.isPaused) {
+        setTimeout(() => {
+          if (!window.nagState.interrupted && !window.nagState.isPaused && window.startListening) {
+            window.startListening();
+          }
+        }, 500);
+      }
+    }
+  }
+  
+  // Use onclick for more reliable handling on mobile
+  document.onclick = handleInterruptionClick;
+  
+  console.log("Interruption handling setup complete");
+};
+
+// Function to add a message to the chat
+window.addMessage = function(text, isUser = false) {
+  // Use the global window.addMessage function if it exists separately
+  if (typeof window.addMessage !== window.addMessage && typeof window.addMessage === 'function') {
+    window.addMessage(text, isUser);
+    return;
+  }
+  
+  // Fallback to direct DOM manipulation
+  const messagesContainer = document.getElementById('messages');
+  if (!messagesContainer) {
+    console.error("Messages container not found");
+    return;
+  }
+  
+  const messageDiv = document.createElement('div');
+  messageDiv.className = `message ${isUser ? 'user' : 'ai'}`;
+  messageDiv.textContent = text;
+  
+  // Add at the bottom (normal chat order)
+  messagesContainer.appendChild(messageDiv);
+  
+  // Scroll to show the new message
+  messagesContainer.scrollTop = messagesContainer.scrollHeight;
+};
+
+// Helper function to update mode hint
+window.updateModeHint = function(text) {
+  const modeHint = document.getElementById('mode-hint');
+  if (modeHint) {
+    modeHint.textContent = text;
+    modeHint.style.display = "block";
+    
+    // Auto-hide after a few seconds
+    setTimeout(() => {
+      modeHint.style.display = "none";
+    }, 3000);
+  }
+};
