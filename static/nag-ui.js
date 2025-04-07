@@ -205,15 +205,34 @@ window.handleOrbTouchEnd = function(e) {
   }
 };
 
-// Initialize UI elements
+// Initialize UI components
 window.setupUI = function() {
   console.log("Setting up UI components...");
   
-  // Initialize mode hint with default text
-  if (window.nagElements.modeHint) {
-    window.nagElements.modeHint.textContent = "Click & hold the orb to use walkie-talkie mode";
-    window.nagElements.modeHint.style.display = "block";
+  // Prevent recursive initialization
+  if (window.nagState.initialized) {
+    console.log("UI already initialized, skipping...");
+    return;
   }
+  
+  // Verify all required elements exist
+  if (!window.nagElements || !window.nagElements.orb || !window.nagElements.toggleBtn || 
+      !window.nagElements.pauseBtn || !window.nagElements.modeToggle || !window.nagElements.modeHint) {
+    console.error("Missing required UI elements");
+    return;
+  }
+
+  // Setup orb interactions
+  setupOrbInteractions(window.nagElements.orb);
+  
+  // Setup button event listeners
+  window.nagElements.toggleBtn.onclick = handleToggleClick;
+  window.nagElements.pauseBtn.onclick = handlePauseClick;
+  window.nagElements.modeToggle.onclick = handleModeToggleClick;
+  
+  // Initialize mode hint with default text
+  window.nagElements.modeHint.textContent = "Nag will listen continuously for your voice";
+  window.nagElements.modeHint.style.display = "block";
   
   // Show the mode hint for a few seconds then hide it
   setTimeout(() => {
@@ -222,26 +241,21 @@ window.setupUI = function() {
     }
   }, 5000);
   
-  // Add initial welcome message
-  if (window.addMessage) {
+  // Add initial welcome message if not already added
+  if (window.addMessage && !window.nagState.initialized) {
     window.addMessage("Welcome to Nag's Digital Twin. How can I help you today?", false);
   }
   
-  // Make sure debug container is properly set up
-  const debugToggle = document.getElementById('showAllLogs');
-  const debugContainer = document.getElementById('debug');
-  
-  if (debugToggle && debugContainer) {
-    // Set initial visibility based on checkbox
-    debugContainer.classList.toggle('visible', debugToggle.checked);
-    
-    // Debug visibility toggle
-    debugToggle.onclick = function() {
-      debugContainer.classList.toggle('visible', this.checked);
+  // Setup debug panel
+  if (window.nagElements.debugToggle && window.nagElements.debugPanel) {
+    window.nagElements.debugToggle.onclick = function() {
+      window.nagElements.debugPanel.classList.toggle('active');
     };
-    
-    console.log("Debug panel setup complete");
   }
+  
+  // Mark UI as initialized
+  window.nagState.initialized = true;
+  console.log("UI setup complete");
 };
 
 // Improved Safari-compatible orb interaction setup
@@ -250,23 +264,26 @@ window.setupOrbInteractions = function(orb) {
     console.error("Orb element not found for interaction setup");
     return;
   }
-  
-  console.log("Setting up orb interactions");
-  
-  // Clean any existing listeners first
+
+  // Remove any existing event listeners
   orb.onclick = null;
   orb.onmousedown = null;
   orb.onmouseup = null;
   orb.onmouseleave = null;
   orb.ontouchstart = null;
   orb.ontouchend = null;
+  orb.ontouchcancel = null;
+
+  // Setup new event listeners
+  orb.onclick = handleOrbClick;
+  orb.onmousedown = handleOrbDown;
+  orb.onmouseup = handleOrbUp;
+  orb.onmouseleave = handleOrbUp;
   
-  // Now add our direct handlers - more reliable than addEventListener for iOS
-  orb.onclick = window.handleOrbClick;
-  orb.onmousedown = window.handleOrbDown;
-  orb.onmouseup = window.handleOrbUp;
-  orb.ontouchstart = window.handleOrbTouchStart;
-  orb.ontouchend = window.handleOrbTouchEnd;
+  // Touch events for mobile/Safari
+  orb.ontouchstart = handleOrbTouchStart;
+  orb.ontouchend = handleOrbTouchEnd;
+  orb.ontouchcancel = handleOrbTouchEnd;
   
   console.log("Orb interactions setup complete");
 };
@@ -409,3 +426,24 @@ window.updateModeHint = function(text) {
     }, 3000);
   }
 };
+
+// Export functions for global use
+window.handleToggleClick = handleToggleClick;
+window.handlePauseClick = handlePauseClick;
+window.handleModeToggleClick = handleModeToggleClick;
+window.handleOrbClick = handleOrbClick;
+window.handleOrbDown = handleOrbDown;
+window.handleOrbUp = handleOrbUp;
+window.handleOrbTouchStart = handleOrbTouchStart;
+window.handleOrbTouchEnd = handleOrbTouchEnd;
+
+// Initialize UI when the script loads
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', function() {
+    if (!window.nagState.initialized) {
+      setupUI();
+    }
+  });
+} else if (!window.nagState.initialized) {
+  setupUI();
+}
