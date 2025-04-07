@@ -407,16 +407,11 @@ window.setupUI = function() {
   elements.forEach(element => {
     if (element) {
       // Remove all icon-related attributes
-      element.removeAttribute("iconName");
-      element.removeAttribute("layoutTraits");
-      element.removeAttribute("src");
-      element.removeAttribute("icon");
-      element.removeAttribute("data-icon");
-      element.removeAttribute("style");
-      element.removeAttribute("data-icon-name");
-      element.removeAttribute("data-icon-src");
-      element.removeAttribute("data-icon-type");
-      element.removeAttribute("data-icon-size");
+      const attrsToRemove = [
+        "iconName", "layoutTraits", "src", "icon", "data-icon", "style",
+        "data-icon-name", "data-icon-src", "data-icon-type", "data-icon-size"
+      ];
+      attrsToRemove.forEach(attr => element.removeAttribute(attr));
       
       // Set basic styles for Safari compatibility
       element.style.cssText = `
