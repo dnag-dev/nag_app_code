@@ -466,5 +466,37 @@
       window.addMessage("Welcome! Click the orb or tap 'Start Conversation' to begin.", false);
     }
   </script>
+
+  <script>
+    // Script loading sequence
+    const loadScript = (src) => {
+      return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = src;
+        script.onload = resolve;
+        script.onerror = reject;
+        document.body.appendChild(script);
+      });
+    };
+
+    // Load scripts in sequence
+    document.addEventListener('DOMContentLoaded', async () => {
+      try {
+        await loadScript('/static/nag-utils.js');
+        await loadScript('/static/nag-audio.js');
+        await loadScript('/static/nag-recording.js');
+        await loadScript('/static/nag-transcription.js');
+        await loadScript('/static/nag-ui.js');
+        await loadScript('/static/nag-core.js');
+        
+        // Initialize app after all scripts are loaded
+        if (typeof initializeApp === 'function') {
+          initializeApp();
+        }
+      } catch (error) {
+        console.error('Script loading error:', error);
+      }
+    });
+  </script>
 </body>
 </html>

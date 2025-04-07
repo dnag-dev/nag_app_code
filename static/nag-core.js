@@ -105,7 +105,10 @@ window.nagState = {
   // Browser detection
   isiOS: /iPad|iPhone|iPod/.test(navigator.userAgent) || 
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1),
-  isSafari: /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
+  isSafari: /^((?!chrome|android).)*safari/i.test(navigator.userAgent),
+  
+  // Initialization flag
+  initialized: false
 };
 
 // DOM references - will be populated once document is loaded
@@ -445,3 +448,161 @@ function updateModeHint(text) {
     console.warn('Mode hint element not initialized yet');
   }
 }
+
+// Nag Digital Twin v2.0.0 - Core State Management
+
+// Single source of truth for state initialization
+function initializeState() {
+    window.nagState = {
+        // Recording state
+        mediaRecorder: null,
+        audioChunks: [],
+        stream: null,
+        listening: false,
+        isUploading: false,
+        
+        // UI state
+        interrupted: false,
+        isPaused: false,
+        
+        // Mode state
+        isWalkieTalkieMode: false,
+        walkieTalkieActive: false,
+        
+        // Audio processing
+        analyserNode: null,
+        silenceTimer: null,
+        longRecordingTimer: null,
+        audioUnlocked: false,
+        speechDetected: false,
+        
+        // Transcription handling
+        lastTranscription: "",
+        consecutiveIdenticalTranscriptions: 0,
+        emptyTranscriptionCount: 0,
+        
+        // UI elements cache
+        currentPlayButton: null,
+        
+        // Browser detection
+        isiOS: /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+            (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1),
+        isSafari: /^((?!chrome|android).)*safari/i.test(navigator.userAgent),
+        
+        // Initialization flag
+        initialized: false
+    };
+}
+
+// Unified Safari audio unlocking
+async function unlockAudioContext() {
+    if (window.nagState.audioUnlocked) return true;
+    
+    try {
+        // Create and immediately suspend an audio context
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        
+        // For Safari, we need to resume the context during a user gesture
+        await audioContext.resume();
+        
+        // Create and play a silent buffer (crucial for Safari)
+        const buffer = audioContext.createBuffer(1, 1, 22050);
+        const source = audioContext.createBufferSource();
+        source.buffer = buffer;
+        source.connect(audioContext.destination);
+        
+        source.start(0);
+        
+        // Also try to play the audio element if it exists
+        if (window.nagElements && window.nagElements.audio) {
+            const audio = window.nagElements.audio;
+            
+            audio.src = "data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAADQgD///////////////////////////////////////////8AAAA8TEFNRTMuMTAwAQAAAAAAAAAAABSAJAJAQgAAgAAAA0L2YLwAAAAAAAAAAAAAAAAAAAAA//sQZAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//sQZB4P8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAEVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU=";
+            
+            try {
+                await audio.play();
+                audio.pause();
+                audio.currentTime = 0;
+            } catch (e) {
+                console.log("Auto-play prevented: User interaction needed");
+            }
+        }
+        
+        window.nagState.audioUnlocked = true;
+        return true;
+    } catch (error) {
+        console.error("Error unlocking audio:", error);
+        return false;
+    }
+}
+
+// Get the best audio format for the browser
+function getBestAudioFormat() {
+    const formats = [
+        'audio/webm;codecs=opus', 
+        'audio/webm', 
+        'audio/mp4', 
+        'audio/mpeg', 
+        'audio/ogg;codecs=opus'
+    ];
+    
+    // Safari needs different format prioritization
+    if (window.nagState.isSafari || window.nagState.isiOS) {
+        formats.unshift('audio/mp4');
+    }
+    
+    for (const format of formats) {
+        try {
+            if (MediaRecorder.isTypeSupported(format)) {
+                console.log(`Using audio format: ${format}`);
+                return format;
+            }
+        } catch (e) {
+            console.error(`Error checking format support for ${format}:`, e);
+        }
+    }
+    
+    return ''; // fallback to browser default
+}
+
+// Master initialization function
+function initializeApp() {
+    console.log("Initializing app...");
+    
+    // First initialize state
+    initializeState();
+    
+    // Cache DOM elements
+    const elementsAvailable = cacheElements();
+    
+    if (!elementsAvailable) {
+        console.error("Critical DOM elements missing. Cannot initialize app.");
+        return;
+    }
+    
+    // Set up event listeners
+    setupEventListeners();
+    
+    // Try to unlock audio context
+    unlockAudioContext().then(unlocked => {
+        console.log("Audio context unlock attempt:", unlocked ? "success" : "waiting for user interaction");
+    });
+    
+    // Add welcome message
+    if (window.addMessage) {
+        window.addMessage("Welcome to Nag. Click the orb to start.", false);
+    }
+    
+    // Log browser capabilities
+    logBrowserInfo();
+    
+    // Mark as initialized
+    window.nagState.initialized = true;
+    console.log("App initialization complete");
+}
+
+// Export functions for global use
+window.initializeApp = initializeApp;
+window.initializeState = initializeState;
+window.unlockAudioContext = unlockAudioContext;
+window.getBestAudioFormat = getBestAudioFormat;

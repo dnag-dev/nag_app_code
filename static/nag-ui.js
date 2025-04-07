@@ -376,13 +376,7 @@ window.setupUI = function() {
   
   // Initialize state if not exists
   if (!window.nagState) {
-    window.nagState = {
-      initialized: false,
-      listening: false,
-      isPaused: false,
-      isWalkieTalkieMode: false,
-      interrupted: false
-    };
+    window.initializeState();
   }
   
   // Cache DOM elements
