@@ -12,17 +12,42 @@ function handleToggleClick() {
       if (window.nagElements.toggleBtn) {
         window.nagElements.toggleBtn.textContent = "Start Conversation";
         window.nagElements.toggleBtn.classList.remove("active");
-        // Remove all icon-related attributes
+        // Remove all icon-related attributes and styles
         window.nagElements.toggleBtn.removeAttribute("iconName");
         window.nagElements.toggleBtn.removeAttribute("layoutTraits");
         window.nagElements.toggleBtn.removeAttribute("src");
         window.nagElements.toggleBtn.removeAttribute("icon");
         window.nagElements.toggleBtn.removeAttribute("data-icon");
+        window.nagElements.toggleBtn.removeAttribute("style");
+        // Set basic styles for Safari compatibility
+        window.nagElements.toggleBtn.style.display = "block";
+        window.nagElements.toggleBtn.style.padding = "10px";
+        window.nagElements.toggleBtn.style.margin = "5px";
+        window.nagElements.toggleBtn.style.border = "1px solid #ccc";
+        window.nagElements.toggleBtn.style.borderRadius = "5px";
+        window.nagElements.toggleBtn.style.backgroundColor = "#fff";
+        window.nagElements.toggleBtn.style.color = "#000";
+        window.nagElements.toggleBtn.style.fontSize = "14px";
+        window.nagElements.toggleBtn.style.fontFamily = "system-ui, -apple-system, sans-serif";
       }
       if (window.stopListening) window.stopListening();
       if (window.nagElements.orb) {
         window.nagElements.orb.classList.remove("listening", "speaking", "thinking");
         window.nagElements.orb.classList.add("idle");
+        // Remove all icon-related attributes and styles from orb
+        window.nagElements.orb.removeAttribute("iconName");
+        window.nagElements.orb.removeAttribute("layoutTraits");
+        window.nagElements.orb.removeAttribute("src");
+        window.nagElements.orb.removeAttribute("icon");
+        window.nagElements.orb.removeAttribute("data-icon");
+        window.nagElements.orb.removeAttribute("style");
+        // Set basic styles for Safari compatibility
+        window.nagElements.orb.style.display = "block";
+        window.nagElements.orb.style.width = "100px";
+        window.nagElements.orb.style.height = "100px";
+        window.nagElements.orb.style.borderRadius = "50%";
+        window.nagElements.orb.style.backgroundColor = "#ccc";
+        window.nagElements.orb.style.margin = "10px auto";
       }
       if (window.addMessage) window.addMessage("Conversation stopped", true);
     } else {
@@ -31,24 +56,46 @@ function handleToggleClick() {
       if (window.nagElements.toggleBtn) {
         window.nagElements.toggleBtn.textContent = "Stop Conversation";
         window.nagElements.toggleBtn.classList.add("active");
-        // Remove all icon-related attributes
+        // Remove all icon-related attributes and styles
         window.nagElements.toggleBtn.removeAttribute("iconName");
         window.nagElements.toggleBtn.removeAttribute("layoutTraits");
         window.nagElements.toggleBtn.removeAttribute("src");
         window.nagElements.toggleBtn.removeAttribute("icon");
         window.nagElements.toggleBtn.removeAttribute("data-icon");
+        window.nagElements.toggleBtn.removeAttribute("style");
+        // Set basic styles for Safari compatibility
+        window.nagElements.toggleBtn.style.display = "block";
+        window.nagElements.toggleBtn.style.padding = "10px";
+        window.nagElements.toggleBtn.style.margin = "5px";
+        window.nagElements.toggleBtn.style.border = "1px solid #ccc";
+        window.nagElements.toggleBtn.style.borderRadius = "5px";
+        window.nagElements.toggleBtn.style.backgroundColor = "#fff";
+        window.nagElements.toggleBtn.style.color = "#000";
+        window.nagElements.toggleBtn.style.fontSize = "14px";
+        window.nagElements.toggleBtn.style.fontFamily = "system-ui, -apple-system, sans-serif";
       }
       window.nagState.interrupted = false;
       window.nagState.isPaused = false;
       if (window.nagElements.pauseBtn) {
         window.nagElements.pauseBtn.textContent = "Pause";
         window.nagElements.pauseBtn.classList.remove("paused");
-        // Remove all icon-related attributes
+        // Remove all icon-related attributes and styles
         window.nagElements.pauseBtn.removeAttribute("iconName");
         window.nagElements.pauseBtn.removeAttribute("layoutTraits");
         window.nagElements.pauseBtn.removeAttribute("src");
         window.nagElements.pauseBtn.removeAttribute("icon");
         window.nagElements.pauseBtn.removeAttribute("data-icon");
+        window.nagElements.pauseBtn.removeAttribute("style");
+        // Set basic styles for Safari compatibility
+        window.nagElements.pauseBtn.style.display = "block";
+        window.nagElements.pauseBtn.style.padding = "10px";
+        window.nagElements.pauseBtn.style.margin = "5px";
+        window.nagElements.pauseBtn.style.border = "1px solid #ccc";
+        window.nagElements.pauseBtn.style.borderRadius = "5px";
+        window.nagElements.pauseBtn.style.backgroundColor = "#fff";
+        window.nagElements.pauseBtn.style.color = "#000";
+        window.nagElements.pauseBtn.style.fontSize = "14px";
+        window.nagElements.pauseBtn.style.fontFamily = "system-ui, -apple-system, sans-serif";
       }
       if (window.startListening) window.startListening();
       if (window.addMessage) window.addMessage("Conversation started", true);
@@ -275,27 +322,34 @@ window.setupUI = function() {
     return;
   }
 
-  // Remove all icon-related attributes from buttons
-  const buttons = [window.nagElements.toggleBtn, window.nagElements.pauseBtn, window.nagElements.modeToggle];
-  buttons.forEach(button => {
-    if (button) {
-      button.removeAttribute("iconName");
-      button.removeAttribute("layoutTraits");
-      button.removeAttribute("src");
-      button.removeAttribute("icon");
-      button.removeAttribute("data-icon");
-      // Remove any inline styles that might be causing issues
-      button.removeAttribute("style");
+  // Remove all icon-related attributes and styles from buttons and orb
+  const elements = [window.nagElements.toggleBtn, window.nagElements.pauseBtn, window.nagElements.modeToggle, window.nagElements.orb];
+  elements.forEach(element => {
+    if (element) {
+      element.removeAttribute("iconName");
+      element.removeAttribute("layoutTraits");
+      element.removeAttribute("src");
+      element.removeAttribute("icon");
+      element.removeAttribute("data-icon");
+      element.removeAttribute("style");
       // Set basic styles for Safari compatibility
-      button.style.display = "block";
-      button.style.padding = "10px";
-      button.style.margin = "5px";
-      button.style.border = "1px solid #ccc";
-      button.style.borderRadius = "5px";
-      button.style.backgroundColor = "#fff";
-      button.style.color = "#000";
-      button.style.fontSize = "14px";
-      button.style.fontFamily = "system-ui, -apple-system, sans-serif";
+      element.style.display = "block";
+      element.style.padding = "10px";
+      element.style.margin = "5px";
+      element.style.border = "1px solid #ccc";
+      element.style.borderRadius = "5px";
+      element.style.backgroundColor = "#fff";
+      element.style.color = "#000";
+      element.style.fontSize = "14px";
+      element.style.fontFamily = "system-ui, -apple-system, sans-serif";
+      // Special styles for orb
+      if (element === window.nagElements.orb) {
+        element.style.width = "100px";
+        element.style.height = "100px";
+        element.style.borderRadius = "50%";
+        element.style.backgroundColor = "#ccc";
+        element.style.margin = "10px auto";
+      }
     }
   });
 
