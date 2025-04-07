@@ -12,6 +12,9 @@ function handleToggleClick() {
       if (window.nagElements.toggleBtn) {
         window.nagElements.toggleBtn.textContent = "Start Conversation";
         window.nagElements.toggleBtn.classList.remove("active");
+        window.nagElements.toggleBtn.removeAttribute("iconName");
+        window.nagElements.toggleBtn.removeAttribute("layoutTraits");
+        window.nagElements.toggleBtn.removeAttribute("src");
       }
       if (window.stopListening) window.stopListening();
       if (window.nagElements.orb) {
@@ -25,12 +28,18 @@ function handleToggleClick() {
       if (window.nagElements.toggleBtn) {
         window.nagElements.toggleBtn.textContent = "Stop Conversation";
         window.nagElements.toggleBtn.classList.add("active");
+        window.nagElements.toggleBtn.removeAttribute("iconName");
+        window.nagElements.toggleBtn.removeAttribute("layoutTraits");
+        window.nagElements.toggleBtn.removeAttribute("src");
       }
       window.nagState.interrupted = false;
       window.nagState.isPaused = false;
       if (window.nagElements.pauseBtn) {
         window.nagElements.pauseBtn.textContent = "Pause";
         window.nagElements.pauseBtn.classList.remove("paused");
+        window.nagElements.pauseBtn.removeAttribute("iconName");
+        window.nagElements.pauseBtn.removeAttribute("layoutTraits");
+        window.nagElements.pauseBtn.removeAttribute("src");
       }
       if (window.startListening) window.startListening();
       if (window.addMessage) window.addMessage("Conversation started", true);
@@ -255,6 +264,23 @@ window.setupUI = function() {
   if (missingElements.length > 0) {
     console.error("Missing required elements:", missingElements);
     return;
+  }
+
+  // Remove problematic icon attributes from buttons
+  if (window.nagElements.toggleBtn) {
+    window.nagElements.toggleBtn.removeAttribute("iconName");
+    window.nagElements.toggleBtn.removeAttribute("layoutTraits");
+    window.nagElements.toggleBtn.removeAttribute("src");
+  }
+  if (window.nagElements.pauseBtn) {
+    window.nagElements.pauseBtn.removeAttribute("iconName");
+    window.nagElements.pauseBtn.removeAttribute("layoutTraits");
+    window.nagElements.pauseBtn.removeAttribute("src");
+  }
+  if (window.nagElements.modeToggle) {
+    window.nagElements.modeToggle.removeAttribute("iconName");
+    window.nagElements.modeToggle.removeAttribute("layoutTraits");
+    window.nagElements.modeToggle.removeAttribute("src");
   }
 
   // Setup orb interactions
