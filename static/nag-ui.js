@@ -144,36 +144,91 @@ function handlePauseClick() {
 
 function handleModeToggleClick() {
   console.log("Mode toggle clicked");
-  window.nagState.isWalkieTalkieMode = !window.nagState.isWalkieTalkieMode;
-  
-  if (window.nagState.isWalkieTalkieMode) {
-    if (window.nagElements.modeToggle) {
-      window.nagElements.modeToggle.textContent = "Switch to Continuous";
+  try {
+    if (!window.nagState) {
+      console.error("Nag state not initialized");
+      return;
     }
-    if (window.updateModeHint) {
-      window.updateModeHint("Click & hold the orb to use walkie-talkie mode");
-    }
-    if (window.logDebug) window.logDebug("🎤 Switched to walkie-talkie mode");
-    if (window.addMessage) window.addMessage("Switched to walkie-talkie mode", true);
+
+    // Toggle walkie-talkie mode
+    window.nagState.isWalkieTalkieMode = !window.nagState.isWalkieTalkieMode;
     
-    if (window.nagState.mediaRecorder && 
+    // Update mode toggle button
+    if (window.nagElements.modeToggle) {
+      // Remove all icon-related attributes
+      window.nagElements.modeToggle.removeAttribute("iconName");
+      window.nagElements.modeToggle.removeAttribute("layoutTraits");
+      window.nagElements.modeToggle.removeAttribute("src");
+      window.nagElements.modeToggle.removeAttribute("icon");
+      window.nagElements.modeToggle.removeAttribute("data-icon");
+      window.nagElements.modeToggle.removeAttribute("style");
+      
+      // Set basic styles for Safari compatibility
+      window.nagElements.modeToggle.style.display = "block";
+      window.nagElements.modeToggle.style.padding = "10px";
+      window.nagElements.modeToggle.style.margin = "5px";
+      window.nagElements.modeToggle.style.border = "1px solid #ccc";
+      window.nagElements.modeToggle.style.borderRadius = "5px";
+      window.nagElements.modeToggle.style.backgroundColor = "#fff";
+      window.nagElements.modeToggle.style.color = "#000";
+      window.nagElements.modeToggle.style.fontSize = "14px";
+      window.nagElements.modeToggle.style.fontFamily = "system-ui, -apple-system, sans-serif";
+      
+      // Update button text
+      window.nagElements.modeToggle.textContent = window.nagState.isWalkieTalkieMode ? 
+        "Switch to Continuous Mode" : "Switch to Walkie-Talkie Mode";
+      
+      // Update button class
+      window.nagElements.modeToggle.classList.toggle("walkie-talkie", window.nagState.isWalkieTalkieMode);
+    }
+
+    // Update mode hint
+    if (window.nagElements.modeHint) {
+      window.nagElements.modeHint.textContent = window.nagState.isWalkieTalkieMode ? 
+        "Click & hold the orb to use walkie-talkie mode" : 
+        "Nag will listen continuously for your voice";
+      window.nagElements.modeHint.style.display = "block";
+      
+      // Hide hint after 5 seconds
+      setTimeout(() => {
+        if (window.nagElements.modeHint) {
+          window.nagElements.modeHint.style.display = "none";
+        }
+      }, 5000);
+    }
+
+    // Log mode change
+    if (window.logDebug) {
+      window.logDebug(window.nagState.isWalkieTalkieMode ? 
+        "🎤 Switched to walkie-talkie mode" : 
+        "🎤 Switched to continuous mode");
+    }
+
+    // Add mode change message
+    if (window.addMessage) {
+      window.addMessage(window.nagState.isWalkieTalkieMode ? 
+        "Switched to walkie-talkie mode" : 
+        "Switched to continuous mode", true);
+    }
+
+    // Stop current recording if in walkie-talkie mode
+    if (window.nagState.isWalkieTalkieMode && 
+        window.nagState.mediaRecorder && 
         window.nagState.mediaRecorder.state === "recording" && 
         window.stopRecording) {
       window.stopRecording();
     }
-  } else {
-    if (window.nagElements.modeToggle) {
-      window.nagElements.modeToggle.textContent = "Switch to Walkie-Talkie";
-    }
-    if (window.updateModeHint) {
-      window.updateModeHint("Nag will listen continuously for your voice");
-    }
-    if (window.logDebug) window.logDebug("🎤 Switched to continuous mode");
-    if (window.addMessage) window.addMessage("Switched to continuous mode", true);
-    
-    if (window.nagState.listening && !window.nagState.isPaused && window.startListening) {
+
+    // Start listening in continuous mode
+    if (!window.nagState.isWalkieTalkieMode && 
+        window.nagState.listening && 
+        !window.nagState.isPaused && 
+        window.startListening) {
       window.startListening();
     }
+  } catch (error) {
+    console.error("Error in mode toggle:", error);
+    if (window.logDebug) window.logDebug("❌ Error: " + error.message);
   }
 }
 
@@ -326,12 +381,14 @@ window.setupUI = function() {
   const elements = [window.nagElements.toggleBtn, window.nagElements.pauseBtn, window.nagElements.modeToggle, window.nagElements.orb];
   elements.forEach(element => {
     if (element) {
+      // Remove all icon-related attributes
       element.removeAttribute("iconName");
       element.removeAttribute("layoutTraits");
       element.removeAttribute("src");
       element.removeAttribute("icon");
       element.removeAttribute("data-icon");
       element.removeAttribute("style");
+      
       // Set basic styles for Safari compatibility
       element.style.display = "block";
       element.style.padding = "10px";
@@ -342,6 +399,7 @@ window.setupUI = function() {
       element.style.color = "#000";
       element.style.fontSize = "14px";
       element.style.fontFamily = "system-ui, -apple-system, sans-serif";
+      
       // Special styles for orb
       if (element === window.nagElements.orb) {
         element.style.width = "100px";
