@@ -495,7 +495,7 @@ function initializeState() {
 }
 
 // Function to cache DOM elements
-function cacheElements() {
+window.cacheElements = function() {
     try {
         window.nagElements = {
             messageContainer: document.getElementById('messageContainer'),
@@ -524,10 +524,10 @@ function cacheElements() {
         console.error("Error caching elements:", error);
         return false;
     }
-}
+};
 
 // Function to set up event listeners
-function setupEventListeners() {
+window.setupEventListeners = function() {
     try {
         // Setup debug toggle
         if (window.nagElements.debugToggle) {
@@ -557,10 +557,10 @@ function setupEventListeners() {
         console.error("Error setting up event listeners:", error);
         return false;
     }
-}
+};
 
 // Unified Safari audio unlocking
-async function unlockAudioContext() {
+window.unlockAudioContext = async function() {
     if (window.nagState.audioUnlocked) return true;
     
     try {
@@ -599,10 +599,10 @@ async function unlockAudioContext() {
         console.error("Error unlocking audio:", error);
         return false;
     }
-}
+};
 
 // Get the best audio format for the browser
-function getBestAudioFormat() {
+window.getBestAudioFormat = function() {
     const formats = [
         'audio/webm;codecs=opus', 
         'audio/webm', 
@@ -628,10 +628,10 @@ function getBestAudioFormat() {
     }
     
     return ''; // fallback to browser default
-}
+};
 
 // Master initialization function
-function initializeApp() {
+window.initializeApp = function() {
     console.log("Initializing app...");
     
     try {
@@ -639,7 +639,7 @@ function initializeApp() {
         initializeState();
         
         // Cache DOM elements
-        const elementsAvailable = cacheElements();
+        const elementsAvailable = window.cacheElements();
         
         if (!elementsAvailable) {
             console.error("Critical DOM elements missing. Cannot initialize app.");
@@ -647,10 +647,10 @@ function initializeApp() {
         }
         
         // Set up event listeners
-        setupEventListeners();
+        window.setupEventListeners();
         
         // Try to unlock audio context
-        unlockAudioContext().then(unlocked => {
+        window.unlockAudioContext().then(unlocked => {
             console.log("Audio context unlock attempt:", unlocked ? "success" : "waiting for user interaction");
         });
         
@@ -668,7 +668,7 @@ function initializeApp() {
     } catch (error) {
         console.error("Error during app initialization:", error);
     }
-}
+};
 
 // Function to log browser info
 function logBrowserInfo() {
