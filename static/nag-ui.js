@@ -10,92 +10,118 @@ function handleToggleClick() {
       console.log("Stopping conversation...");
       if (window.logDebug) window.logDebug("⏹️ Stopping conversation...");
       if (window.nagElements.toggleBtn) {
+        // Remove all icon-related attributes and styles
+        const attrsToRemove = [
+          "iconName", "layoutTraits", "src", "icon", "data-icon", "style",
+          "data-icon-name", "data-icon-src", "data-icon-type", "data-icon-size"
+        ];
+        attrsToRemove.forEach(attr => window.nagElements.toggleBtn.removeAttribute(attr));
+        
+        // Set basic styles for Safari compatibility
+        window.nagElements.toggleBtn.style.cssText = `
+          display: block;
+          padding: 10px;
+          margin: 5px;
+          border: 1px solid #ccc;
+          border-radius: 5px;
+          background-color: #fff;
+          color: #000;
+          font-size: 14px;
+          font-family: system-ui, -apple-system, sans-serif;
+          text-align: center;
+          cursor: pointer;
+          user-select: none;
+          -webkit-user-select: none;
+        `;
+        
         window.nagElements.toggleBtn.textContent = "Start Conversation";
         window.nagElements.toggleBtn.classList.remove("active");
-        // Remove all icon-related attributes and styles
-        window.nagElements.toggleBtn.removeAttribute("iconName");
-        window.nagElements.toggleBtn.removeAttribute("layoutTraits");
-        window.nagElements.toggleBtn.removeAttribute("src");
-        window.nagElements.toggleBtn.removeAttribute("icon");
-        window.nagElements.toggleBtn.removeAttribute("data-icon");
-        window.nagElements.toggleBtn.removeAttribute("style");
-        // Set basic styles for Safari compatibility
-        window.nagElements.toggleBtn.style.display = "block";
-        window.nagElements.toggleBtn.style.padding = "10px";
-        window.nagElements.toggleBtn.style.margin = "5px";
-        window.nagElements.toggleBtn.style.border = "1px solid #ccc";
-        window.nagElements.toggleBtn.style.borderRadius = "5px";
-        window.nagElements.toggleBtn.style.backgroundColor = "#fff";
-        window.nagElements.toggleBtn.style.color = "#000";
-        window.nagElements.toggleBtn.style.fontSize = "14px";
-        window.nagElements.toggleBtn.style.fontFamily = "system-ui, -apple-system, sans-serif";
       }
       if (window.stopListening) window.stopListening();
       if (window.nagElements.orb) {
         window.nagElements.orb.classList.remove("listening", "speaking", "thinking");
         window.nagElements.orb.classList.add("idle");
         // Remove all icon-related attributes and styles from orb
-        window.nagElements.orb.removeAttribute("iconName");
-        window.nagElements.orb.removeAttribute("layoutTraits");
-        window.nagElements.orb.removeAttribute("src");
-        window.nagElements.orb.removeAttribute("icon");
-        window.nagElements.orb.removeAttribute("data-icon");
-        window.nagElements.orb.removeAttribute("style");
+        const attrsToRemove = [
+          "iconName", "layoutTraits", "src", "icon", "data-icon", "style",
+          "data-icon-name", "data-icon-src", "data-icon-type", "data-icon-size"
+        ];
+        attrsToRemove.forEach(attr => window.nagElements.orb.removeAttribute(attr));
+        
         // Set basic styles for Safari compatibility
-        window.nagElements.orb.style.display = "block";
-        window.nagElements.orb.style.width = "100px";
-        window.nagElements.orb.style.height = "100px";
-        window.nagElements.orb.style.borderRadius = "50%";
-        window.nagElements.orb.style.backgroundColor = "#ccc";
-        window.nagElements.orb.style.margin = "10px auto";
+        window.nagElements.orb.style.cssText = `
+          display: block;
+          width: 100px;
+          height: 100px;
+          border-radius: 50%;
+          background-color: #ccc;
+          margin: 10px auto;
+          cursor: pointer;
+          user-select: none;
+          -webkit-user-select: none;
+        `;
       }
       if (window.addMessage) window.addMessage("Conversation stopped", true);
     } else {
       console.log("Starting conversation...");
       if (window.logDebug) window.logDebug("▶️ Starting conversation...");
       if (window.nagElements.toggleBtn) {
+        // Remove all icon-related attributes and styles
+        const attrsToRemove = [
+          "iconName", "layoutTraits", "src", "icon", "data-icon", "style",
+          "data-icon-name", "data-icon-src", "data-icon-type", "data-icon-size"
+        ];
+        attrsToRemove.forEach(attr => window.nagElements.toggleBtn.removeAttribute(attr));
+        
+        // Set basic styles for Safari compatibility
+        window.nagElements.toggleBtn.style.cssText = `
+          display: block;
+          padding: 10px;
+          margin: 5px;
+          border: 1px solid #ccc;
+          border-radius: 5px;
+          background-color: #fff;
+          color: #000;
+          font-size: 14px;
+          font-family: system-ui, -apple-system, sans-serif;
+          text-align: center;
+          cursor: pointer;
+          user-select: none;
+          -webkit-user-select: none;
+        `;
+        
         window.nagElements.toggleBtn.textContent = "Stop Conversation";
         window.nagElements.toggleBtn.classList.add("active");
-        // Remove all icon-related attributes and styles
-        window.nagElements.toggleBtn.removeAttribute("iconName");
-        window.nagElements.toggleBtn.removeAttribute("layoutTraits");
-        window.nagElements.toggleBtn.removeAttribute("src");
-        window.nagElements.toggleBtn.removeAttribute("icon");
-        window.nagElements.toggleBtn.removeAttribute("data-icon");
-        window.nagElements.toggleBtn.removeAttribute("style");
-        // Set basic styles for Safari compatibility
-        window.nagElements.toggleBtn.style.display = "block";
-        window.nagElements.toggleBtn.style.padding = "10px";
-        window.nagElements.toggleBtn.style.margin = "5px";
-        window.nagElements.toggleBtn.style.border = "1px solid #ccc";
-        window.nagElements.toggleBtn.style.borderRadius = "5px";
-        window.nagElements.toggleBtn.style.backgroundColor = "#fff";
-        window.nagElements.toggleBtn.style.color = "#000";
-        window.nagElements.toggleBtn.style.fontSize = "14px";
-        window.nagElements.toggleBtn.style.fontFamily = "system-ui, -apple-system, sans-serif";
       }
       window.nagState.interrupted = false;
       window.nagState.isPaused = false;
       if (window.nagElements.pauseBtn) {
+        // Remove all icon-related attributes and styles
+        const attrsToRemove = [
+          "iconName", "layoutTraits", "src", "icon", "data-icon", "style",
+          "data-icon-name", "data-icon-src", "data-icon-type", "data-icon-size"
+        ];
+        attrsToRemove.forEach(attr => window.nagElements.pauseBtn.removeAttribute(attr));
+        
+        // Set basic styles for Safari compatibility
+        window.nagElements.pauseBtn.style.cssText = `
+          display: block;
+          padding: 10px;
+          margin: 5px;
+          border: 1px solid #ccc;
+          border-radius: 5px;
+          background-color: #fff;
+          color: #000;
+          font-size: 14px;
+          font-family: system-ui, -apple-system, sans-serif;
+          text-align: center;
+          cursor: pointer;
+          user-select: none;
+          -webkit-user-select: none;
+        `;
+        
         window.nagElements.pauseBtn.textContent = "Pause";
         window.nagElements.pauseBtn.classList.remove("paused");
-        // Remove all icon-related attributes and styles
-        window.nagElements.pauseBtn.removeAttribute("iconName");
-        window.nagElements.pauseBtn.removeAttribute("layoutTraits");
-        window.nagElements.pauseBtn.removeAttribute("src");
-        window.nagElements.pauseBtn.removeAttribute("icon");
-        window.nagElements.pauseBtn.removeAttribute("data-icon");
-        window.nagElements.pauseBtn.removeAttribute("style");
-        // Set basic styles for Safari compatibility
-        window.nagElements.pauseBtn.style.display = "block";
-        window.nagElements.pauseBtn.style.padding = "10px";
-        window.nagElements.pauseBtn.style.margin = "5px";
-        window.nagElements.pauseBtn.style.border = "1px solid #ccc";
-        window.nagElements.pauseBtn.style.borderRadius = "5px";
-        window.nagElements.pauseBtn.style.backgroundColor = "#fff";
-        window.nagElements.pauseBtn.style.color = "#000";
-        window.nagElements.pauseBtn.style.fontSize = "14px";
-        window.nagElements.pauseBtn.style.fontFamily = "system-ui, -apple-system, sans-serif";
       }
       if (window.startListening) window.startListening();
       if (window.addMessage) window.addMessage("Conversation started", true);
@@ -156,23 +182,28 @@ function handleModeToggleClick() {
     // Update mode toggle button
     if (window.nagElements.modeToggle) {
       // Remove all icon-related attributes
-      window.nagElements.modeToggle.removeAttribute("iconName");
-      window.nagElements.modeToggle.removeAttribute("layoutTraits");
-      window.nagElements.modeToggle.removeAttribute("src");
-      window.nagElements.modeToggle.removeAttribute("icon");
-      window.nagElements.modeToggle.removeAttribute("data-icon");
-      window.nagElements.modeToggle.removeAttribute("style");
+      const attrsToRemove = [
+        "iconName", "layoutTraits", "src", "icon", "data-icon", "style",
+        "data-icon-name", "data-icon-src", "data-icon-type", "data-icon-size"
+      ];
+      attrsToRemove.forEach(attr => window.nagElements.modeToggle.removeAttribute(attr));
       
       // Set basic styles for Safari compatibility
-      window.nagElements.modeToggle.style.display = "block";
-      window.nagElements.modeToggle.style.padding = "10px";
-      window.nagElements.modeToggle.style.margin = "5px";
-      window.nagElements.modeToggle.style.border = "1px solid #ccc";
-      window.nagElements.modeToggle.style.borderRadius = "5px";
-      window.nagElements.modeToggle.style.backgroundColor = "#fff";
-      window.nagElements.modeToggle.style.color = "#000";
-      window.nagElements.modeToggle.style.fontSize = "14px";
-      window.nagElements.modeToggle.style.fontFamily = "system-ui, -apple-system, sans-serif";
+      window.nagElements.modeToggle.style.cssText = `
+        display: block;
+        padding: 10px;
+        margin: 5px;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        background-color: #fff;
+        color: #000;
+        font-size: 14px;
+        font-family: system-ui, -apple-system, sans-serif;
+        text-align: center;
+        cursor: pointer;
+        user-select: none;
+        -webkit-user-select: none;
+      `;
       
       // Update button text
       window.nagElements.modeToggle.textContent = window.nagState.isWalkieTalkieMode ? 
@@ -382,31 +413,42 @@ window.setupUI = function() {
   elements.forEach(element => {
     if (element) {
       // Remove all icon-related attributes
-      element.removeAttribute("iconName");
-      element.removeAttribute("layoutTraits");
-      element.removeAttribute("src");
-      element.removeAttribute("icon");
-      element.removeAttribute("data-icon");
-      element.removeAttribute("style");
+      const attrsToRemove = [
+        "iconName", "layoutTraits", "src", "icon", "data-icon", "style",
+        "data-icon-name", "data-icon-src", "data-icon-type", "data-icon-size"
+      ];
+      attrsToRemove.forEach(attr => element.removeAttribute(attr));
       
       // Set basic styles for Safari compatibility
-      element.style.display = "block";
-      element.style.padding = "10px";
-      element.style.margin = "5px";
-      element.style.border = "1px solid #ccc";
-      element.style.borderRadius = "5px";
-      element.style.backgroundColor = "#fff";
-      element.style.color = "#000";
-      element.style.fontSize = "14px";
-      element.style.fontFamily = "system-ui, -apple-system, sans-serif";
+      element.style.cssText = `
+        display: block;
+        padding: 10px;
+        margin: 5px;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        background-color: #fff;
+        color: #000;
+        font-size: 14px;
+        font-family: system-ui, -apple-system, sans-serif;
+        text-align: center;
+        cursor: pointer;
+        user-select: none;
+        -webkit-user-select: none;
+      `;
       
       // Special styles for orb
       if (element === window.nagElements.orb) {
-        element.style.width = "100px";
-        element.style.height = "100px";
-        element.style.borderRadius = "50%";
-        element.style.backgroundColor = "#ccc";
-        element.style.margin = "10px auto";
+        element.style.cssText = `
+          display: block;
+          width: 100px;
+          height: 100px;
+          border-radius: 50%;
+          background-color: #ccc;
+          margin: 10px auto;
+          cursor: pointer;
+          user-select: none;
+          -webkit-user-select: none;
+        `;
       }
     }
   });
