@@ -494,6 +494,71 @@ function initializeState() {
     };
 }
 
+// Function to cache DOM elements
+function cacheElements() {
+    try {
+        window.nagElements = {
+            messageContainer: document.getElementById('messageContainer'),
+            orb: document.getElementById('orb'),
+            toggleBtn: document.getElementById('toggleBtn'),
+            pauseBtn: document.getElementById('pauseBtn'),
+            modeToggle: document.getElementById('modeToggle'),
+            modeHint: document.getElementById('modeHint'),
+            debugPanel: document.getElementById('debugPanel'),
+            debugToggle: document.getElementById('debugToggle'),
+            audio: document.getElementById('audio'),
+            volumeBar: document.getElementById('volumeBar')
+        };
+        
+        // Verify all required elements exist
+        const requiredElements = ['messageContainer', 'orb', 'toggleBtn', 'pauseBtn', 'modeToggle', 'modeHint', 'audio'];
+        const missingElements = requiredElements.filter(id => !window.nagElements[id]);
+        
+        if (missingElements.length > 0) {
+            console.error("Missing required elements:", missingElements);
+            return false;
+        }
+        
+        return true;
+    } catch (error) {
+        console.error("Error caching elements:", error);
+        return false;
+    }
+}
+
+// Function to set up event listeners
+function setupEventListeners() {
+    try {
+        // Setup debug toggle
+        if (window.nagElements.debugToggle) {
+            window.nagElements.debugToggle.onclick = function() {
+                window.nagElements.debugPanel.classList.toggle('active');
+            };
+        }
+        
+        // Setup button event listeners
+        if (window.nagElements.toggleBtn) {
+            window.nagElements.toggleBtn.onclick = window.handleToggleClick;
+        }
+        if (window.nagElements.pauseBtn) {
+            window.nagElements.pauseBtn.onclick = window.handlePauseClick;
+        }
+        if (window.nagElements.modeToggle) {
+            window.nagElements.modeToggle.onclick = window.handleModeToggleClick;
+        }
+        
+        // Setup orb interactions
+        if (window.nagElements.orb) {
+            window.setupOrbInteractions(window.nagElements.orb);
+        }
+        
+        return true;
+    } catch (error) {
+        console.error("Error setting up event listeners:", error);
+        return false;
+    }
+}
+
 // Unified Safari audio unlocking
 async function unlockAudioContext() {
     if (window.nagState.audioUnlocked) return true;
@@ -569,36 +634,51 @@ function getBestAudioFormat() {
 function initializeApp() {
     console.log("Initializing app...");
     
-    // First initialize state
-    initializeState();
-    
-    // Cache DOM elements
-    const elementsAvailable = cacheElements();
-    
-    if (!elementsAvailable) {
-        console.error("Critical DOM elements missing. Cannot initialize app.");
-        return;
+    try {
+        // First initialize state
+        initializeState();
+        
+        // Cache DOM elements
+        const elementsAvailable = cacheElements();
+        
+        if (!elementsAvailable) {
+            console.error("Critical DOM elements missing. Cannot initialize app.");
+            return;
+        }
+        
+        // Set up event listeners
+        setupEventListeners();
+        
+        // Try to unlock audio context
+        unlockAudioContext().then(unlocked => {
+            console.log("Audio context unlock attempt:", unlocked ? "success" : "waiting for user interaction");
+        });
+        
+        // Add welcome message
+        if (window.addMessage) {
+            window.addMessage("Welcome to Nag. Click the orb to start.", false);
+        }
+        
+        // Log browser capabilities
+        logBrowserInfo();
+        
+        // Mark as initialized
+        window.nagState.initialized = true;
+        console.log("App initialization complete");
+    } catch (error) {
+        console.error("Error during app initialization:", error);
     }
-    
-    // Set up event listeners
-    setupEventListeners();
-    
-    // Try to unlock audio context
-    unlockAudioContext().then(unlocked => {
-        console.log("Audio context unlock attempt:", unlocked ? "success" : "waiting for user interaction");
+}
+
+// Function to log browser info
+function logBrowserInfo() {
+    console.log("Browser Info:", {
+        userAgent: navigator.userAgent,
+        platform: navigator.platform,
+        isSafari: window.nagState.isSafari,
+        isiOS: window.nagState.isiOS,
+        audioUnlocked: window.nagState.audioUnlocked
     });
-    
-    // Add welcome message
-    if (window.addMessage) {
-        window.addMessage("Welcome to Nag. Click the orb to start.", false);
-    }
-    
-    // Log browser capabilities
-    logBrowserInfo();
-    
-    // Mark as initialized
-    window.nagState.initialized = true;
-    console.log("App initialization complete");
 }
 
 // Export functions for global use
@@ -606,3 +686,5 @@ window.initializeApp = initializeApp;
 window.initializeState = initializeState;
 window.unlockAudioContext = unlockAudioContext;
 window.getBestAudioFormat = getBestAudioFormat;
+window.cacheElements = cacheElements;
+window.setupEventListeners = setupEventListeners;
