@@ -12,9 +12,12 @@ function handleToggleClick() {
       if (window.nagElements.toggleBtn) {
         window.nagElements.toggleBtn.textContent = "Start Conversation";
         window.nagElements.toggleBtn.classList.remove("active");
+        // Remove all icon-related attributes
         window.nagElements.toggleBtn.removeAttribute("iconName");
         window.nagElements.toggleBtn.removeAttribute("layoutTraits");
         window.nagElements.toggleBtn.removeAttribute("src");
+        window.nagElements.toggleBtn.removeAttribute("icon");
+        window.nagElements.toggleBtn.removeAttribute("data-icon");
       }
       if (window.stopListening) window.stopListening();
       if (window.nagElements.orb) {
@@ -28,18 +31,24 @@ function handleToggleClick() {
       if (window.nagElements.toggleBtn) {
         window.nagElements.toggleBtn.textContent = "Stop Conversation";
         window.nagElements.toggleBtn.classList.add("active");
+        // Remove all icon-related attributes
         window.nagElements.toggleBtn.removeAttribute("iconName");
         window.nagElements.toggleBtn.removeAttribute("layoutTraits");
         window.nagElements.toggleBtn.removeAttribute("src");
+        window.nagElements.toggleBtn.removeAttribute("icon");
+        window.nagElements.toggleBtn.removeAttribute("data-icon");
       }
       window.nagState.interrupted = false;
       window.nagState.isPaused = false;
       if (window.nagElements.pauseBtn) {
         window.nagElements.pauseBtn.textContent = "Pause";
         window.nagElements.pauseBtn.classList.remove("paused");
+        // Remove all icon-related attributes
         window.nagElements.pauseBtn.removeAttribute("iconName");
         window.nagElements.pauseBtn.removeAttribute("layoutTraits");
         window.nagElements.pauseBtn.removeAttribute("src");
+        window.nagElements.pauseBtn.removeAttribute("icon");
+        window.nagElements.pauseBtn.removeAttribute("data-icon");
       }
       if (window.startListening) window.startListening();
       if (window.addMessage) window.addMessage("Conversation started", true);
@@ -266,22 +275,29 @@ window.setupUI = function() {
     return;
   }
 
-  // Remove problematic icon attributes from buttons
-  if (window.nagElements.toggleBtn) {
-    window.nagElements.toggleBtn.removeAttribute("iconName");
-    window.nagElements.toggleBtn.removeAttribute("layoutTraits");
-    window.nagElements.toggleBtn.removeAttribute("src");
-  }
-  if (window.nagElements.pauseBtn) {
-    window.nagElements.pauseBtn.removeAttribute("iconName");
-    window.nagElements.pauseBtn.removeAttribute("layoutTraits");
-    window.nagElements.pauseBtn.removeAttribute("src");
-  }
-  if (window.nagElements.modeToggle) {
-    window.nagElements.modeToggle.removeAttribute("iconName");
-    window.nagElements.modeToggle.removeAttribute("layoutTraits");
-    window.nagElements.modeToggle.removeAttribute("src");
-  }
+  // Remove all icon-related attributes from buttons
+  const buttons = [window.nagElements.toggleBtn, window.nagElements.pauseBtn, window.nagElements.modeToggle];
+  buttons.forEach(button => {
+    if (button) {
+      button.removeAttribute("iconName");
+      button.removeAttribute("layoutTraits");
+      button.removeAttribute("src");
+      button.removeAttribute("icon");
+      button.removeAttribute("data-icon");
+      // Remove any inline styles that might be causing issues
+      button.removeAttribute("style");
+      // Set basic styles for Safari compatibility
+      button.style.display = "block";
+      button.style.padding = "10px";
+      button.style.margin = "5px";
+      button.style.border = "1px solid #ccc";
+      button.style.borderRadius = "5px";
+      button.style.backgroundColor = "#fff";
+      button.style.color = "#000";
+      button.style.fontSize = "14px";
+      button.style.fontFamily = "system-ui, -apple-system, sans-serif";
+    }
+  });
 
   // Setup orb interactions
   setupOrbInteractions(window.nagElements.orb);
