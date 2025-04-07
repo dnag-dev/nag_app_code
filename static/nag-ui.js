@@ -1,10 +1,10 @@
 // Nag Digital Twin v2.0.0 - UI and Event Handling
 
-// Define handler functions for global use
-window.handleToggleClick = async function() {
+// Define handler functions
+function handleToggleClick() {
   console.log("Toggle button clicked");
   try {
-    if (window.unlockAudio) await window.unlockAudio();
+    if (window.unlockAudio) window.unlockAudio();
     
     if (window.nagState.listening) {
       console.log("Stopping conversation...");
@@ -12,7 +12,7 @@ window.handleToggleClick = async function() {
       if (window.nagElements.toggleBtn) {
         window.nagElements.toggleBtn.textContent = "Start Conversation";
       }
-      if (window.stopListening) await window.stopListening();
+      if (window.stopListening) window.stopListening();
       if (window.nagElements.orb) {
         window.nagElements.orb.classList.remove("listening", "speaking", "thinking");
         window.nagElements.orb.classList.add("idle");
@@ -30,7 +30,7 @@ window.handleToggleClick = async function() {
         window.nagElements.pauseBtn.textContent = "Pause";
         window.nagElements.pauseBtn.classList.remove("paused");
       }
-      if (window.startListening) await window.startListening();
+      if (window.startListening) window.startListening();
       if (window.addMessage) window.addMessage("Conversation started", true);
     }
     if (window.updateButtonStates) window.updateButtonStates();
@@ -38,9 +38,9 @@ window.handleToggleClick = async function() {
     console.error("Error in toggle button:", error);
     if (window.logDebug) window.logDebug("❌ Error: " + error.message);
   }
-};
+}
 
-window.handlePauseClick = function() {
+function handlePauseClick() {
   console.log("Pause button clicked");
   if (!window.nagState.listening) return;
   
@@ -73,9 +73,9 @@ window.handlePauseClick = function() {
       window.stopRecording();
     }
   }
-};
+}
 
-window.handleModeToggleClick = function() {
+function handleModeToggleClick() {
   console.log("Mode toggle clicked");
   window.nagState.isWalkieTalkieMode = !window.nagState.isWalkieTalkieMode;
   
@@ -108,7 +108,7 @@ window.handleModeToggleClick = function() {
       window.startListening();
     }
   }
-};
+}
 
 // Handler functions for orb interactions
 window.handleOrbClick = function(e) {
@@ -215,10 +215,26 @@ window.setupUI = function() {
     return;
   }
   
+  // Cache DOM elements
+  window.nagElements = {
+    messageContainer: document.getElementById('messageContainer'),
+    orb: document.getElementById('orb'),
+    toggleBtn: document.getElementById('toggleBtn'),
+    pauseBtn: document.getElementById('pauseBtn'),
+    modeToggle: document.getElementById('modeToggle'),
+    modeHint: document.getElementById('modeHint'),
+    debugPanel: document.getElementById('debugPanel'),
+    debugToggle: document.getElementById('debugToggle'),
+    audio: document.getElementById('audio'),
+    volumeBar: document.getElementById('volumeBar')
+  };
+  
   // Verify all required elements exist
-  if (!window.nagElements || !window.nagElements.orb || !window.nagElements.toggleBtn || 
-      !window.nagElements.pauseBtn || !window.nagElements.modeToggle || !window.nagElements.modeHint) {
-    console.error("Missing required UI elements");
+  const requiredElements = ['messageContainer', 'orb', 'toggleBtn', 'pauseBtn', 'modeToggle', 'modeHint', 'audio'];
+  const missingElements = requiredElements.filter(id => !window.nagElements[id]);
+  
+  if (missingElements.length > 0) {
+    console.error("Missing required elements:", missingElements);
     return;
   }
 
@@ -288,141 +304,17 @@ window.setupOrbInteractions = function(orb) {
   console.log("Orb interactions setup complete");
 };
 
-// Setup all event listeners for UI controls
-window.setupEventListeners = function() {
-  console.log("Setting up event listeners...");
-  
-  if (!window.nagElements) {
-    console.error('nagElements not initialized');
-    return;
-  }
-
-  const toggleBtn = window.nagElements.toggleBtn;
-  const pauseBtn = window.nagElements.pauseBtn;
-  const modeToggle = window.nagElements.modeToggle;
-  const orb = window.nagElements.orb;
-  
-  if (!toggleBtn || !pauseBtn || !modeToggle || !orb) {
-    console.error('Required UI elements not found:', {
-      toggleBtn: !!toggleBtn,
-      pauseBtn: !!pauseBtn,
-      modeToggle: !!modeToggle,
-      orb: !!orb
-    });
-    return;
-  }
-  
-  console.log("All UI elements found, setting up event listeners");
-  
-  // Use direct assignment for most reliable event handling on iOS/Safari
-  toggleBtn.onclick = window.handleToggleClick;
-  pauseBtn.onclick = window.handlePauseClick;
-  modeToggle.onclick = window.handleModeToggleClick;
-  
-  // Add special debugging to verify button event handlers
-  console.log("Verifying event handlers assigned:", {
-    toggleBtn: typeof toggleBtn.onclick === 'function',
-    pauseBtn: typeof pauseBtn.onclick === 'function',
-    modeToggle: typeof modeToggle.onclick === 'function'
-  });
-  
-  // Set up Safari-friendly orb interactions
-  window.setupOrbInteractions(orb);
-  
-  // Test click to ensure handlers are working
-  setTimeout(() => {
-    console.log("Event binding test complete");
-    if (window.logDebug) window.logDebug("Event listeners configured successfully");
-  }, 500);
-  
-  console.log("Event listeners setup complete");
-};
-
-// Setup interruption handling for better UX
-window.setupInterruptionHandling = function() {
-  console.log("Setting up interruption handling");
-  
-  // Create a function for the interruption handler
-  function handleInterruptionClick(e) {
-    // Don't interrupt if clicking on controls
-    const target = e.target;
-    
-    if (target === window.nagElements.toggleBtn || 
-        target === window.nagElements.pauseBtn ||
-        target === window.nagElements.modeToggle ||
-        target === window.nagElements.orb ||
-        target.id === 'showAllLogs' ||
-        (window.nagState.currentPlayButton && 
-         (target === window.nagState.currentPlayButton || 
-          window.nagState.currentPlayButton.contains(target)))) {
-      return;
-    }
-    
-    // If orb is speaking, interrupt it
-    const orb = window.nagElements.orb;
-    const audio = window.nagElements.audio;
-    
-    if (orb && orb.classList.contains("speaking")) {
-      if (window.logDebug) window.logDebug("🔄 Interrupting AI response...");
-      if (audio) {
-        audio.pause();
-        audio.currentTime = 0;
-      }
-      orb.classList.remove("speaking");
-      orb.classList.add("idle");
-      
-      if (!window.nagState.isWalkieTalkieMode && !window.nagState.isPaused) {
-        setTimeout(() => {
-          if (!window.nagState.interrupted && !window.nagState.isPaused && window.startListening) {
-            window.startListening();
-          }
-        }, 500);
-      }
-    }
-  }
-  
-  // Use onclick for more reliable handling on mobile
-  document.onclick = handleInterruptionClick;
-  
-  console.log("Interruption handling setup complete");
-};
-
-// Function to add a message to the chat
-window.addMessage = function(text, isUser = false) {
-  // Use the global window.addMessage function if it exists separately
-  if (typeof window.addMessage !== window.addMessage && typeof window.addMessage === 'function') {
-    window.addMessage(text, isUser);
-    return;
-  }
-  
-  // Fallback to direct DOM manipulation
-  const messagesContainer = document.getElementById('messages');
-  if (!messagesContainer) {
-    console.error("Messages container not found");
-    return;
-  }
-  
-  const messageDiv = document.createElement('div');
-  messageDiv.className = `message ${isUser ? 'user' : 'ai'}`;
-  messageDiv.textContent = text;
-  
-  // Add at the bottom (normal chat order)
-  messagesContainer.appendChild(messageDiv);
-  
-  // Scroll to show the new message
-  messagesContainer.scrollTop = messagesContainer.scrollHeight;
-};
-
 // Helper function to update mode hint
 window.updateModeHint = function(text) {
-  const modeHint = document.getElementById('mode-hint');
-  if (modeHint) {
-    modeHint.textContent = text;
-    modeHint.style.display = "block";
+  if (window.nagElements && window.nagElements.modeHint) {
+    window.nagElements.modeHint.textContent = text;
+    window.nagElements.modeHint.style.display = "block";
     
     // Auto-hide after a few seconds
     setTimeout(() => {
-      modeHint.style.display = "none";
+      if (window.nagElements.modeHint) {
+        window.nagElements.modeHint.style.display = "none";
+      }
     }, 3000);
   }
 };
