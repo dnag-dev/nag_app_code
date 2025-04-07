@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Nag - The Digital Twin</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>Nag - Your AI Assistant</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <link rel="stylesheet" href="/static/styles.css" />
   <!-- Initialize global state before loading scripts -->
   <script>
@@ -11,7 +11,7 @@
     window.nagState = {
       listening: false,
       isPaused: false,
-      isWalkieTalkieMode: true,
+      isWalkieTalkieMode: false,
       interrupted: false,
       audioUnlocked: false,
       mediaRecorder: null,
@@ -21,7 +21,16 @@
       isiOS: /iPad|iPhone|iPod/.test(navigator.userAgent) || 
         (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
     };
-    window.nagElements = {};
+    window.nagElements = {
+      messageContainer: document.getElementById('messageContainer'),
+      orb: document.getElementById('orb'),
+      toggleBtn: document.getElementById('toggleBtn'),
+      pauseBtn: document.getElementById('pauseBtn'),
+      modeToggle: document.getElementById('modeToggle'),
+      modeHint: document.getElementById('modeHint'),
+      debugPanel: document.getElementById('debugPanel'),
+      debugToggle: document.getElementById('debugToggle')
+    };
   </script>
   <!-- Load JavaScript files in correct order -->
   <script src="/static/nag-utils.js"></script>
@@ -62,47 +71,48 @@
   <style>
     /* Reset and base styles */
     * {
-      box-sizing: border-box;
       margin: 0;
       padding: 0;
+      box-sizing: border-box;
     }
     
-    html, body {
-      height: 100%;
-      width: 100%;
-      overflow: hidden;
-      background-color: #f0f0f0;
+    body {
+      margin: 0;
+      padding: 0;
+      background: #f0f0f0;
       display: flex;
       justify-content: center;
       align-items: center;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      min-height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, "San Francisco", Helvetica, Arial, sans-serif;
     }
 
-    /* iPhone simulator container */
     .device-frame {
-      position: relative;
       width: 375px;
       height: 812px;
-      background: white;
-      border-radius: 44px;
+      background: #fff;
+      border-radius: 40px;
+      box-shadow: 0 0 0 14px #111, 0 0 0 17px #222, 0 0 0 20px rgba(0,0,0,0.2);
       overflow: hidden;
-      border: 14px solid #111;
-      box-shadow: 0 0 0 2px #222;
+      position: relative;
+      margin: 20px auto;
+      display: flex;
+      flex-direction: column;
     }
 
-    /* iPhone notch */
+    /* Notch styling */
     .device-frame:before {
       content: '';
       position: absolute;
       top: 0;
       left: 50%;
       transform: translateX(-50%);
-      height: 30px;
       width: 150px;
+      height: 30px;
       background: #111;
       border-bottom-left-radius: 18px;
       border-bottom-right-radius: 18px;
-      z-index: 10;
+      z-index: 2;
     }
 
     /* Home indicator */
@@ -112,324 +122,219 @@
       bottom: 8px;
       left: 50%;
       transform: translateX(-50%);
+      width: 135px;
       height: 5px;
-      width: 134px;
       background: #000;
-      border-radius: 2.5px;
-      z-index: 10;
+      border-radius: 3px;
     }
 
-    /* App container */
-    #app-container {
-      height: 100%;
-      width: 100%;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-
-    /* Status bar */
-    .status-bar {
-      padding-top: 40px; /* Account for notch */
-      height: 70px;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      border-bottom: 1px solid #e0e0e0;
-      z-index: 2;
-    }
-
-    #status {
-      padding: 8px 16px;
-      border-radius: 16px;
-      background-color: rgba(0, 200, 0, 0.1);
-      color: #1c7430;
-      font-size: 14px;
-      font-weight: 500;
-    }
-
-    /* Header */
-    header {
-      padding: 12px 16px;
-      text-align: center;
-      border-bottom: 1px solid #e0e0e0;
-    }
-
-    header h1 {
-      font-size: 20px;
-      color: #333;
-      margin-bottom: 5px;
-    }
-
-    header .subtitle {
-      font-size: 14px;
-      color: #777;
-    }
-
-    /* Debug toggle */
-    .debug-control {
-      padding: 8px 16px;
-      display: flex;
-      justify-content: flex-end;
-      align-items: center;
-      border-bottom: 1px solid #e0e0e0;
-    }
-
-    .debug-control label {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 14px;
-      color: #555;
-    }
-
-    .debug-control input[type="checkbox"] {
-      width: 16px;
-      height: 16px;
-    }
-
-    /* Main content area */
-    .main-content {
+    .app-container {
       flex: 1;
       display: flex;
       flex-direction: column;
-      overflow: hidden;
-      padding: 16px;
-    }
-
-    /* Orb */
-    #orb-container {
+      padding: 44px 20px 34px;
       position: relative;
-      width: 140px;
-      height: 140px;
-      margin: 10px auto 20px;
-      display: flex;
-      justify-content: center;
-      align-items: center;
+      overflow: hidden;
     }
 
-    #orb {
-      width: 100px;
-      height: 100px;
-      border-radius: 50%;
-      background: radial-gradient(circle at 30% 30%, #4a90e2, #366ab3);
-      box-shadow: 0 0 20px rgba(0, 100, 255, 0.5), inset 0 0 10px rgba(255, 255, 255, 0.3);
-      cursor: pointer;
-      transition: all 0.3s ease;
-    }
-
-    #orb.idle {
-      background: radial-gradient(circle at 30% 30%, #4a90e2, #366ab3);
-    }
-
-    #orb.listening {
-      background: radial-gradient(circle at 30% 30%, #4cd964, #28a745);
-      box-shadow: 0 0 30px rgba(0, 200, 0, 0.6);
-      animation: pulse 1.5s infinite;
-    }
-
-    #orb.speaking {
-      background: radial-gradient(circle at 30% 30%, #ff9500, #ed8936);
-      box-shadow: 0 0 30px rgba(255, 150, 0, 0.6);
-      animation: speak 0.5s infinite;
-    }
-
-    #orb.thinking {
-      background: radial-gradient(circle at 30% 30%, #af52de, #8a2be2);
-      box-shadow: 0 0 30px rgba(150, 0, 255, 0.6);
-      animation: think 2s infinite;
-    }
-
-    .volume-bar {
-      position: absolute;
-      bottom: 0;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 80%;
-      height: 4px;
-      background: #00ff00;
-      border-radius: 2px;
-    }
-
-    /* Messages container */
-    .messages-container {
+    .message-container {
       flex: 1;
-      display: flex;
-      flex-direction: column;
       overflow-y: auto;
-      background: #f7f7f7;
+      padding: 10px;
+      margin-bottom: 20px;
+      background: #f8f8f8;
       border-radius: 12px;
-      padding: 12px;
-      margin-bottom: 12px;
-      border: 1px solid #e0e0e0;
+      min-height: 200px;
     }
 
-    /* Message bubbles */
     .message {
+      margin: 8px 0;
+      padding: 10px 15px;
+      border-radius: 12px;
       max-width: 80%;
-      padding: 10px 14px;
-      margin-bottom: 8px;
-      border-radius: 18px;
-      font-size: 14px;
-      line-height: 1.4;
+      word-wrap: break-word;
     }
 
-    .message.user {
-      align-self: flex-end;
-      background: #007aff;
+    .user-message {
+      background: #007AFF;
       color: white;
+      margin-left: auto;
       border-bottom-right-radius: 4px;
     }
 
-    .message.ai {
-      align-self: flex-start;
-      background: #e5e5ea;
-      color: #000;
+    .assistant-message {
+      background: #E5E5EA;
+      color: black;
+      margin-right: auto;
       border-bottom-left-radius: 4px;
     }
 
-    /* Debug container */
-    .debug-container {
-      display: none;
-      flex-direction: column;
-      background: #1a1a1a;
-      color: #ffffff;
-      border-radius: 12px;
-      overflow: hidden;
-      height: 120px;
-      margin-bottom: 12px;
+    .system-message {
+      background: #f0f0f0;
+      color: #666;
+      font-size: 0.9em;
+      margin: 8px auto;
+      text-align: center;
+      padding: 5px 10px;
+      border-radius: 8px;
     }
 
-    .debug-container.visible {
+    .controls {
       display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 20px;
     }
 
-    .debug-header {
-      padding: 8px 12px;
-      background: #333;
-      font-size: 12px;
-      font-weight: bold;
-      border-bottom: 1px solid #444;
+    .button-row {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
     }
 
-    .debug-content {
-      flex: 1;
-      overflow-y: auto;
-      font-family: monospace;
-      font-size: 11px;
-      padding: 8px;
-    }
-
-    .log-entry {
-      margin-bottom: 4px;
-      padding-bottom: 4px;
-      border-bottom: 1px solid rgba(255,255,255,0.1);
-      white-space: pre-wrap;
-      word-break: break-word;
-    }
-
-    .log-entry.info { color: #4da6ff; }
-    .log-entry.debug { color: #cccccc; }
-    .log-entry.error { color: #ff4d4d; }
-
-    /* Control buttons */
-    .controls-container {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      grid-gap: 10px;
-      padding: 10px 16px 30px; /* Extra padding at bottom for home indicator */
-    }
-
-    .btn {
-      padding: 14px 0;
+    button {
+      padding: 12px 20px;
       border: none;
       border-radius: 10px;
+      background: #007AFF;
+      color: white;
       font-size: 16px;
-      font-weight: 500;
       cursor: pointer;
-      text-align: center;
-      transition: all 0.2s ease;
+      transition: background 0.2s;
+      flex: 1;
+      max-width: 200px;
     }
 
-    .btn.primary {
-      grid-column: 1 / 3;
-      background: #007aff;
+    button:hover {
+      background: #0056b3;
+    }
+
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+
+    button.active {
+      background: #0056b3;
+    }
+
+    .orb-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin: 20px 0;
+      position: relative;
+    }
+
+    .orb {
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      background: #007AFF;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      position: relative;
+      display: flex;
+      justify-content: center;
+      align-items: center;
       color: white;
-    }
-
-    .btn.secondary {
-      background: #e5e5ea;
-      color: #000;
-    }
-
-    .btn.paused {
-      background: #ff3b30;
-      color: white;
-    }
-
-    /* Animations */
-    @keyframes pulse {
-      0% { transform: scale(1); }
-      50% { transform: scale(1.05); }
-      100% { transform: scale(1); }
-    }
-
-    @keyframes speak {
-      0% { transform: scale(1); }
-      50% { transform: scale(1.03); }
-      100% { transform: scale(1); }
-    }
-
-    @keyframes think {
-      0% { transform: rotate(0deg); }
-      25% { transform: rotate(5deg); }
-      75% { transform: rotate(-5deg); }
-      100% { transform: rotate(0deg); }
-    }
-
-    /* Hints and overlays */
-    .safari-hint, .mode-hint {
-      position: absolute;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(0, 0, 0, 0.7);
-      color: white;
-      padding: 8px 16px;
-      border-radius: 20px;
       font-size: 14px;
       text-align: center;
-      z-index: 100;
-      display: none;
+      padding: 10px;
     }
 
-    .safari-hint {
-      top: 100px;
+    .orb.idle {
+      background: #007AFF;
+      transform: scale(1);
+    }
+
+    .orb.listening {
+      background: #FF3B30;
+      transform: scale(1.1);
+      animation: pulse 1.5s infinite;
+    }
+
+    .orb.speaking {
+      background: #34C759;
+      transform: scale(1.1);
+    }
+
+    .orb.thinking {
+      background: #FF9500;
+      transform: scale(1.1);
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(1.1); }
+      50% { transform: scale(1.2); }
+      100% { transform: scale(1.1); }
     }
 
     .mode-hint {
-      bottom: 100px;
+      text-align: center;
+      color: #666;
+      font-size: 14px;
+      margin: 10px 0;
+      padding: 5px;
+      background: #f0f0f0;
+      border-radius: 8px;
     }
 
-    /* Play button */
-    .play-button {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      padding: 12px 24px;
-      background: #007aff;
+    .debug-panel {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: rgba(0, 0, 0, 0.9);
+      color: #fff;
+      padding: 10px;
+      font-family: monospace;
+      font-size: 12px;
+      max-height: 200px;
+      overflow-y: auto;
+      z-index: 1000;
+      display: none;
+    }
+
+    .debug-panel.active {
+      display: block;
+    }
+
+    .debug-toggle {
+      position: fixed;
+      bottom: 10px;
+      right: 10px;
+      background: rgba(0, 0, 0, 0.7);
       color: white;
       border: none;
-      border-radius: 24px;
-      font-size: 16px;
-      font-weight: 600;
+      padding: 5px 10px;
+      border-radius: 5px;
       cursor: pointer;
-      z-index: 100;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+      z-index: 1001;
     }
 
-    .play-button.safari {
-      background: #ff3b30;
+    @media (max-width: 400px) {
+      .device-frame {
+        width: 100%;
+        height: 100vh;
+        border-radius: 0;
+        margin: 0;
+      }
+
+      .app-container {
+        padding: 44px 10px 34px;
+      }
+
+      button {
+        padding: 10px 15px;
+        font-size: 14px;
+      }
+
+      .orb {
+        width: 80px;
+        height: 80px;
+      }
     }
   </style>
 </head>
@@ -453,59 +358,31 @@
   </script>
 
   <div class="device-frame">
-    <div id="app-container">
-      <div class="status-bar">
-        <div id="status" class="status">Connected to server</div>
+    <div class="app-container">
+      <div class="message-container" id="messageContainer"></div>
+      <div class="orb-container">
+        <div class="orb idle" id="orb">Click to start</div>
       </div>
-
-      <header>
-        <h1>Nag's Digital Twin</h1>
-        <p class="subtitle">Dinakara's mind — therapist, companion, mirror</p>
-      </header>
-
-      <div class="debug-control">
-        <label>
-          <input type="checkbox" id="showAllLogs" />
-          Show Debug Logs
-        </label>
-      </div>
-
-      <div class="main-content">
-        <div id="orb-container">
-          <div id="orb" class="idle"></div>
-          <div class="volume-bar"></div>
+      <div class="mode-hint" id="modeHint">Nag will listen continuously for your voice</div>
+      <div class="controls">
+        <div class="button-row">
+          <button id="toggleBtn">Start Conversation</button>
+          <button id="pauseBtn" disabled>Pause</button>
         </div>
-
-        <div class="messages-container" id="messages">
-          <!-- Messages will be added here -->
+        <div class="button-row">
+          <button id="modeToggle">Switch to walkie-talkie mode</button>
         </div>
-
-        <div class="debug-container" id="debug">
-          <div class="debug-header">
-            <span>Debug Log</span>
-          </div>
-          <div class="debug-content">
-            <!-- Debug logs will be added here -->
-          </div>
-        </div>
-      </div>
-
-      <div class="controls-container">
-        <button id="toggle-btn" class="btn primary">Start Conversation</button>
-        <button id="pause-btn" class="btn secondary">Pause</button>
-        <button id="mode-toggle" class="btn secondary">Switch to Continuous</button>
       </div>
     </div>
   </div>
 
-  <div id="mode-hint" class="mode-hint">Click & hold the orb to use walkie-talkie mode</div>
-  <div class="safari-hint">Tap the orb to enable audio</div>
-  <audio id="audio" hidden></audio>
+  <div class="debug-panel" id="debugPanel"></div>
+  <button class="debug-toggle" id="debugToggle">Toggle Debug</button>
 
   <script>
     // Initialize message and debug handlers immediately
     window.addMessage = function(text, isUser = false) {
-      const messagesContainer = document.getElementById('messages');
+      const messagesContainer = document.getElementById('messageContainer');
       if (!messagesContainer) return;
       
       const message = document.createElement('div');
