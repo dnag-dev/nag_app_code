@@ -5,9 +5,10 @@
   <title>Nag - Your AI Assistant</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <link rel="stylesheet" href="/static/styles.css" />
-  <!-- Initialize global state before loading scripts -->
+  
+  <!-- Initialize global state and elements -->
   <script>
-    // Initialize global state and elements
+    // Initialize global state
     window.nagState = {
       listening: false,
       isPaused: false,
@@ -19,20 +20,38 @@
       audioChunks: [],
       isSafari: /^((?!chrome|android).)*safari/i.test(navigator.userAgent),
       isiOS: /iPad|iPhone|iPod/.test(navigator.userAgent) || 
-        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1),
+      initialized: false
     };
-    window.nagElements = {
-      messageContainer: document.getElementById('messageContainer'),
-      orb: document.getElementById('orb'),
-      toggleBtn: document.getElementById('toggleBtn'),
-      pauseBtn: document.getElementById('pauseBtn'),
-      modeToggle: document.getElementById('modeToggle'),
-      modeHint: document.getElementById('modeHint'),
-      debugPanel: document.getElementById('debugPanel'),
-      debugToggle: document.getElementById('debugToggle'),
-      audio: document.getElementById('audio')
+
+    // Initialize elements object (will be populated after DOM is ready)
+    window.nagElements = {};
+
+    // Debug logging function
+    window.logMessage = function(message, level = 'info') {
+      console.log(`[${level.toUpperCase()}] ${message}`);
+      const debugPanel = document.getElementById('debugPanel');
+      if (debugPanel) {
+        const timestamp = new Date().toLocaleTimeString();
+        debugPanel.innerHTML += `[${timestamp}] [${level.toUpperCase()}] ${message}<br>`;
+        debugPanel.scrollTop = debugPanel.scrollHeight;
+      }
+    };
+
+    // Message display function
+    window.addMessage = function(text, isUser = false) {
+      const messagesContainer = document.getElementById('messageContainer');
+      if (!messagesContainer) return;
+      
+      const message = document.createElement('div');
+      message.className = `message ${isUser ? 'user-message' : 'assistant-message'}`;
+      message.textContent = text;
+      
+      messagesContainer.appendChild(message);
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
     };
   </script>
+
   <!-- Load JavaScript files in correct order -->
   <script src="/static/nag-utils.js"></script>
   <script src="/static/nag-audio.js"></script>
@@ -40,6 +59,7 @@
   <script src="/static/nag-transcription.js"></script>
   <script src="/static/nag-ui.js"></script>
   <script src="/static/nag-core.js"></script>
+
   <script>
     // Track script loading
     window.scriptLoadOrder = [];
@@ -47,25 +67,59 @@
     scripts.forEach(script => {
       script.onload = () => {
         window.scriptLoadOrder.push(script.src);
-        console.log(`Loaded: ${script.src}`);
-        if (window.logMessage) {
-          window.logMessage(`Script loaded: ${script.src}`, 'debug');
-        }
+        window.logMessage(`Script loaded: ${script.src}`, 'debug');
       };
     });
 
-    // Initialize app when all scripts are loaded
-    window.addEventListener('load', function() {
-      console.log('All scripts loaded in order:', window.scriptLoadOrder);
-      if (window.logMessage) {
-        window.logMessage('All scripts loaded, initializing app...', 'info');
+    // Initialize app when DOM is ready
+    document.addEventListener('DOMContentLoaded', function() {
+      // Cache all DOM elements
+      window.nagElements = {
+        messageContainer: document.getElementById('messageContainer'),
+        orb: document.getElementById('orb'),
+        toggleBtn: document.getElementById('toggleBtn'),
+        pauseBtn: document.getElementById('pauseBtn'),
+        modeToggle: document.getElementById('modeToggle'),
+        modeHint: document.getElementById('modeHint'),
+        debugPanel: document.getElementById('debugPanel'),
+        debugToggle: document.getElementById('debugToggle'),
+        audio: document.getElementById('audio'),
+        volumeBar: document.getElementById('volumeBar')
+      };
+
+      // Verify all required elements exist
+      const requiredElements = ['messageContainer', 'orb', 'toggleBtn', 'pauseBtn', 'modeToggle', 'modeHint', 'audio'];
+      const missingElements = requiredElements.filter(id => !window.nagElements[id]);
+      
+      if (missingElements.length > 0) {
+        window.logMessage(`Missing required elements: ${missingElements.join(', ')}`, 'error');
+        return;
       }
-      if (typeof initializeApp === 'function') {
-        initializeApp();
-      } else {
-        if (window.logMessage) {
+
+      // Setup debug toggle
+      if (window.nagElements.debugToggle) {
+        window.nagElements.debugToggle.onclick = function() {
+          window.nagElements.debugPanel.classList.toggle('active');
+        };
+      }
+
+      // Initialize app only if all scripts are loaded
+      if (window.scriptLoadOrder.length === scripts.length) {
+        window.logMessage('All scripts loaded, initializing app...', 'info');
+        if (typeof initializeApp === 'function') {
+          initializeApp();
+        } else {
           window.logMessage('Error: initializeApp function not found!', 'error');
         }
+      } else {
+        window.logMessage('Waiting for all scripts to load...', 'info');
+        window.addEventListener('load', function() {
+          if (typeof initializeApp === 'function') {
+            initializeApp();
+          } else {
+            window.logMessage('Error: initializeApp function not found!', 'error');
+          }
+        });
       }
     });
   </script>
@@ -337,6 +391,26 @@
         height: 80px;
       }
     }
+
+    /* Volume bar styles */
+    .volume-container {
+      position: absolute;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 200px;
+      height: 8px;
+      background-color: #f0f0f0;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    
+    .volume-bar {
+      height: 100%;
+      width: 0%;
+      background-color: #00C851;
+      transition: width 0.1s ease, background-color 0.1s ease;
+    }
   </style>
 </head>
 
@@ -351,7 +425,7 @@
     
     // Force unlock audio on any user interaction
     function tryUnlockAudio() {
-      if (window.unlockAudio) {
+      if (window.unlockAudio && !window.nagState.audioUnlocked) {
         window.unlockAudio();
       }
     }
@@ -368,6 +442,9 @@
         <div class="orb idle" id="orb">Click to start</div>
       </div>
       <div class="mode-hint" id="modeHint">Nag will listen continuously for your voice</div>
+      <div class="volume-container">
+        <div id="volumeBar" class="volume-bar"></div>
+      </div>
       <div class="controls">
         <div class="button-row">
           <button id="toggleBtn">Start Conversation</button>
@@ -384,162 +461,9 @@
   <button class="debug-toggle" id="debugToggle">Toggle Debug</button>
 
   <script>
-    // Initialize message and debug handlers immediately
-    window.addMessage = function(text, isUser = false) {
-      const messagesContainer = document.getElementById('messageContainer');
-      if (!messagesContainer) return;
-      
-      const message = document.createElement('div');
-      message.className = `message ${isUser ? 'user' : 'ai'}`;
-      message.textContent = text;
-      
-      // Add at the bottom (normal chat order)
-      messagesContainer.appendChild(message);
-      
-      // Scroll to the bottom to show the latest message
-      messagesContainer.scrollTop = messagesContainer.scrollHeight;
-    };
-
-    window.logMessage = function(message, level = 'info') {
-      const debugContent = document.querySelector('.debug-content');
-      if (!debugContent) return;
-
-      const entry = document.createElement('div');
-      entry.className = `log-entry ${level}`;
-      const timestamp = new Date().toLocaleTimeString();
-      entry.textContent = `[${timestamp}] [${level.toUpperCase()}] ${message}`;
-      
-      // Add messages at the bottom (latest at bottom like a console)
-      debugContent.appendChild(entry);
-      
-      // Auto-scroll to bottom
-      debugContent.scrollTop = debugContent.scrollHeight;
-    };
-
-    // Setup debug toggle
-    document.addEventListener('DOMContentLoaded', function() {
-      const debugToggle = document.getElementById('showAllLogs');
-      const debugContainer = document.getElementById('debug');
-      
-      if (debugToggle && debugContainer) {
-        debugToggle.addEventListener('change', function() {
-          debugContainer.classList.toggle('visible', this.checked);
-        });
-      }
-      
-      // Direct event binding for all buttons to ensure iOS compatibility
-      const toggleBtn = document.getElementById('toggle-btn');
-      const pauseBtn = document.getElementById('pause-btn');
-      const modeToggle = document.getElementById('mode-toggle');
-      const orb = document.getElementById('orb');
-      
-      if (toggleBtn) {
-        toggleBtn.onclick = function() {
-          console.log("Toggle button clicked directly");
-          if (window.handleToggleClick) {
-            window.handleToggleClick();
-          } else if (window.nagState) {
-            if (window.nagState.listening) {
-              window.nagState.listening = false;
-              toggleBtn.textContent = "Start Conversation";
-              if (window.stopListening) window.stopListening();
-            } else {
-              window.nagState.listening = true;
-              toggleBtn.textContent = "Stop Conversation";
-              if (window.startListening) window.startListening();
-            }
-          }
-        };
-      }
-      
-      if (pauseBtn) {
-        pauseBtn.onclick = function() {
-          console.log("Pause button clicked directly");
-          if (window.handlePauseClick) {
-            window.handlePauseClick();
-          } else if (window.nagState) {
-            window.nagState.isPaused = !window.nagState.isPaused;
-            pauseBtn.textContent = window.nagState.isPaused ? "Resume" : "Pause";
-            pauseBtn.classList.toggle('paused', window.nagState.isPaused);
-          }
-        };
-      }
-      
-      if (modeToggle) {
-        modeToggle.onclick = function() {
-          console.log("Mode toggle clicked directly");
-          if (window.handleModeToggleClick) {
-            window.handleModeToggleClick();
-          } else if (window.nagState) {
-            window.nagState.isWalkieTalkieMode = !window.nagState.isWalkieTalkieMode;
-            modeToggle.textContent = window.nagState.isWalkieTalkieMode ? 
-              "Switch to Continuous" : "Switch to Walkie-Talkie";
-          }
-        };
-      }
-      
-      if (orb) {
-        // Handle orb clicks directly
-        orb.onclick = function(e) {
-          console.log("Orb clicked directly");
-          if (window.handleOrbClick) {
-            window.handleOrbClick(e);
-          } else if (window.nagState && !window.nagState.isWalkieTalkieMode) {
-            if (!window.nagState.listening) {
-              window.nagState.listening = true;
-              orb.classList.remove('idle');
-              orb.classList.add('listening');
-              if (window.startListening) window.startListening();
-              if (toggleBtn) toggleBtn.textContent = "Stop Conversation";
-            } else {
-              window.nagState.listening = false;
-              orb.classList.remove('listening');
-              orb.classList.add('idle');
-              if (window.stopListening) window.stopListening();
-              if (toggleBtn) toggleBtn.textContent = "Start Conversation";
-            }
-          }
-        };
-        
-        // Handle walkie-talkie mode
-        orb.onmousedown = orb.ontouchstart = function(e) {
-          if (e.preventDefault) e.preventDefault();
-          console.log("Orb press/touch start directly");
-          
-          if (window.nagState && window.nagState.isWalkieTalkieMode) {
-            window.nagState.walkieTalkieActive = true;
-            orb.classList.remove('idle');
-            orb.classList.add('listening');
-            if (window.startListening) window.startListening();
-          }
-        };
-        
-        orb.onmouseup = orb.onmouseleave = orb.ontouchend = function(e) {
-          if (e && e.preventDefault) e.preventDefault();
-          console.log("Orb release/touch end directly");
-          
-          if (window.nagState && window.nagState.isWalkieTalkieMode && window.nagState.walkieTalkieActive) {
-            window.nagState.walkieTalkieActive = false;
-            orb.classList.remove('listening');
-            orb.classList.add('idle');
-            if (window.stopListening) window.stopListening();
-          }
-        };
-      }
-      
-      // Add welcome message
+    // Add welcome message after initialization
+    if (window.nagState && !window.nagState.initialized) {
       window.addMessage("Welcome! Click the orb or tap 'Start Conversation' to begin.", false);
-    });
-    
-    // Safari/iOS detection
-    function isMobileSafari() {
-      return /^((?!chrome|android).)*safari/i.test(navigator.userAgent) &&
-             /iPhone|iPad|iPod/.test(navigator.userAgent);
-    }
-
-    // Show Safari hint if needed
-    if (isMobileSafari()) {
-      document.querySelector('.safari-hint').style.display = 'block';
     }
   </script>
 </body>

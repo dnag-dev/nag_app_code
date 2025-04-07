@@ -561,3 +561,82 @@ function updateVolume(analyserNode) {
   
   return volume;
 }
+
+// Update volume bar visualization
+function updateVolumeBar(volume) {
+  const volumeBar = document.getElementById('volumeBar');
+  if (!volumeBar) return; // Early return if element doesn't exist
+  
+  // Convert volume to percentage (0-100)
+  const percentage = Math.min(100, Math.max(0, Math.round(volume * 100)));
+  
+  // Update volume bar width
+  volumeBar.style.width = `${percentage}%`;
+  
+  // Update color based on volume level
+  if (percentage > 80) {
+    volumeBar.style.backgroundColor = '#ff4444'; // Red for loud
+  } else if (percentage > 50) {
+    volumeBar.style.backgroundColor = '#ffbb33'; // Yellow for medium
+  } else {
+    volumeBar.style.backgroundColor = '#00C851'; // Green for quiet
+  }
+}
+
+// Stop listening and recording
+window.stopListening = async function() {
+  console.log("Stopping listening...");
+  if (window.logDebug) window.logDebug("⏹️ Stopping listening...");
+  
+  try {
+    // Stop volume visualization
+    if (window.volumeInterval) {
+      clearInterval(window.volumeInterval);
+      window.volumeInterval = null;
+    }
+    
+    // Reset volume bar if it exists
+    const volumeBar = document.getElementById('volumeBar');
+    if (volumeBar) {
+      volumeBar.style.width = '0%';
+      volumeBar.style.backgroundColor = '#00C851';
+    }
+    
+    // Stop media recorder if active
+    if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state === 'recording') {
+      window.nagState.mediaRecorder.stop();
+      window.nagState.mediaRecorder = null;
+    }
+    
+    // Stop audio stream if active
+    if (window.nagState.stream) {
+      window.nagState.stream.getTracks().forEach(track => track.stop());
+      window.nagState.stream = null;
+    }
+    
+    // Reset state
+    window.nagState.listening = false;
+    window.nagState.audioChunks = [];
+    
+    // Update UI
+    if (window.nagElements.orb) {
+      window.nagElements.orb.classList.remove('listening', 'speaking', 'thinking');
+      window.nagElements.orb.classList.add('idle');
+    }
+    
+    if (window.nagElements.toggleBtn) {
+      window.nagElements.toggleBtn.textContent = "Start Conversation";
+      window.nagElements.toggleBtn.classList.remove('active');
+    }
+    
+    if (window.updateButtonStates) {
+      window.updateButtonStates();
+    }
+    
+    console.log("Successfully stopped listening");
+    if (window.logDebug) window.logDebug("✅ Successfully stopped listening");
+  } catch (error) {
+    console.error("Error stopping listening:", error);
+    if (window.logDebug) window.logDebug(`❌ Error stopping listening: ${error.message}`);
+  }
+};
