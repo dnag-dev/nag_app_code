@@ -259,6 +259,13 @@
       transition: background 0.2s;
       flex: 1;
       max-width: 200px;
+      -webkit-appearance: none;
+      appearance: none;
+      text-align: center;
+      text-decoration: none;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-tap-highlight-color: transparent;
     }
 
     button:hover {
@@ -297,6 +304,11 @@
       font-size: 14px;
       text-align: center;
       padding: 10px;
+      -webkit-appearance: none;
+      appearance: none;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-tap-highlight-color: transparent;
     }
 
     .orb.idle {
@@ -440,7 +452,7 @@
     <div class="app-container">
       <div class="message-container" id="messageContainer"></div>
       <div class="orb-container">
-        <div class="orb idle" id="orb">Click to start</div>
+        <div class="orb idle" id="orb" role="button" tabindex="0">Click to start</div>
       </div>
       <div class="mode-hint" id="modeHint">Nag will listen continuously for your voice</div>
       <div class="volume-container">
@@ -448,18 +460,18 @@
       </div>
       <div class="controls">
         <div class="button-row">
-          <button id="toggleBtn">Start Conversation</button>
-          <button id="pauseBtn" disabled>Pause</button>
+          <button id="toggleBtn" type="button" class="button">Start Conversation</button>
+          <button id="pauseBtn" type="button" class="button" disabled>Pause</button>
         </div>
         <div class="button-row">
-          <button id="modeToggle">Switch to walkie-talkie mode</button>
+          <button id="modeToggle" type="button" class="button">Switch to walkie-talkie mode</button>
         </div>
       </div>
     </div>
   </div>
 
   <div class="debug-panel" id="debugPanel"></div>
-  <button class="debug-toggle" id="debugToggle">Toggle Debug</button>
+  <button class="debug-toggle" id="debugToggle" type="button">Toggle Debug</button>
 
   <script>
     // Add welcome message after initialization
