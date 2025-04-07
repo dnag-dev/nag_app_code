@@ -16,7 +16,10 @@
       audioUnlocked: false,
       mediaRecorder: null,
       stream: null,
-      audioChunks: []
+      audioChunks: [],
+      isSafari: /^((?!chrome|android).)*safari/i.test(navigator.userAgent),
+      isiOS: /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
     };
     window.nagElements = {};
   </script>
@@ -54,62 +57,101 @@
     body {
       margin: 0;
       padding: 0;
-      background: #111;
+      background: #f0f0f0;
       display: flex;
       justify-content: center;
       align-items: center;
       min-height: 100vh;
-      overflow-x: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "San Francisco", Helvetica, Arial, sans-serif;
     }
 
     .device-frame {
-      width: 100%;
-      max-width: 500px;
-      height: 100%;
-      background: #000;
+      width: 375px;
+      height: 812px;
+      background: #fff;
       border-radius: 40px;
-      padding: 20px;
-      box-shadow: 0 0 20px rgba(0, 0, 0, 0.3);
-      box-sizing: border-box;
+      box-shadow: 0 0 0 14px #111, 0 0 0 17px #222, 0 0 0 20px rgba(0,0,0,0.2);
+      overflow: hidden;
+      position: relative;
       margin: 20px auto;
+    }
+
+    /* Notch styling */
+    .device-frame:before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      height: 30px;
+      width: 200px;
+      background: #111;
+      border-bottom-left-radius: 20px;
+      border-bottom-right-radius: 20px;
+      z-index: 9;
+    }
+
+    /* Home indicator */
+    .device-frame:after {
+      content: '';
+      position: absolute;
+      bottom: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      height: 5px;
+      width: 135px;
+      background: #111;
+      border-radius: 3px;
+      z-index: 9;
     }
 
     #app-container {
       background: #f5f5f5;
-      border-radius: 20px;
+      border-radius: 0;
       display: flex;
       flex-direction: column;
       height: 100%;
+      width: 100%;
       overflow: hidden;
-      max-width: 100%;
-      margin: 0 auto;
+    }
+
+    .status-bar {
+      height: 44px;
+      background: #fff;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-bottom: 1px solid #e0e0e0;
+      padding-top: 30px; /* Make room for the notch */
+      z-index: 8;
     }
 
     .status {
-      padding: 5px;
       text-align: center;
-      background: rgba(0, 0, 0, 0.8);
-      color: white;
-      font-size: 12px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #333;
     }
 
     header {
       text-align: center;
-      padding: 20px 10px 10px;
+      padding: 10px;
       background: #fff;
-      border-bottom: 1px solid #eee;
+      border-bottom: 1px solid #e0e0e0;
     }
 
     header h1 {
-      font-size: 1.2em;
+      font-size: 18px;
       margin: 0;
       color: #333;
+      font-weight: 600;
     }
 
     header .subtitle {
-      font-size: 0.9em;
+      font-size: 12px;
       color: #666;
-      margin-top: 5px;
+      margin-top: 4px;
     }
 
     .main-content {
@@ -117,27 +159,25 @@
       display: flex;
       flex-direction: column;
       overflow: hidden;
-      padding: 20px;
-      gap: 20px;
-      align-items: center;
+      padding: 10px;
     }
 
     #orb-container {
       position: relative;
-      width: 200px;
-      height: 200px;
-      margin: 0 auto;
+      width: 150px;
+      height: 150px;
+      margin: 10px auto;
       display: flex;
       justify-content: center;
       align-items: center;
     }
 
     #orb {
-      width: 150px;
-      height: 150px;
+      width: 120px;
+      height: 120px;
       border-radius: 50%;
       background: radial-gradient(circle at 30% 30%, rgba(0, 150, 255, 0.8), rgba(0, 50, 150, 0.9));
-      box-shadow: 0 0 60px rgba(0, 150, 255, 0.6), inset 0 0 20px rgba(255, 255, 255, 0.3);
+      box-shadow: 0 0 30px rgba(0, 150, 255, 0.6), inset 0 0 20px rgba(255, 255, 255, 0.3);
       position: relative;
       transition: all 0.3s ease;
       margin: 0 auto;
@@ -146,25 +186,218 @@
 
     #orb.idle {
       background: radial-gradient(circle at 30% 30%, rgba(0, 150, 255, 0.8), rgba(0, 50, 150, 0.9));
-      box-shadow: 0 0 60px rgba(0, 150, 255, 0.6), inset 0 0 20px rgba(255, 255, 255, 0.3);
+      box-shadow: 0 0 30px rgba(0, 150, 255, 0.6), inset 0 0 20px rgba(255, 255, 255, 0.3);
     }
 
     #orb.listening {
       background: radial-gradient(circle at 30% 30%, rgba(0, 255, 0, 0.8), rgba(0, 150, 0, 0.9));
-      box-shadow: 0 0 60px rgba(0, 255, 0, 0.6), inset 0 0 20px rgba(255, 255, 255, 0.3);
+      box-shadow: 0 0 30px rgba(0, 255, 0, 0.6), inset 0 0 20px rgba(255, 255, 255, 0.3);
       animation: pulse 1.5s infinite;
     }
 
     #orb.speaking {
       background: radial-gradient(circle at 30% 30%, rgba(255, 150, 0, 0.8), rgba(200, 100, 0, 0.9));
-      box-shadow: 0 0 60px rgba(255, 150, 0, 0.6), inset 0 0 20px rgba(255, 255, 255, 0.3);
+      box-shadow: 0 0 30px rgba(255, 150, 0, 0.6), inset 0 0 20px rgba(255, 255, 255, 0.3);
       animation: speak 0.5s infinite;
     }
 
     #orb.thinking {
       background: radial-gradient(circle at 30% 30%, rgba(150, 0, 255, 0.8), rgba(100, 0, 200, 0.9));
-      box-shadow: 0 0 60px rgba(150, 0, 255, 0.6), inset 0 0 20px rgba(255, 255, 255, 0.3);
+      box-shadow: 0 0 30px rgba(150, 0, 255, 0.6), inset 0 0 20px rgba(255, 255, 255, 0.3);
       animation: think 2s infinite;
+    }
+
+    .volume-bar {
+      position: absolute;
+      bottom: -5px;
+      left: 0;
+      width: 100%;
+      height: 4px;
+      background: #00ff00;
+      transform: scaleX(0);
+      transform-origin: left;
+      transition: transform 0.1s ease, background-color 0.1s ease;
+      border-radius: 2px;
+    }
+
+    /* Debug checkbox control */
+    .debug-control {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      padding: 5px 10px;
+      border-bottom: 1px solid #e0e0e0;
+      background: #f5f5f5;
+    }
+
+    .debug-control label {
+      font-size: 12px;
+      color: #666;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    /* Messages container */
+    .messages-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      padding: 10px;
+      margin-bottom: 10px;
+      border-radius: 12px;
+      background: #fff;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    }
+
+    .message {
+      max-width: 80%;
+      padding: 10px 14px;
+      border-radius: 18px;
+      margin-bottom: 10px;
+      word-break: break-word;
+      box-shadow: 0 1px 1px rgba(0,0,0,0.1);
+      position: relative;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+
+    .message.user {
+      align-self: flex-end;
+      background: #007AFF;
+      color: white;
+      border-bottom-right-radius: 4px;
+    }
+
+    .message.ai {
+      align-self: flex-start;
+      background: #E9E9EB;
+      color: #000;
+      border-bottom-left-radius: 4px;
+    }
+
+    /* Debug container */
+    .debug-container {
+      display: none;
+      background: #1a1a1a;
+      color: #f0f0f0;
+      border-radius: 12px;
+      overflow: hidden;
+      margin-top: 5px;
+      height: 150px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    }
+
+    .debug-container.visible {
+      display: block;
+    }
+
+    .debug-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 10px;
+      background: #333;
+      border-bottom: 1px solid #444;
+    }
+
+    .debug-header span {
+      color: #fff;
+      font-weight: 600;
+      font-size: 12px;
+    }
+
+    .debug-content {
+      height: calc(100% - 30px);
+      overflow-y: auto;
+      padding: 5px 0;
+      font-size: 11px;
+      font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
+    }
+
+    .log-entry {
+      padding: 3px 10px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .log-entry.info { 
+      color: #4da6ff;
+    }
+    .log-entry.debug { 
+      color: #a0a0a0;
+    }
+    .log-entry.error { 
+      color: #ff4d4d;
+    }
+
+    /* Controls at bottom */
+    .controls-container {
+      padding: 10px;
+      background: #fff;
+      border-top: 1px solid #e0e0e0;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .btn {
+      padding: 12px 0;
+      border: none;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-align: center;
+    }
+
+    .btn.primary {
+      background: #007AFF;
+      color: white;
+      grid-column: span 2;
+    }
+
+    .btn.secondary {
+      background: #E9E9EB;
+      color: #000;
+    }
+
+    .btn.paused {
+      background: #FF3B30;
+      color: white;
+    }
+
+    .safari-hint {
+      position: absolute;
+      top: 60px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.7);
+      color: white;
+      padding: 10px 20px;
+      border-radius: 20px;
+      font-size: 14px;
+      text-align: center;
+      z-index: 1000;
+      display: none;
+    }
+
+    .mode-hint {
+      position: absolute;
+      bottom: 70px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.7);
+      color: white;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 12px;
+      text-align: center;
+      z-index: 1000;
+      display: none;
     }
 
     @keyframes pulse {
@@ -188,188 +421,27 @@
       100% { transform: rotate(0deg); }
     }
 
-    .messages-container {
-      flex: 1;
-      overflow-y: auto;
-      padding: 10px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-
-    .message {
-      max-width: 80%;
-      padding: 10px 15px;
-      border-radius: 15px;
-      word-break: break-word;
-    }
-
-    .message.user {
-      align-self: flex-end;
-      background: #007AFF;
-      color: white;
-    }
-
-    .message.ai {
-      align-self: flex-start;
-      background: #E9E9EB;
-      color: #000;
-    }
-
-    .controls-container {
-      padding: 15px;
-      background: #fff;
-      border-top: 1px solid #eee;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-
-    .btn {
-      padding: 12px 20px;
-      border: none;
-      border-radius: 8px;
-      font-size: 14px;
-      cursor: pointer;
-      transition: all 0.3s ease;
-      display: block;
-      width: 100%;
-      text-align: center;
-      margin: 5px 0;
-      font-weight: 500;
-    }
-
-    .btn.primary {
-      background: #007AFF;
-      color: white;
-    }
-
-    .btn.secondary {
-      background: #E9E9EB;
-      color: #000;
-    }
-
-    .btn:hover {
-      opacity: 0.9;
-      transform: translateY(-1px);
-    }
-
-    .btn:active {
-      opacity: 0.8;
-      transform: translateY(1px);
-    }
-
-    .btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
-    .btn.paused {
-      background: #FF3B30;
-      color: white;
-    }
-
-    .debug-container {
-      background: #1a1a1a;
-      color: #e0e0e0;
-      padding: 10px;
-      font-family: monospace;
-      font-size: 12px;
-      max-height: 150px;
-      overflow-y: auto;
-      display: none;
-      border-radius: 8px;
-      margin-top: 10px;
-      border: 1px solid #333;
-    }
-
-    .debug-container.visible {
-      display: block;
-    }
-
-    .debug-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 5px;
-      color: #e0e0e0;
-      font-weight: bold;
-      border-bottom: 1px solid #333;
-      padding-bottom: 5px;
-    }
-
-    .debug-content {
-      display: flex;
-      flex-direction: column;
-      gap: 5px;
-      color: #e0e0e0;
-    }
-
-    .log-entry {
-      padding: 5px 10px;
-      border-radius: 3px;
-      word-break: break-word;
-      color: #e0e0e0;
-      border-left: 3px solid transparent;
-    }
-
-    .log-entry.info { 
-      background: rgba(0, 150, 255, 0.1);
-      color: #4da6ff;
-      border-left-color: #4da6ff;
-    }
-    .log-entry.debug { 
-      background: rgba(100, 100, 100, 0.1);
-      color: #a0a0a0;
-      border-left-color: #a0a0a0;
-    }
-    .log-entry.error { 
-      background: rgba(255, 0, 0, 0.1);
-      color: #ff4d4d;
-      border-left-color: #ff4d4d;
-    }
-
-    .safari-hint {
-      position: fixed;
-      top: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(0, 150, 255, 0.9);
-      color: white;
-      padding: 10px 20px;
-      border-radius: 20px;
-      font-size: 14px;
-      text-align: center;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-      z-index: 1000;
-      display: none;
-    }
-
-    .mode-hint {
-      position: fixed;
-      top: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(0, 150, 255, 0.9);
-      color: white;
-      padding: 10px 20px;
-      border-radius: 20px;
-      font-size: 14px;
-      text-align: center;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-      z-index: 1000;
-      display: none;
-    }
-
-    .volume-bar {
+    /* Play button styles */
+    .play-button {
       position: absolute;
-      bottom: -10px;
-      left: 0;
-      width: 0%;
-      height: 4px;
-      background: #00ff00;
-      transition: width 0.1s ease, background-color 0.1s ease;
-      border-radius: 2px;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      padding: 12px 20px;
+      background: #007AFF;
+      color: white;
+      border: none;
+      border-radius: 20px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      z-index: 100;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    }
+
+    .play-button.safari {
+      padding: 14px 20px;
+      background: #FF3B30;
     }
   </style>
 </head>
@@ -379,21 +451,6 @@
   <script>
     // Safari touch event compatibility
     document.addEventListener('touchstart', function() {}, {passive: false});
-    
-    // Ensure nagState is properly initialized
-    window.nagState = window.nagState || {
-      listening: false,
-      isPaused: false,
-      isWalkieTalkieMode: true,
-      interrupted: false,
-      audioUnlocked: false,
-      mediaRecorder: null,
-      stream: null,
-      audioChunks: [],
-      isSafari: /^((?!chrome|android).)*safari/i.test(navigator.userAgent),
-      isiOS: /iPad|iPhone|iPod/.test(navigator.userAgent) || 
-        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
-    };
     
     // Force unlock audio on any user interaction
     function tryUnlockAudio() {
@@ -409,12 +466,21 @@
 
   <div class="device-frame">
     <div id="app-container">
-      <div id="status" class="status">Ready</div>
+      <div class="status-bar">
+        <div id="status" class="status">Ready</div>
+      </div>
 
       <header>
-        <h1>Nag's Digital Twin 3.5-dev</h1>
-        <p class="subtitle">Dinakara's mind — therapist, companion, unfiltered mirror.</p>
+        <h1>Nag's Digital Twin</h1>
+        <p class="subtitle">Dinakara's mind — therapist, companion, mirror</p>
       </header>
+
+      <div class="debug-control">
+        <label>
+          <input type="checkbox" id="showAllLogs" />
+          Show Debug Logs
+        </label>
+      </div>
 
       <div class="main-content">
         <div id="orb-container">
@@ -423,30 +489,28 @@
         </div>
 
         <div class="messages-container" id="messages">
-          <!-- Messages go here -->
+          <!-- Messages will be added here -->
         </div>
 
-        <div class="controls-container">
-          <button id="toggle-btn" class="btn primary">Start Conversation</button>
-          <button id="pause-btn" class="btn secondary">Pause</button>
-          <button id="mode-toggle" class="btn secondary">Switch to continuous mode</button>
-          <div id="mode-hint" class="mode-hint">Click & hold the orb to use walkie-talkie mode</div>
-          <label>
-            <input type="checkbox" id="showAllLogs" checked />
-            Show Debug Logs
-          </label>
-        </div>
-
-        <div class="debug-container visible" id="debug">
+        <div class="debug-container" id="debug">
           <div class="debug-header">
             <span>Debug Log</span>
           </div>
-          <div class="debug-content"></div>
+          <div class="debug-content">
+            <!-- Debug logs will be added here -->
+          </div>
         </div>
+      </div>
+
+      <div class="controls-container">
+        <button id="toggle-btn" class="btn primary">Start Conversation</button>
+        <button id="pause-btn" class="btn secondary">Pause</button>
+        <button id="mode-toggle" class="btn secondary">Switch to Continuous</button>
       </div>
     </div>
   </div>
 
+  <div id="mode-hint" class="mode-hint">Click & hold the orb to use walkie-talkie mode</div>
   <div class="safari-hint">Tap the orb to enable audio</div>
   <audio id="audio" hidden></audio>
 
@@ -458,7 +522,7 @@
 
     function unlockAudioContext() {
       const audio = new Audio();
-      audio.src = "data:audio/mp3;base64,//uQx...";
+      audio.src = "data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAADQgD///////////////////////////////////////////8AAAA8TEFNRTMuMTAwAQAAAAAAAAAAABSAJAJAQgAAgAAAA0L2YLwAAAAAAAAAAAAAAAAAAAAA//sQZAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//sQZB4P8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAEVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU=";
       audio.play().catch(() => {});
       const hint = document.querySelector('.safari-hint');
       if (hint) hint.style.display = 'none';
@@ -472,31 +536,45 @@
     document.addEventListener('DOMContentLoaded', function () {
       const debugToggle = document.getElementById('showAllLogs');
       const debugContainer = document.getElementById('debug');
-      if (debugToggle && debugToggle.checked) debugContainer.classList.add('visible');
-      debugToggle.addEventListener('change', () => {
-        debugContainer.classList.toggle('visible', debugToggle.checked);
-      });
+      
+      if (debugToggle) {
+        debugToggle.addEventListener('change', () => {
+          if (debugContainer) {
+            debugContainer.classList.toggle('visible', debugToggle.checked);
+          }
+        });
+      }
     });
 
-    function addMessage(text, isUser = false) {
+    window.addMessage = function(text, isUser = false) {
       const messagesContainer = document.getElementById('messages');
+      if (!messagesContainer) return;
+      
       const message = document.createElement('div');
       message.className = `message ${isUser ? 'user' : 'ai'}`;
       message.textContent = text;
+      
+      // Add at the bottom (normal chat order)
       messagesContainer.appendChild(message);
+      
+      // Scroll to the bottom to show the latest message
       messagesContainer.scrollTop = messagesContainer.scrollHeight;
-    }
+    };
 
     window.logMessage = function (message, level = 'info') {
-      const showAll = document.getElementById('showAllLogs')?.checked;
-      if (!showAll && !["listening", "thinking", "speaking", "transcribed", "tts"].some(k => message.toLowerCase().includes(k))) return;
+      const debugContent = document.querySelector('.debug-content');
+      if (!debugContent) return;
 
       const entry = document.createElement('div');
       entry.className = `log-entry ${level}`;
       const timestamp = new Date().toLocaleTimeString();
       entry.textContent = `[${timestamp}] [${level.toUpperCase()}] ${message}`;
-      document.querySelector('.debug-content')?.appendChild(entry);
-      document.querySelector('.debug-content').scrollTop = document.querySelector('.debug-content').scrollHeight;
+      
+      // Add messages at the bottom (latest at bottom like a console)
+      debugContent.appendChild(entry);
+      
+      // Auto-scroll to bottom
+      debugContent.scrollTop = debugContent.scrollHeight;
     };
   </script>
 </body>
