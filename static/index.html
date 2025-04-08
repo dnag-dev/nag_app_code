@@ -340,85 +340,91 @@
 
   <!-- Script Loading Logic -->
   <script>
-    // Ensure scriptLoadStatus exists before starting
-    window.nagState.scriptLoadStatus = window.nagState.scriptLoadStatus || {};
+    // CRITICAL: Ensure window.nagState itself is initialized before proceeding
+    if (typeof window.nagState === 'undefined') {
+      console.error("FATAL: window.nagState is undefined before script loading begins! Cannot proceed.");
+      // You might want to display an error message to the user here if the DOM is ready
+      document.addEventListener('DOMContentLoaded', () => {
+          const panel = document.getElementById('statusPanel');
+          if (panel) {
+              const errDiv = document.createElement('div');
+              errDiv.className = 'status-message error';
+              errDiv.textContent = 'FATAL: Application state failed to initialize. Please refresh.';
+              panel.insertBefore(errDiv, panel.firstChild);
+          }
+      });
+      // Halt further script execution in this block if state is missing
+      // throw new Error("window.nagState not initialized!"); 
+    } else {
+      // Ensure scriptLoadStatus exists before starting
+      window.nagState.scriptLoadStatus = window.nagState.scriptLoadStatus || {};
 
-    function checkAllScriptsLoaded() {
-      return window.scriptsToLoad.every(script => window.nagState.scriptLoadStatus[script]);
-    }
+      function checkAllScriptsLoaded() {
+        // Add safety check here too
+        if (!window.nagState || typeof window.nagState.scriptLoadStatus === 'undefined') {
+             console.error("checkAllScriptsLoaded: nagState or scriptLoadStatus missing!");
+             return false;
+        }
+        return window.scriptsToLoad.every(script => window.nagState.scriptLoadStatus[script]);
+      }
 
-    function onScriptLoad(scriptName) {
-      console.log(`${scriptName} loaded.`);
-      window.nagState.scriptLoadStatus[scriptName] = true;
-      if (checkAllScriptsLoaded()) {
-        console.log("All scripts loaded. Initializing app...");
-        if (typeof initializeApp === 'function') {
-          initializeApp(); // Call main initialization function from nag-core.js
-        } else {
-          console.error('Error: initializeApp function not found after loading scripts!');
-          addStatusMessage("Core initialization function missing!", "error");
+      function onScriptLoad(scriptName) {
+        // Add safety check here too
+        if (!window.nagState || typeof window.nagState.scriptLoadStatus === 'undefined') {
+            console.error(`onScriptLoad (${scriptName}): nagState or scriptLoadStatus missing! Cannot update status.`);
+            return; // Prevent the error by exiting early
+        }
+        console.log(`${scriptName} loaded.`);
+        window.nagState.scriptLoadStatus[scriptName] = true; // The problematic line
+        if (checkAllScriptsLoaded()) {
+          console.log("All scripts loaded. Initializing app...");
+          if (typeof initializeApp === 'function') {
+            initializeApp();
+          } else {
+            console.error('Error: initializeApp function not found after loading scripts!');
+            if(window.addStatusMessage) addStatusMessage("Core initialization function missing!", "error");
+          }
         }
       }
-    }
 
-    function loadScript(src) {
-      return new Promise((resolve, reject) => {
-        const script = document.createElement('script');
-        script.src = src;
-        script.async = false; // Load in order specified
-        script.onload = () => {
-          onScriptLoad(src);
-          resolve();
-        };
-        script.onerror = () => {
-          console.error(`Error loading script: ${src}`);
-          addStatusMessage(`Failed to load script: ${src}`, "error");
-          reject(new Error(`Script load error for ${src}`));
-        };
-        document.body.appendChild(script);
+      function loadScript(src) {
+        return new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = src;
+          script.async = false;
+          script.onload = () => {
+            onScriptLoad(src);
+            resolve();
+          };
+          script.onerror = () => {
+            console.error(`Error loading script: ${src}`);
+            if(window.addStatusMessage) addStatusMessage(`Failed to load script: ${src}`, "error");
+            reject(new Error(`Script load error for ${src}`));
+          };
+          document.body.appendChild(script);
+        });
+      }
+
+      // Add initial message (use addStatusMessage if available)
+      if(typeof window.addStatusMessage === 'function') {
+          addStatusMessage("Loading application components...", "info");
+      } else {
+          // Fallback if utils hasn't loaded (e.g. if state failed above)
+          console.log("Loading application components...");
+      }
+
+      // Load all scripts sequentially
+      window.scriptsToLoad.reduce((promise, scriptSrc) => {
+          return promise.then(() => loadScript(scriptSrc));
+      }, Promise.resolve()).catch(err => {
+          console.error("Error during script loading sequence:", err);
+          if (window.addStatusMessage) {
+               window.addStatusMessage("Critical error loading application scripts. Please refresh.", "error");
+          } else {
+              console.error("Critical error loading application scripts. Please refresh.");
+          }
       });
-    }
-
-    // Utility function to add status messages (needed before scripts load)
-    function addStatusMessage(message, type = 'info', isDebug = false) {
-        const statusPanel = document.getElementById('statusPanel');
-        if (!statusPanel) {
-            console.error("Status panel not found for message:", message);
-            return;
-        }
-
-        const messageDiv = document.createElement('div');
-        messageDiv.classList.add('status-message');
-        messageDiv.classList.add(type); // e.g., 'info', 'error', 'user', 'assistant', 'debug'
-        if (isDebug) {
-            messageDiv.classList.add('debug');
-        }
-        messageDiv.textContent = message;
-
-        // Prepend to show newest first (due to flex-direction: column-reverse)
-        statusPanel.insertBefore(messageDiv, statusPanel.firstChild);
-
-        // Optional: Scroll to bottom (which is visually the top because of column-reverse)
-        // statusPanel.scrollTop = 0;
-    }
-
-    // Add initial message before loading scripts
-    addStatusMessage("Loading application components...", "info");
-
-    // Load all scripts sequentially
-    window.scriptsToLoad.reduce((promise, scriptSrc) => {
-        return promise.then(() => loadScript(scriptSrc));
-    }, Promise.resolve()).catch(err => {
-        // Add a final catch here for any script loading errors
-        console.error("Error during script loading sequence:", err);
-        // Use the globally available function IF nag-utils loaded, otherwise log
-        if (window.addStatusMessage) {
-             window.addStatusMessage("Critical error loading application scripts. Please refresh.", "error");
-        } else {
-            console.error("Critical error loading application scripts. Please refresh.");
-        }
-    });
-
+    } // End of the check for window.nagState
   </script>
 
   <!-- Debug Toggle Logic -->
