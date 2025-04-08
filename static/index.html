@@ -369,13 +369,43 @@
       }
 
       function onScriptLoad(scriptName) {
-        // Add safety check here too
-        if (!window.nagState || typeof window.nagState.scriptLoadStatus === 'undefined') {
-            console.error(`onScriptLoad (${scriptName}): nagState or scriptLoadStatus missing! Cannot update status.`);
-            return; // Prevent the error by exiting early
+        // Add more detailed safety checks and logging
+        console.log(`Entering onScriptLoad for: ${scriptName}`);
+        if (!window.nagState) {
+            console.error(`FATAL within onScriptLoad (${scriptName}): window.nagState is missing!`);
+            return;
         }
-        console.log(`${scriptName} loaded.`);
-        window.nagState.scriptLoadStatus[scriptName] = true; // The problematic line
+        if (typeof window.nagState.scriptLoadStatus === 'undefined') {
+            console.error(`FATAL within onScriptLoad (${scriptName}): window.nagState.scriptLoadStatus is undefined!`);
+            // Attempt to re-initialize as a last resort? Could mask the root cause.
+            // window.nagState.scriptLoadStatus = {}; 
+            return; 
+        }
+        
+        // Log state RIGHT BEFORE the assignment
+        console.log(`State before assigning status for ${scriptName}:`, {
+            nagStateExists: typeof window.nagState !== 'undefined',
+            scriptLoadStatusExists: typeof window.nagState.scriptLoadStatus !== 'undefined',
+            scriptLoadStatusValue: JSON.stringify(window.nagState.scriptLoadStatus) // Log the actual content
+        });
+
+        console.log(`Attempting to set status for ${scriptName}...`);
+        try {
+            window.nagState.scriptLoadStatus[scriptName] = true; // The problematic line
+            console.log(`Successfully set status for ${scriptName}.`);
+        } catch (error) {
+             console.error(`ERROR occurred trying to set status for ${scriptName}:`, error);
+             // Log state AGAIN right after the error
+             console.error('State AT THE MOMENT OF ERROR:', {
+                 nagStateExists: typeof window.nagState !== 'undefined',
+                 scriptLoadStatusExists: typeof window.nagState.scriptLoadStatus !== 'undefined',
+                 nagStateContent: JSON.stringify(window.nagState) // Log entire state on error
+             });
+             // Optionally re-throw or handle further
+             // throw error; 
+        }
+
+        // Check if all loaded AFTER attempting the update
         if (checkAllScriptsLoaded()) {
           console.log("All scripts loaded. Initializing app...");
           if (typeof initializeApp === 'function') {
