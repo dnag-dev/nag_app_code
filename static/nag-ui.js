@@ -7,7 +7,8 @@ function cleanupButtonAttributes(element) {
     // Remove all icon-related attributes
     const attrsToRemove = [
         "iconName", "layoutTraits", "src", "icon", "data-icon", "style",
-        "data-icon-name", "data-icon-src", "data-icon-type", "data-icon-size"
+        "data-icon-name", "data-icon-src", "data-icon-type", "data-icon-size",
+        "data-layout-traits", "data-icon-layout", "data-icon-style"
     ];
     
     attrsToRemove.forEach(attr => {
@@ -20,21 +21,42 @@ function cleanupButtonAttributes(element) {
     
     // Set basic styles for Safari compatibility
     element.style.cssText = `
-        display: block;
-        padding: 10px;
-        margin: 5px;
-        border: 1px solid #ccc;
-        border-radius: 5px;
-        background-color: #fff;
-        color: #000;
-        font-size: 14px;
-        font-family: system-ui, -apple-system, sans-serif;
-        text-align: center;
-        cursor: pointer;
+        -webkit-appearance: none;
+        appearance: none;
+        -webkit-tap-highlight-color: transparent;
         user-select: none;
         -webkit-user-select: none;
+        text-align: center;
+        text-decoration: none;
     `;
 }
+
+// Add this function to ensure all buttons are cleaned up
+function cleanupAllButtons() {
+    const buttons = document.querySelectorAll('button, [role="button"]');
+    buttons.forEach(button => {
+        cleanupButtonAttributes(button);
+    });
+}
+
+// Call cleanupAllButtons after DOM is loaded
+document.addEventListener('DOMContentLoaded', function() {
+    cleanupAllButtons();
+});
+
+// Call cleanupAllButtons after any dynamic content changes
+const observer = new MutationObserver(function(mutations) {
+    mutations.forEach(function(mutation) {
+        if (mutation.addedNodes.length) {
+            cleanupAllButtons();
+        }
+    });
+});
+
+observer.observe(document.body, {
+    childList: true,
+    subtree: true
+});
 
 // Define handler functions
 function handleToggleClick() {
