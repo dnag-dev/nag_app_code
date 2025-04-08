@@ -340,6 +340,9 @@
 
   <!-- Script Loading Logic -->
   <script>
+    // Ensure scriptLoadStatus exists before starting
+    window.nagState.scriptLoadStatus = window.nagState.scriptLoadStatus || {};
+
     function checkAllScriptsLoaded() {
       return window.scriptsToLoad.every(script => window.nagState.scriptLoadStatus[script]);
     }
