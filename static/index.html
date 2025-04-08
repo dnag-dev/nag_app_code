@@ -134,73 +134,35 @@
     
     body {
       margin: 0;
-      padding: 0;
+      padding: 20px;
       background: #f0f0f0;
-      display: flex;
-      justify-content: center;
-      align-items: center;
       min-height: 100vh;
       font-family: -apple-system, BlinkMacSystemFont, "San Francisco", Helvetica, Arial, sans-serif;
-    }
-
-    .device-frame {
-      width: 375px;
-      height: 812px;
-      background: #fff;
-      border-radius: 40px;
-      box-shadow: 0 0 0 14px #111, 0 0 0 17px #222, 0 0 0 20px rgba(0,0,0,0.2);
-      overflow: hidden;
-      position: relative;
-      margin: 20px auto;
       display: flex;
       flex-direction: column;
-    }
-
-    /* Notch styling */
-    .device-frame:before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 150px;
-      height: 30px;
-      background: #111;
-      border-bottom-left-radius: 18px;
-      border-bottom-right-radius: 18px;
-      z-index: 2;
-    }
-
-    /* Home indicator */
-    .device-frame:after {
-      content: '';
-      position: absolute;
-      bottom: 8px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 135px;
-      height: 5px;
-      background: #000;
-      border-radius: 3px;
+      align-items: center;
     }
 
     .app-container {
-      flex: 1;
+      max-width: 800px;
+      width: 100%;
+      margin: 0 auto;
       display: flex;
       flex-direction: column;
-      padding: 44px 20px 34px;
-      position: relative;
-      overflow: hidden;
+      gap: 20px;
+      min-height: 90vh;
+      justify-content: space-between;
     }
 
     .message-container {
       flex: 1;
       overflow-y: auto;
-      padding: 10px;
-      margin-bottom: 20px;
+      padding: 20px;
       background: #f8f8f8;
       border-radius: 12px;
       min-height: 200px;
+      max-height: 400px;
+      margin-bottom: 20px;
     }
 
     .message {
@@ -239,7 +201,8 @@
       display: flex;
       flex-direction: column;
       gap: 10px;
-      margin-top: 20px;
+      margin-top: auto; /* Push controls to bottom */
+      padding-bottom: 20px;
     }
 
     .button-row {
@@ -266,19 +229,23 @@
       user-select: none;
       -webkit-user-select: none;
       -webkit-tap-highlight-color: transparent;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
 
     button:hover {
       background: #0056b3;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
     }
 
     button:disabled {
       background: #ccc;
       cursor: not-allowed;
+      box-shadow: none;
     }
 
     button.active {
       background: #0056b3;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
     }
 
     .orb-container {
@@ -287,11 +254,12 @@
       align-items: center;
       margin: 20px 0;
       position: relative;
+      order: -1; /* Move orb up */
     }
 
     .orb {
-      width: 100px;
-      height: 100px;
+      width: 120px;
+      height: 120px;
       border-radius: 50%;
       background: #007AFF;
       cursor: pointer;
@@ -301,7 +269,7 @@
       justify-content: center;
       align-items: center;
       color: white;
-      font-size: 14px;
+      font-size: 16px;
       text-align: center;
       padding: 10px;
       -webkit-appearance: none;
@@ -309,6 +277,7 @@
       user-select: none;
       -webkit-user-select: none;
       -webkit-tap-highlight-color: transparent;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
     }
 
     .orb.idle {
@@ -363,6 +332,7 @@
       overflow-y: auto;
       z-index: 1000;
       display: none;
+      margin-top: auto; /* Push debug panel to bottom */
     }
 
     .debug-panel.active {
@@ -383,15 +353,9 @@
     }
 
     @media (max-width: 400px) {
-      .device-frame {
-        width: 100%;
-        height: 100vh;
-        border-radius: 0;
-        margin: 0;
-      }
-
       .app-container {
-        padding: 44px 10px 34px;
+        padding: 20px 10px;
+        min-height: 100vh;
       }
 
       button {
@@ -400,8 +364,8 @@
       }
 
       .orb {
-        width: 80px;
-        height: 80px;
+        width: 100px;
+        height: 100px;
       }
     }
 
@@ -448,24 +412,22 @@
     document.addEventListener('touchstart', tryUnlockAudio, {once: false});
   </script>
 
-  <div class="device-frame">
-    <div class="app-container">
-      <div class="message-container" id="messageContainer"></div>
-      <div class="orb-container">
-        <div class="orb idle" id="orb" role="button" tabindex="0">Click to start</div>
+  <div class="app-container">
+    <div class="message-container" id="messageContainer"></div>
+    <div class="orb-container">
+      <div class="orb idle" id="orb" role="button" tabindex="0">Click to start</div>
+    </div>
+    <div class="mode-hint" id="modeHint">Nag will listen continuously for your voice</div>
+    <div class="volume-container">
+      <div id="volumeBar" class="volume-bar"></div>
+    </div>
+    <div class="controls">
+      <div class="button-row">
+        <button id="toggleBtn" type="button" class="button" role="button" tabindex="0">Start Conversation</button>
+        <button id="pauseBtn" type="button" class="button" role="button" tabindex="0" disabled>Pause</button>
       </div>
-      <div class="mode-hint" id="modeHint">Nag will listen continuously for your voice</div>
-      <div class="volume-container">
-        <div id="volumeBar" class="volume-bar"></div>
-      </div>
-      <div class="controls">
-        <div class="button-row">
-          <button id="toggleBtn" type="button" class="button" role="button" tabindex="0">Start Conversation</button>
-          <button id="pauseBtn" type="button" class="button" role="button" tabindex="0" disabled>Pause</button>
-        </div>
-        <div class="button-row">
-          <button id="modeToggle" type="button" class="button" role="button" tabindex="0">Switch to walkie-talkie mode</button>
-        </div>
+      <div class="button-row">
+        <button id="modeToggle" type="button" class="button" role="button" tabindex="0">Switch to walkie-talkie mode</button>
       </div>
     </div>
   </div>
