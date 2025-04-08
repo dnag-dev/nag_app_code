@@ -229,60 +229,70 @@ function handleModeToggleClick() {
 
 // Handler functions for orb interactions
 window.handleOrbClick = function(e) {
-  console.log("Orb clicked", e);
-  if (window.logDebug) window.logDebug("Orb clicked");
-  
-  // Only handle click in continuous mode
-  if (!window.nagState.isWalkieTalkieMode) {
-    if (!window.nagState.listening) {
-      if (window.logDebug) window.logDebug("Starting conversation via orb");
-      if (window.startListening) window.startListening();
-      window.nagState.listening = true;
-      if (window.nagElements.toggleBtn) {
-        window.nagElements.toggleBtn.textContent = "Stop Conversation";
-        window.nagElements.toggleBtn.classList.add("active");
-      }
-    } else {
-      if (window.logDebug) window.logDebug("Stopping conversation via orb");
-      if (window.stopListening) window.stopListening();
-      window.nagState.listening = false;
-      if (window.nagElements.toggleBtn) {
-        window.nagElements.toggleBtn.textContent = "Start Conversation";
-        window.nagElements.toggleBtn.classList.remove("active");
-      }
+    console.log("Orb clicked", e);
+    if (window.logDebug) window.logDebug("Orb clicked");
+    
+    // Only handle click in continuous mode
+    if (!window.nagState.isWalkieTalkieMode) {
+        if (!window.nagState.listening) {
+            if (window.logDebug) window.logDebug("Starting conversation via orb");
+            // Initialize audio context first
+            if (window.initializeAudioContext) {
+                window.initializeAudioContext().then(() => {
+                    if (window.startListening) window.startListening();
+                    window.nagState.listening = true;
+                    if (window.nagElements.toggleBtn) {
+                        window.nagElements.toggleBtn.textContent = "Stop Conversation";
+                        window.nagElements.toggleBtn.classList.add("active");
+                    }
+                });
+            }
+        } else {
+            if (window.logDebug) window.logDebug("Stopping conversation via orb");
+            if (window.stopListening) window.stopListening();
+            window.nagState.listening = false;
+            if (window.nagElements.toggleBtn) {
+                window.nagElements.toggleBtn.textContent = "Start Conversation";
+                window.nagElements.toggleBtn.classList.remove("active");
+            }
+        }
+        if (window.updateButtonStates) window.updateButtonStates();
     }
-    if (window.updateButtonStates) window.updateButtonStates();
-  }
 };
 
 window.handleOrbDown = function(e) {
-  console.log("Orb pressed (mouse)");
-  if (window.logDebug) window.logDebug("Orb pressed");
-  
-  if (window.nagState.isWalkieTalkieMode) {
-    if (window.startListening) window.startListening();
-    window.nagState.listening = true;
-    if (window.nagElements.toggleBtn) {
-      window.nagElements.toggleBtn.textContent = "Stop Conversation";
-      window.nagElements.toggleBtn.classList.add("active");
+    console.log("Orb pressed (mouse)");
+    if (window.logDebug) window.logDebug("Orb pressed");
+    
+    if (window.nagState.isWalkieTalkieMode) {
+        // Initialize audio context first
+        if (window.initializeAudioContext) {
+            window.initializeAudioContext().then(() => {
+                if (window.startListening) window.startListening();
+                window.nagState.listening = true;
+                if (window.nagElements.toggleBtn) {
+                    window.nagElements.toggleBtn.textContent = "Stop Conversation";
+                    window.nagElements.toggleBtn.classList.add("active");
+                }
+                if (window.updateButtonStates) window.updateButtonStates();
+            });
+        }
     }
-    if (window.updateButtonStates) window.updateButtonStates();
-  }
 };
 
 window.handleOrbUp = function(e) {
-  console.log("Orb released (mouse)");
-  if (window.logDebug) window.logDebug("Orb released");
-  
-  if (window.nagState.isWalkieTalkieMode) {
-    if (window.stopListening) window.stopListening();
-    window.nagState.listening = false;
-    if (window.nagElements.toggleBtn) {
-      window.nagElements.toggleBtn.textContent = "Start Conversation";
-      window.nagElements.toggleBtn.classList.remove("active");
+    console.log("Orb released (mouse)");
+    if (window.logDebug) window.logDebug("Orb released");
+    
+    if (window.nagState.isWalkieTalkieMode) {
+        if (window.stopListening) window.stopListening();
+        window.nagState.listening = false;
+        if (window.nagElements.toggleBtn) {
+            window.nagElements.toggleBtn.textContent = "Start Conversation";
+            window.nagElements.toggleBtn.classList.remove("active");
+        }
+        if (window.updateButtonStates) window.updateButtonStates();
     }
-    if (window.updateButtonStates) window.updateButtonStates();
-  }
 };
 
 window.handleOrbTouchStart = function(e) {

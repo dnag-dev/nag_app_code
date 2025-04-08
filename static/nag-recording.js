@@ -1,5 +1,9 @@
 // Nag Digital Twin v2.0.0 - Recording Functions
 
+// Add this at the top of the file
+window.audioContext = null;
+window.audioContextUnlocked = false;
+
 // Setup volume visualization for the orb
 function setupVolumeVisualization(stream) {
   try {
@@ -307,6 +311,27 @@ async function stopRecording() {
   }
 }
 
+// Add this function
+async function initializeAudioContext() {
+    try {
+        if (!window.audioContext) {
+            window.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            logDebug("🎵 AudioContext created");
+        }
+        
+        if (window.audioContext.state === 'suspended') {
+            await window.audioContext.resume();
+            logDebug("🎵 AudioContext resumed");
+        }
+        
+        window.audioContextUnlocked = true;
+        return true;
+    } catch (e) {
+        logDebug("❌ Error initializing AudioContext: " + e.message);
+        return false;
+    }
+}
+
 // Start listening for audio
 async function startListening() {
   const orb = window.nagElements.orb;
@@ -315,6 +340,12 @@ async function startListening() {
   if (window.nagState.isUploading || window.nagState.isPaused) return;
   
   try {
+    // Initialize audio context first
+    const audioContextInitialized = await initializeAudioContext();
+    if (!audioContextInitialized) {
+      throw new Error("Failed to initialize audio context");
+    }
+    
     removePlayButton();
     window.nagState.emptyTranscriptionCount = 0;
     window.nagState.speechDetected = false;
