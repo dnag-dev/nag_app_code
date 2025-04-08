@@ -1,5 +1,45 @@
 // Nag Digital Twin v2.0.0 - Utility Functions
 
+// Function to add status messages to the UI panel
+function addStatusMessage(message, type = 'info', isDebug = false) {
+    const statusPanel = document.getElementById('statusPanel');
+    if (!statusPanel) {
+        // Log to console if panel isn't ready yet or doesn't exist
+        console.log(`[StatusPanel ${type}]: ${message}`);
+        return;
+    }
+
+    const messageDiv = document.createElement('div');
+    messageDiv.classList.add('status-message');
+    messageDiv.classList.add(type); // e.g., 'info', 'error', 'user', 'assistant'
+
+    if (isDebug) {
+        messageDiv.classList.add('debug');
+    }
+
+    // Sanitize message slightly (optional, basic example)
+    // message = message.replace(/</g, "&lt;").replace(/>/g, "&gt;"); 
+    messageDiv.textContent = message;
+
+    // Prepend to show newest first (due to flex-direction: column-reverse)
+    statusPanel.insertBefore(messageDiv, statusPanel.firstChild);
+
+    // Optional: Scroll to bottom (which is visually the top because of column-reverse)
+    // statusPanel.scrollTop = 0; 
+    
+    // Also log errors and debug messages to console for developers
+    if(type === 'error') {
+        console.error(`[StatusPanel ERROR]: ${message}`);
+    } else if (isDebug && window.nagState && window.nagState.debugEnabled) {
+        console.log(`[StatusPanel DEBUG]: ${message}`);
+    }
+}
+
+// Make it globally accessible
+if (typeof window !== 'undefined') {
+    window.addStatusMessage = addStatusMessage;
+}
+
 // Add debug message to log
 function logDebug(msg) {
   const debugBox = window.nagElements.debugBox;
@@ -20,6 +60,11 @@ function logDebug(msg) {
   
   // Also log to console for developer debugging
   console.log(msg);
+}
+
+// Make logDebug globally accessible if needed elsewhere
+if (typeof window !== 'undefined') {
+    window.logDebug = logDebug;
 }
 
 // Safely parse JSON with error handling

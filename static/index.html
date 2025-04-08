@@ -1,487 +1,446 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Nag - Your AI Assistant</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <link rel="stylesheet" href="/static/styles.css" />
-  
-  <!-- Initialize global state and elements -->
-  <script>
-    // Initialize global state
-    window.nagState = {
-      listening: false,
-      isPaused: false,
-      isWalkieTalkieMode: false,
-      interrupted: false,
-      audioUnlocked: false,
-      mediaRecorder: null,
-      stream: null,
-      audioChunks: [],
-      isSafari: /^((?!chrome|android).)*safari/i.test(navigator.userAgent),
-      isiOS: /iPad|iPhone|iPod/.test(navigator.userAgent) || 
-        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1),
-      initialized: false
-    };
-
-    // Initialize elements object (will be populated after DOM is ready)
-    window.nagElements = {};
-
-    // Debug logging function
-    window.logMessage = function(message, level = 'info') {
-      console.log(`[${level.toUpperCase()}] ${message}`);
-      const debugPanel = document.getElementById('debugPanel');
-      if (debugPanel) {
-        const timestamp = new Date().toLocaleTimeString();
-        debugPanel.innerHTML += `[${timestamp}] [${level.toUpperCase()}] ${message}<br>`;
-        debugPanel.scrollTop = debugPanel.scrollHeight;
-      }
-    };
-
-    // Message display function
-    window.addMessage = function(text, isUser = false) {
-      const messagesContainer = document.getElementById('messageContainer');
-      if (!messagesContainer) return;
-      
-      const message = document.createElement('div');
-      message.className = `message ${isUser ? 'user-message' : 'assistant-message'}`;
-      message.textContent = text;
-      
-      messagesContainer.appendChild(message);
-      messagesContainer.scrollTop = messagesContainer.scrollHeight;
-    };
-  </script>
-
-  <!-- Load JavaScript files in correct order -->
-  <script src="/static/nag-utils.js"></script>
-  <script src="/static/nag-audio.js"></script>
-  <script src="/static/nag-recording.js"></script>
-  <script src="/static/nag-transcription.js"></script>
-  <script src="/static/nag-ui.js"></script>
-  <script src="/static/nag-core.js"></script>
-
-  <script>
-    // Track script loading
-    window.scriptLoadOrder = [];
-    const scripts = document.querySelectorAll('script[src]');
-    scripts.forEach(script => {
-      script.onload = () => {
-        window.scriptLoadOrder.push(script.src);
-        window.logMessage(`Script loaded: ${script.src}`, 'debug');
-      };
-    });
-
-    // Initialize app when DOM is ready
-    document.addEventListener('DOMContentLoaded', function() {
-      // Cache all DOM elements
-      window.nagElements = {
-        messageContainer: document.getElementById('messageContainer'),
-        orb: document.getElementById('orb'),
-        toggleBtn: document.getElementById('toggleBtn'),
-        pauseBtn: document.getElementById('pauseBtn'),
-        modeToggle: document.getElementById('modeToggle'),
-        modeHint: document.getElementById('modeHint'),
-        debugPanel: document.getElementById('debugPanel'),
-        debugToggle: document.getElementById('debugToggle'),
-        audio: document.getElementById('audio'),
-        volumeBar: document.getElementById('volumeBar')
-      };
-
-      // Verify all required elements exist
-      const requiredElements = ['messageContainer', 'orb', 'toggleBtn', 'pauseBtn', 'modeToggle', 'modeHint', 'audio'];
-      const missingElements = requiredElements.filter(id => !window.nagElements[id]);
-      
-      if (missingElements.length > 0) {
-        window.logMessage(`Missing required elements: ${missingElements.join(', ')}`, 'error');
-        return;
-      }
-
-      // Setup debug toggle
-      if (window.nagElements.debugToggle) {
-        window.nagElements.debugToggle.onclick = function() {
-          window.nagElements.debugPanel.classList.toggle('active');
-        };
-      }
-
-      // Initialize app only if all scripts are loaded
-      if (window.scriptLoadOrder.length === scripts.length) {
-        window.logMessage('All scripts loaded, initializing app...', 'info');
-        if (typeof initializeApp === 'function') {
-          initializeApp();
-        } else {
-          window.logMessage('Error: initializeApp function not found!', 'error');
-        }
-      } else {
-        window.logMessage('Waiting for all scripts to load...', 'info');
-        window.addEventListener('load', function() {
-          if (typeof initializeApp === 'function') {
-            initializeApp();
-          } else {
-            window.logMessage('Error: initializeApp function not found!', 'error');
-          }
-        });
-      }
-    });
-  </script>
-
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Nag - AI Assistant</title>
+  <link rel="stylesheet" href="styles.css"> <!-- Keep if you have external styles -->
   <style>
-    /* Reset and base styles */
-    * {
+    :root {
+      --primary-blue: #007bff;
+      --light-gray: #f8f9fa;
+      --medium-gray: #dee2e6;
+      --dark-gray: #6c757d;
+      --text-dark: #212529;
+      --text-light: #ffffff;
+      --error-red: #dc3545;
+      --info-blue: #17a2b8;
+      --debug-purple: #6f42c1;
+      --orb-idle-color: #6c757d; /* Dark Gray */
+      --orb-listening-color: #28a745; /* Green */
+      --orb-thinking-color: #ffc107; /* Yellow */
+      --orb-speaking-color: #17a2b8; /* Info Blue */
+    }
+
+    html, body {
+      height: 100%;
       margin: 0;
       padding: 0;
-      box-sizing: border-box;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background-color: var(--light-gray);
+      color: var(--text-dark);
+      overscroll-behavior: none; /* Prevent pull-to-refresh */
     }
-    
+
     body {
-      margin: 0;
-      padding: 20px;
-      background: #1a1a1a;
-      min-height: 100vh;
-      font-family: -apple-system, BlinkMacSystemFont, "San Francisco", Helvetica, Arial, sans-serif;
       display: flex;
       flex-direction: column;
       align-items: center;
-      color: #ffffff;
+      padding: 20px;
+      box-sizing: border-box;
     }
 
     .app-container {
-      max-width: 800px;
-      width: 100%;
-      margin: 0 auto;
       display: flex;
       flex-direction: column;
-      gap: 20px;
-      min-height: 90vh;
-      justify-content: space-between;
-      background: #2a2a2a;
-      border-radius: 16px;
-      padding: 20px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-    }
-
-    .message-container {
-      flex: 1;
-      overflow-y: auto;
-      padding: 20px;
-      background: #333333;
-      border-radius: 12px;
-      min-height: 200px;
-      max-height: 400px;
-      margin-bottom: 20px;
-      color: #ffffff;
-    }
-
-    .message {
-      margin: 8px 0;
-      padding: 10px 15px;
-      border-radius: 12px;
-      max-width: 80%;
-      word-wrap: break-word;
-    }
-
-    .user-message {
-      background: #007AFF;
-      color: white;
-      margin-left: auto;
-      border-bottom-right-radius: 4px;
-    }
-
-    .assistant-message {
-      background: #E5E5EA;
-      color: black;
-      margin-right: auto;
-      border-bottom-left-radius: 4px;
-    }
-
-    .system-message {
-      background: #f0f0f0;
-      color: #666;
-      font-size: 0.9em;
-      margin: 8px auto;
-      text-align: center;
-      padding: 5px 10px;
-      border-radius: 8px;
-    }
-
-    .controls {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      margin-top: auto; /* Push controls to bottom */
-      padding-bottom: 20px;
-    }
-
-    .button-row {
-      display: flex;
-      gap: 10px;
-      justify-content: center;
-    }
-
-    button {
-      padding: 12px 20px;
-      border: none;
-      border-radius: 10px;
-      background: #007AFF;
-      color: white;
-      font-size: 16px;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      flex: 1;
-      max-width: 200px;
-      -webkit-appearance: none;
-      appearance: none;
-      text-align: center;
-      text-decoration: none;
-      user-select: none;
-      -webkit-user-select: none;
-      -webkit-tap-highlight-color: transparent;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-      display: inline-flex;
       align-items: center;
-      justify-content: center;
-      gap: 8px;
-      line-height: 1.2;
-      font-weight: 500;
-      letter-spacing: 0.3px;
+      width: 100%;
+      max-width: 400px; /* Constrain width for portrait feel */
+      flex-grow: 1; /* Allow container to grow */
+      padding-bottom: 20px; /* Space for debug toggle */
     }
 
-    button::before,
-    button::after {
-      display: none !important;
-      content: none !important;
-    }
-
-    button:hover {
-      background: #0056b3;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-      transform: translateY(-1px);
-    }
-
-    button:disabled {
-      background: #666666;
-      cursor: not-allowed;
-      box-shadow: none;
-      transform: none;
-      opacity: 0.7;
-    }
-
-    button.active {
-      background: #0056b3;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-    }
-
-    /* Remove any icon-related styles */
-    button[iconName],
-    button[layoutTraits],
-    button[src] {
-      all: unset;
+    h1 {
+      font-size: 1.5rem;
+      color: var(--text-dark);
+      margin-top: 0;
+      margin-bottom: 20px;
+      text-align: center;
     }
 
     .orb-container {
+      margin-bottom: 30px;
       display: flex;
       justify-content: center;
       align-items: center;
-      margin: 20px 0;
-      position: relative;
-      order: -1;
     }
 
     .orb {
       width: 120px;
       height: 120px;
       border-radius: 50%;
-      background: #007AFF;
-      cursor: pointer;
-      transition: all 0.3s ease;
-      position: relative;
       display: flex;
       justify-content: center;
       align-items: center;
-      color: white;
-      font-size: 16px;
+      font-size: 0.9rem;
+      color: var(--text-light);
       text-align: center;
-      padding: 10px;
-      -webkit-appearance: none;
-      appearance: none;
+      cursor: pointer;
+      transition: background-color 0.3s ease, transform 0.1s ease;
       user-select: none;
       -webkit-user-select: none;
       -webkit-tap-highlight-color: transparent;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+      position: relative; /* For potential future animations/indicators */
     }
 
-    .orb.listening {
-      background: #ff3b30;
-      animation: pulse 1.5s infinite;
+    /* Orb States */
+    .orb.idle { background-color: var(--orb-idle-color); }
+    .orb.listening { background-color: var(--orb-listening-color); }
+    .orb.thinking { background-color: var(--orb-thinking-color); }
+    .orb.speaking { background-color: var(--orb-speaking-color); }
+
+    .orb:active {
+      transform: scale(0.95);
     }
 
-    .orb.thinking {
-      background: #ff9500;
-      animation: pulse 1.5s infinite;
+    .controls {
+      display: flex;
+      flex-direction: column; /* Stack button rows */
+      align-items: center;
+      gap: 10px; /* Space between button rows */
+      margin-bottom: 20px;
+      width: 100%;
     }
 
-    .orb.speaking {
-      background: #34c759;
-      animation: pulse 1.5s infinite;
+    .button-row {
+        display: flex;
+        justify-content: center;
+        gap: 10px; /* Space between buttons in a row */
+        width: 100%;
     }
 
-    .orb.idle {
-      background: #007AFF;
-    }
-
-    @keyframes pulse {
-      0% { transform: scale(1); }
-      50% { transform: scale(1.05); }
-      100% { transform: scale(1); }
-    }
-
-    .mode-hint {
-      text-align: center;
-      color: #666;
-      font-size: 14px;
-      margin: 10px 0;
-      padding: 5px;
-      background: #f0f0f0;
-      border-radius: 8px;
-    }
-
-    .debug-panel {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      background: rgba(0, 0, 0, 0.9);
-      color: #ffffff;
-      padding: 10px;
-      font-family: monospace;
-      font-size: 12px;
-      max-height: 200px;
-      overflow-y: auto;
-      z-index: 1000;
-      display: none;
-      margin-top: auto;
-    }
-
-    .debug-panel.active {
-      display: block;
-    }
-
-    .debug-toggle {
-      position: fixed;
-      bottom: 10px;
-      right: 10px;
-      background: rgba(0, 0, 0, 0.7);
-      color: white;
+    .button {
+      background-color: var(--primary-blue);
+      color: var(--text-light);
       border: none;
-      padding: 5px 10px;
-      border-radius: 5px;
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-size: 1rem;
       cursor: pointer;
-      z-index: 1001;
+      transition: background-color 0.2s ease, transform 0.1s ease;
+      -webkit-appearance: none; /* Safari reset */
+      appearance: none; /* Standard reset */
+      -webkit-tap-highlight-color: transparent; /* iOS tap reset */
+      user-select: none;
+      -webkit-user-select: none;
+      text-align: center;
+      flex-grow: 1; /* Allow buttons to grow */
+      max-width: 180px; /* Limit button width */
     }
 
-    @media (max-width: 400px) {
-      .app-container {
-        padding: 20px 10px;
-        min-height: 100vh;
-      }
-
-      button {
-        padding: 10px 15px;
-        font-size: 14px;
-      }
-
-      .orb {
-        width: 100px;
-        height: 100px;
-      }
+    .button:hover:not(:disabled) {
+      background-color: #0056b3; /* Darker blue on hover */
     }
 
-    /* Volume bar styles */
-    .volume-container {
-      position: absolute;
-      bottom: 80px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 200px;
-      height: 8px;
-      background-color: #f0f0f0;
+    .button:active:not(:disabled) {
+       transform: scale(0.97);
+    }
+
+    .button:disabled {
+      background-color: var(--medium-gray);
+      color: var(--dark-gray);
+      cursor: not-allowed;
+      opacity: 0.7;
+    }
+
+    #statusPanel {
+      width: 100%;
+      flex-grow: 1; /* Take remaining vertical space */
+      min-height: 100px; /* Minimum height */
+      max-height: 30vh; /* Limit maximum height */
+      border: 1px solid var(--medium-gray);
+      border-radius: 8px;
+      overflow-y: scroll;
+      padding: 10px;
+      background-color: #ffffff;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column-reverse; /* Makes new messages appear at top */
+      margin-bottom: 15px;
+    }
+
+    .status-message {
+      padding: 6px 8px;
+      margin-bottom: 6px; /* Space between messages */
       border-radius: 4px;
-      overflow: hidden;
+      font-size: 0.85rem;
+      line-height: 1.4;
+      word-wrap: break-word;
     }
-    
-    .volume-bar {
-      position: absolute;
-      bottom: -10px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 4px;
-      height: 0;
-      background: #34c759;
-      transition: height 0.1s ease;
-      border-radius: 2px;
+
+    .status-message:last-child {
+       margin-bottom: 0; /* No margin for the oldest message */
     }
+
+    .status-message.user { /* Example for user message styling */
+        background-color: #e7f3ff;
+        color: #004085;
+        align-self: flex-end; /* Align user messages right */
+        max-width: 80%;
+    }
+
+    .status-message.assistant { /* Example for assistant message styling */
+        background-color: #f8f9fa;
+        color: #383d41;
+        border: 1px solid #d6d8db;
+        align-self: flex-start; /* Align assistant messages left */
+        max-width: 80%;
+    }
+
+    .status-message.info {
+      background-color: #d1ecf1;
+      color: #0c5460; /* Non-white text */
+    }
+
+    .status-message.error {
+      background-color: #f8d7da;
+      color: #721c24; /* Non-white text */
+      font-weight: bold;
+    }
+
+    .status-message.debug {
+      background-color: #e2d9f3;
+      color: #3d2a70; /* Non-white text */
+      font-size: 0.75rem;
+      display: none; /* Hidden by default */
+    }
+
+    body.show-debug .status-message.debug {
+        display: block; /* Show debug messages when body has class */
+    }
+
+    .debug-control {
+      margin-top: auto; /* Push to bottom if space allows */
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      padding: 10px 0;
+    }
+
+    .debug-control label {
+      margin-left: 8px;
+      font-size: 0.9rem;
+      color: var(--dark-gray);
+      cursor: pointer;
+    }
+
+    /* Hide original checkbox */
+    .debug-control input[type="checkbox"] {
+       opacity: 0;
+       position: absolute;
+       width: 0;
+       height: 0;
+    }
+
+    /* Style the label to look like a checkbox */
+   .debug-control label::before {
+        content: '';
+        display: inline-block;
+        width: 16px;
+        height: 16px;
+        border: 1px solid var(--medium-gray);
+        border-radius: 3px;
+        margin-right: 8px;
+        background-color: white;
+        vertical-align: middle;
+        cursor: pointer;
+    }
+
+    /* Style the checkmark */
+   .debug-control input[type="checkbox"]:checked + label::before {
+        content: '\2714'; /* Checkmark symbol */
+        background-color: var(--primary-blue);
+        border-color: var(--primary-blue);
+        color: white;
+        font-size: 12px;
+        text-align: center;
+        line-height: 16px; /* Center checkmark */
+    }
+
   </style>
 </head>
-
 <body>
-  <!-- Add hidden audio element -->
-  <audio id="audio" hidden></audio>
-
-  <!-- Safari touch event compatibility -->
-  <script>
-    // Safari touch event compatibility
-    document.addEventListener('touchstart', function() {}, {passive: false});
-    
-    // Force unlock audio on any user interaction
-    function tryUnlockAudio() {
-      if (window.unlockAudio && !window.nagState.audioUnlocked) {
-        window.unlockAudio();
-      }
-    }
-    
-    // Add this event to every possible user interaction
-    document.addEventListener('click', tryUnlockAudio, {once: false});
-    document.addEventListener('touchstart', tryUnlockAudio, {once: false});
-  </script>
-
   <div class="app-container">
-    <div class="message-container" id="messageContainer"></div>
+    <h1>Nag Assistant</h1>
+
     <div class="orb-container">
-      <div class="orb idle" id="orb" role="button" tabindex="0">Click to start</div>
+      <!-- Ensure class reflects initial state, e.g., 'idle' -->
+      <div class="orb idle" id="orb" role="button" tabindex="0" aria-label="Start conversation">Start</div>
     </div>
-    <div class="mode-hint" id="modeHint">Nag will listen continuously for your voice</div>
-    <div class="volume-container">
-      <div id="volumeBar" class="volume-bar"></div>
-    </div>
+
     <div class="controls">
       <div class="button-row">
-        <button id="toggleBtn" type="button" class="button" role="button" tabindex="0">Start Conversation</button>
-        <button id="pauseBtn" type="button" class="button" role="button" tabindex="0" disabled>Pause</button>
+        <!-- Ensure text/disabled state matches initial app state -->
+        <button id="toggleBtn" type="button" class="button" role="button" tabindex="0" aria-label="Start conversation">Start</button>
+        <button id="pauseBtn" type="button" class="button" role="button" tabindex="0" aria-label="Pause conversation" disabled>Pause</button>
       </div>
       <div class="button-row">
-        <button id="modeToggle" type="button" class="button" role="button" tabindex="0">Switch to walkie-talkie mode</button>
+        <button id="modeToggle" type="button" class="button" role="button" tabindex="0" aria-label="Switch to walkie-talkie mode">Walkie-Talkie</button>
       </div>
     </div>
-  </div>
 
-  <div class="debug-panel" id="debugPanel"></div>
-  <button class="debug-toggle" id="debugToggle" type="button" role="button" tabindex="0">Toggle Debug</button>
+    <div id="statusPanel">
+        <!-- Status messages will be added here by JavaScript -->
+        <!-- Example Message Structure: -->
+        <!-- <div class="status-message info">App Initialized.</div> -->
+        <!-- <div class="status-message error">An error occurred.</div> -->
+        <!-- <div class="status-message debug">Debug info here...</div> -->
+    </div>
 
+    <div class="debug-control">
+        <input type="checkbox" id="debugToggleCheckbox">
+        <label for="debugToggleCheckbox">Show Debug Info</label>
+    </div>
+
+  </div> <!-- end .app-container -->
+
+  <!-- Nag Global State -->
   <script>
-    // Add welcome message after initialization
-    if (window.nagState && !window.nagState.initialized) {
-      window.addMessage("Welcome! Click the orb or tap 'Start Conversation' to begin.", false);
+    window.nagState = {
+      // Core State
+      listening: false, // Is the app actively listening/processing?
+      isPaused: false, // Is listening paused?
+      isWalkieTalkieMode: false, // Is walkie-talkie mode active?
+      walkieTalkieActive: false, // Is the orb currently held down in walkie-talkie mode?
+      interrupted: false, // Was the assistant interrupted mid-speech?
+
+      // Audio/Recording State
+      mediaRecorder: null,
+      audioChunks: [],
+      audioStream: null,
+      audioContext: null,
+      audioContextUnlocked: false,
+      analyserNode: null,
+      volumeDataArray: null,
+
+      // UI/Timing State
+      initialized: false, // Has the UI been fully initialized?
+      scriptLoadStatus: {}, // Track script loading
+      modeHintTimeout: null, // Timeout ID for hiding mode hint
+
+      // Configuration/Flags
+      debugEnabled: false, // Is debug logging active?
+
+      // Add other necessary state properties here
+    };
+
+    window.nagElements = {}; // To cache DOM elements
+    window.scriptsToLoad = [ // List of scripts needed
+        'nag-utils.js',
+        'nag-config.js',
+        'nag-api.js',
+        'nag-audio.js',
+        'nag-recording.js',
+        'nag-ui.js',
+        'nag-core.js'
+    ];
+  </script>
+
+  <!-- Script Loading Logic -->
+  <script>
+    function checkAllScriptsLoaded() {
+      return window.scriptsToLoad.every(script => window.nagState.scriptLoadStatus[script]);
     }
+
+    function onScriptLoad(scriptName) {
+      console.log(`${scriptName} loaded.`);
+      window.nagState.scriptLoadStatus[scriptName] = true;
+      if (checkAllScriptsLoaded()) {
+        console.log("All scripts loaded. Initializing app...");
+        if (typeof initializeApp === 'function') {
+          initializeApp(); // Call main initialization function from nag-core.js
+        } else {
+          console.error('Error: initializeApp function not found after loading scripts!');
+          addStatusMessage("Core initialization function missing!", "error");
+        }
+      }
+    }
+
+    function loadScript(src) {
+      return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = src;
+        script.async = false; // Load in order specified
+        script.onload = () => {
+          onScriptLoad(src);
+          resolve();
+        };
+        script.onerror = () => {
+          console.error(`Error loading script: ${src}`);
+          addStatusMessage(`Failed to load script: ${src}`, "error");
+          reject(new Error(`Script load error for ${src}`));
+        };
+        document.body.appendChild(script);
+      });
+    }
+
+    // Utility function to add status messages (needed before scripts load)
+    function addStatusMessage(message, type = 'info', isDebug = false) {
+        const statusPanel = document.getElementById('statusPanel');
+        if (!statusPanel) {
+            console.error("Status panel not found for message:", message);
+            return;
+        }
+
+        const messageDiv = document.createElement('div');
+        messageDiv.classList.add('status-message');
+        messageDiv.classList.add(type); // e.g., 'info', 'error', 'user', 'assistant', 'debug'
+        if (isDebug) {
+            messageDiv.classList.add('debug');
+        }
+        messageDiv.textContent = message;
+
+        // Prepend to show newest first (due to flex-direction: column-reverse)
+        statusPanel.insertBefore(messageDiv, statusPanel.firstChild);
+
+        // Optional: Scroll to bottom (which is visually the top because of column-reverse)
+        // statusPanel.scrollTop = 0;
+    }
+
+    // Add initial message before loading scripts
+    addStatusMessage("Loading application components...", "info");
+
+    // Load all scripts sequentially
+    window.scriptsToLoad.reduce((promise, scriptSrc) => {
+        return promise.then(() => loadScript(scriptSrc));
+    }, Promise.resolve()).catch(err => {
+        // Add a final catch here for any script loading errors
+        console.error("Error during script loading sequence:", err);
+        // Use the globally available function IF nag-utils loaded, otherwise log
+        if (window.addStatusMessage) {
+             window.addStatusMessage("Critical error loading application scripts. Please refresh.", "error");
+        } else {
+            console.error("Critical error loading application scripts. Please refresh.");
+        }
+    });
+
   </script>
 
+  <!-- Debug Toggle Logic -->
   <script>
-    // Initialize app when DOM is ready
-    document.addEventListener('DOMContentLoaded', function() {
-      if (typeof initializeApp === 'function') {
-        initializeApp();
-      } else {
-        console.error('Error: initializeApp function not found!');
-      }
-    });
+      document.addEventListener('DOMContentLoaded', () => {
+          const debugCheckbox = document.getElementById('debugToggleCheckbox');
+          if (debugCheckbox) {
+              // Initial state check (e.g., from localStorage or default)
+              const showDebug = localStorage.getItem('nagDebugEnabled') === 'true';
+              debugCheckbox.checked = showDebug;
+              document.body.classList.toggle('show-debug', showDebug);
+              window.nagState.debugEnabled = showDebug; // Sync state
+
+              debugCheckbox.addEventListener('change', () => {
+                  const isChecked = debugCheckbox.checked;
+                  document.body.classList.toggle('show-debug', isChecked);
+                  window.nagState.debugEnabled = isChecked; // Update state
+                  localStorage.setItem('nagDebugEnabled', isChecked); // Persist preference
+                  addStatusMessage(`Debug info ${isChecked ? 'shown' : 'hidden'}.`, 'info');
+              });
+          } else {
+              console.error("Debug toggle checkbox not found.");
+          }
+      });
   </script>
+
 </body>
 </html>

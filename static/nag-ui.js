@@ -1,116 +1,127 @@
 // Nag Digital Twin v2.0.0 - UI and Event Handling
 
-// Add this function at the top of the file
+// More aggressive attribute cleanup
 function cleanupButtonAttributes(element) {
     if (!element) return;
-    
-    // Remove all icon-related attributes
-    const attrsToRemove = [
-        "iconName", "layoutTraits", "src", "icon", "data-icon", "style",
-        "data-icon-name", "data-icon-src", "data-icon-type", "data-icon-size",
-        "data-layout-traits", "data-icon-layout", "data-icon-style",
-        "data-pip", "data-placard", "data-inline", "data-macos",
-        "data-macos-layout", "data-macos-traits"
-    ];
-    
-    attrsToRemove.forEach(attr => {
-        try {
-            element.removeAttribute(attr);
-        } catch (e) {
-            console.warn(`Failed to remove attribute ${attr}:`, e);
+
+    const essentialAttrs = ['id', 'class', 'role', 'tabindex', 'aria-label', 'disabled', 'type'];
+    const attrs = element.attributes;
+
+    // Remove all attributes EXCEPT essential ones
+    for (let i = attrs.length - 1; i >= 0; i--) {
+        const attrName = attrs[i].name.toLowerCase();
+        if (!essentialAttrs.includes(attrName) && !attrName.startsWith('on')) { // Keep event handlers
+            try {
+                element.removeAttribute(attrs[i].name);
+            } catch (e) {
+                console.warn(`Failed to remove attribute ${attrs[i].name}:`, e);
+            }
         }
-    });
-    
-    // Set basic styles for Safari compatibility
-    element.style.cssText = `
-        -webkit-appearance: none;
-        appearance: none;
-        -webkit-tap-highlight-color: transparent;
-        user-select: none;
-        -webkit-user-select: none;
-        text-align: center;
-        text-decoration: none;
-        background: none;
-        border: none;
-        padding: 0;
-        margin: 0;
-    `;
+    }
+
+    // Ensure basic styles (important for Safari)
+    // We need to be careful not to override intended styles completely
+    // Let's apply only the absolute necessary resets for Safari issues
+    element.style.webkitAppearance = 'none';
+    element.style.appearance = 'none';
+    element.style.webkitTapHighlightColor = 'transparent';
+    // Avoid setting background/border/padding here as it might override intentional styles
 }
 
-// Add this function to ensure all buttons are cleaned up
+// Ensure all buttons are cleaned up initially and on mutations
 function cleanupAllButtons() {
     const buttons = document.querySelectorAll('button, [role="button"], .orb');
     buttons.forEach(button => {
         cleanupButtonAttributes(button);
-        // Remove any data attributes that might be added by the browser
-        const attrs = button.attributes;
-        for (let i = attrs.length - 1; i >= 0; i--) {
-            const attr = attrs[i];
-            if (attr.name.startsWith('data-') || attr.name.startsWith('icon') || attr.name.startsWith('layout')) {
-                button.removeAttribute(attr.name);
-            }
-        }
     });
 }
 
-// Call cleanupAllButtons after DOM is loaded
+// Call cleanupAllButtons after DOM is loaded and observe mutations
 document.addEventListener('DOMContentLoaded', function() {
     cleanupAllButtons();
-    // Add a mutation observer to clean up any dynamically added buttons
+
     const observer = new MutationObserver(function(mutations) {
+        let needsCleanup = false;
         mutations.forEach(function(mutation) {
-            if (mutation.addedNodes.length) {
-                cleanupAllButtons();
+            if (mutation.type === 'attributes') {
+                 // If an attribute changed on a button-like element, re-clean it
+                 if (mutation.target.matches('button, [role="button"], .orb')) {
+                     cleanupButtonAttributes(mutation.target);
+                     needsCleanup = true; // Mark that a cleanup happened
+                 }
+            } else if (mutation.addedNodes.length) {
+                // If new nodes were added, check if any are buttons and clean them
+                mutation.addedNodes.forEach(node => {
+                    if (node.nodeType === 1 && node.matches('button, [role="button"], .orb')) {
+                        cleanupButtonAttributes(node);
+                        needsCleanup = true;
+                    }
+                    // Also check descendants of added nodes
+                    if (node.nodeType === 1 && node.querySelectorAll) {
+                         node.querySelectorAll('button, [role="button"], .orb').forEach(btn => {
+                            cleanupButtonAttributes(btn);
+                            needsCleanup = true;
+                         });
+                    }
+                });
             }
         });
+        // Optional: log if cleanup occurred within mutation observer
+        // if (needsCleanup) console.log("Mutation observer triggered button cleanup.");
     });
-    
+
     observer.observe(document.body, {
         childList: true,
-        subtree: true
+        subtree: true,
+        attributes: true, // Observe attribute changes too
+        attributeFilter: ['iconName', 'layoutTraits', 'src', 'style', 'class'] // Focus on relevant attributes
     });
 });
 
-// Define handler functions
+// Define handler functions (ensure cleanup is called within them)
 function handleToggleClick() {
   console.log("Toggle button clicked");
   try {
     if (window.unlockAudio) window.unlockAudio();
-    
+
+    const toggleBtn = window.nagElements.toggleBtn;
+    const orb = window.nagElements.orb;
+
     if (window.nagState.listening) {
       console.log("Stopping conversation...");
       if (window.logDebug) window.logDebug("⏹️ Stopping conversation...");
-      if (window.nagElements.toggleBtn) {
-        cleanupButtonAttributes(window.nagElements.toggleBtn);
-        window.nagElements.toggleBtn.textContent = "Start Conversation";
-        window.nagElements.toggleBtn.classList.remove("active");
+      if (toggleBtn) {
+        toggleBtn.textContent = "Start Conversation";
+        toggleBtn.classList.remove("active");
+        cleanupButtonAttributes(toggleBtn); // Clean after state change
       }
       if (window.stopListening) window.stopListening();
-      if (window.nagElements.orb) {
-        window.nagElements.orb.classList.remove("listening", "speaking", "thinking");
-        window.nagElements.orb.classList.add("idle");
-        cleanupButtonAttributes(window.nagElements.orb);
+      if (orb) {
+        orb.classList.remove("listening", "speaking", "thinking");
+        orb.classList.add("idle");
+        cleanupButtonAttributes(orb); // Clean after state change
       }
       if (window.addMessage) window.addMessage("Conversation stopped", true);
     } else {
       console.log("Starting conversation...");
       if (window.logDebug) window.logDebug("▶️ Starting conversation...");
-      if (window.nagElements.toggleBtn) {
-        cleanupButtonAttributes(window.nagElements.toggleBtn);
-        window.nagElements.toggleBtn.textContent = "Stop Conversation";
-        window.nagElements.toggleBtn.classList.add("active");
+      if (toggleBtn) {
+        toggleBtn.textContent = "Stop Conversation";
+        toggleBtn.classList.add("active");
+        cleanupButtonAttributes(toggleBtn); // Clean after state change
       }
       window.nagState.interrupted = false;
       window.nagState.isPaused = false;
       if (window.nagElements.pauseBtn) {
-        cleanupButtonAttributes(window.nagElements.pauseBtn);
-        window.nagElements.pauseBtn.textContent = "Pause";
-        window.nagElements.pauseBtn.classList.remove("paused");
+        const pauseBtn = window.nagElements.pauseBtn;
+        pauseBtn.textContent = "Pause";
+        pauseBtn.classList.remove("paused");
+        cleanupButtonAttributes(pauseBtn); // Clean after state change
       }
       if (window.startListening) window.startListening();
       if (window.addMessage) window.addMessage("Conversation started", true);
     }
-    if (window.updateButtonStates) window.updateButtonStates();
+    if (window.updateButtonStates) window.updateButtonStates(); // Ensure this also cleans if needed
   } catch (error) {
     console.error("Error in toggle button:", error);
     if (window.logDebug) window.logDebug("❌ Error: " + error.message);
@@ -120,39 +131,40 @@ function handleToggleClick() {
 function handlePauseClick() {
   console.log("Pause button clicked");
   if (!window.nagState.listening) return;
-  
+
+  const pauseBtn = window.nagElements.pauseBtn;
+  if (!pauseBtn) return;
+
   if (window.nagState.isPaused) {
     // Resume conversation
     window.nagState.isPaused = false;
-    if (window.nagElements.pauseBtn) {
-      cleanupButtonAttributes(window.nagElements.pauseBtn);
-      window.nagElements.pauseBtn.textContent = "Pause";
-      window.nagElements.pauseBtn.classList.remove("paused");
-    }
+    pauseBtn.textContent = "Pause";
+    pauseBtn.classList.remove("paused");
+    cleanupButtonAttributes(pauseBtn); // Clean after state change
     if (window.logDebug) window.logDebug("▶️ Conversation resumed");
     if (window.addMessage) window.addMessage("Conversation resumed", true);
-    
+
     if (!window.nagState.isWalkieTalkieMode && window.startListening) {
-      window.startListening();
+      window.startListening(); // Restart listening if needed
     }
   } else {
     // Pause conversation
     window.nagState.isPaused = true;
-    if (window.nagElements.pauseBtn) {
-      cleanupButtonAttributes(window.nagElements.pauseBtn);
-      window.nagElements.pauseBtn.textContent = "Resume";
-      window.nagElements.pauseBtn.classList.add("paused");
-    }
+    pauseBtn.textContent = "Resume";
+    pauseBtn.classList.add("paused");
+    cleanupButtonAttributes(pauseBtn); // Clean after state change
     if (window.logDebug) window.logDebug("⏸️ Conversation paused");
     if (window.addMessage) window.addMessage("Conversation paused", true);
-    
-    if (window.nagState.mediaRecorder && 
-        window.nagState.mediaRecorder.state === "recording" && 
+
+    // Stop recording immediately when paused
+    if (window.nagState.mediaRecorder &&
+        window.nagState.mediaRecorder.state === "recording" &&
         window.stopRecording) {
       window.stopRecording();
     }
   }
 }
+
 
 function handleModeToggleClick() {
   console.log("Mode toggle clicked");
@@ -161,32 +173,40 @@ function handleModeToggleClick() {
       console.error("Nag state not initialized");
       return;
     }
+    const modeToggle = window.nagElements.modeToggle;
+    const modeHint = window.nagElements.modeHint;
+
 
     // Toggle walkie-talkie mode
     window.nagState.isWalkieTalkieMode = !window.nagState.isWalkieTalkieMode;
-    
+
     // Update mode toggle button
-    if (window.nagElements.modeToggle) {
-      cleanupButtonAttributes(window.nagElements.modeToggle);
-      
+    if (modeToggle) {
       // Update button text
-      window.nagElements.modeToggle.textContent = window.nagState.isWalkieTalkieMode ? 
+      modeToggle.textContent = window.nagState.isWalkieTalkieMode ?
         "Switch to Continuous Mode" : "Switch to Walkie-Talkie Mode";
-      
       // Update button class
-      window.nagElements.modeToggle.classList.toggle("walkie-talkie", window.nagState.isWalkieTalkieMode);
+      modeToggle.classList.toggle("walkie-talkie", window.nagState.isWalkieTalkieMode);
+      cleanupButtonAttributes(modeToggle); // Clean after state change
     }
 
     // Update mode hint
-    if (window.nagElements.modeHint) {
-      window.nagElements.modeHint.textContent = window.nagState.isWalkieTalkieMode ? 
-        "Click & hold the orb to use walkie-talkie mode" : 
-        "Nag will listen continuously for your voice";
-      window.nagElements.modeHint.style.display = "block";
-      
-      // Hide hint after 5 seconds
-      setTimeout(() => {
-        if (window.nagElements.modeHint) {
+    if (modeHint) {
+        const hintText = window.nagState.isWalkieTalkieMode ?
+          "Click & hold the orb to use walkie-talkie mode" :
+          "Nag will listen continuously for your voice";
+        // Update hint text only if it exists
+        if (modeHint.firstChild && modeHint.firstChild.nodeType === Node.TEXT_NODE) {
+            modeHint.firstChild.nodeValue = hintText;
+        } else {
+            modeHint.textContent = hintText; // Fallback if structure is different
+        }
+      modeHint.style.display = "block"; // Ensure hint is visible
+
+      // Hide hint after 5 seconds (use a variable to manage timeout)
+      if (window.modeHintTimeout) clearTimeout(window.modeHintTimeout);
+      window.modeHintTimeout = setTimeout(() => {
+        if (window.nagElements.modeHint) { // Check if element still exists
           window.nagElements.modeHint.style.display = "none";
         }
       }, 5000);
@@ -194,294 +214,198 @@ function handleModeToggleClick() {
 
     // Log mode change
     if (window.logDebug) {
-      window.logDebug(window.nagState.isWalkieTalkieMode ? 
-        "🎤 Switched to walkie-talkie mode" : 
+      window.logDebug(window.nagState.isWalkieTalkieMode ?
+        "🎤 Switched to walkie-talkie mode" :
         "🎤 Switched to continuous mode");
     }
 
-    // Add mode change message
-    if (window.addMessage) {
-      window.addMessage(window.nagState.isWalkieTalkieMode ? 
-        "Switched to walkie-talkie mode" : 
-        "Switched to continuous mode", true);
+    // If switching *out* of walkie-talkie mode and currently listening, ensure continuous listening starts
+    if (!window.nagState.isWalkieTalkieMode && window.nagState.listening && !window.nagState.isPaused) {
+        if (window.startListening) window.startListening();
+    }
+    // If switching *into* walkie-talkie mode and listening, stop continuous recording
+    else if (window.nagState.isWalkieTalkieMode && window.nagState.listening) {
+       if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state === "recording" && window.stopRecording) {
+           window.stopRecording(); // Stop continuous recording
+           console.log("Stopped continuous recording for walkie-talkie mode.");
+       }
     }
 
-    // Stop current recording if in walkie-talkie mode
-    if (window.nagState.isWalkieTalkieMode && 
-        window.nagState.mediaRecorder && 
-        window.nagState.mediaRecorder.state === "recording" && 
-        window.stopRecording) {
-      window.stopRecording();
-    }
+     if (window.updateButtonStates) window.updateButtonStates(); // Ensure this also cleans if needed
 
-    // Start listening in continuous mode
-    if (!window.nagState.isWalkieTalkieMode && 
-        window.nagState.listening && 
-        !window.nagState.isPaused && 
-        window.startListening) {
-      window.startListening();
-    }
   } catch (error) {
-    console.error("Error in mode toggle:", error);
-    if (window.logDebug) window.logDebug("❌ Error: " + error.message);
+    console.error("Error in mode toggle button:", error);
+    if (window.logDebug) window.logDebug(`❌ Error: ${error.message}`);
   }
 }
 
-// Handler functions for orb interactions
-window.handleOrbClick = function(e) {
-    console.log("Orb clicked", e);
-    if (window.logDebug) window.logDebug("Orb clicked");
-    
-    // Only handle click in continuous mode
-    if (!window.nagState.isWalkieTalkieMode) {
-        if (!window.nagState.listening) {
-            if (window.logDebug) window.logDebug("Starting conversation via orb");
-            // Initialize audio context first
-            if (window.initializeAudioContext) {
-                window.initializeAudioContext().then(() => {
-                    if (window.startListening) window.startListening();
-                    window.nagState.listening = true;
-                    if (window.nagElements.toggleBtn) {
-                        window.nagElements.toggleBtn.textContent = "Stop Conversation";
-                        window.nagElements.toggleBtn.classList.add("active");
-                    }
-                });
-            }
+// Central function to update button states based on nagState
+function updateButtonStates() {
+    const { listening, isPaused, isWalkieTalkieMode } = window.nagState;
+    const { toggleBtn, pauseBtn, modeToggle, orb } = window.nagElements;
+
+    // Toggle Button
+    if (toggleBtn) {
+        toggleBtn.textContent = listening ? "Stop Conversation" : "Start Conversation";
+        toggleBtn.classList.toggle("active", listening);
+        toggleBtn.disabled = false; // Generally enabled unless specific conditions
+        cleanupButtonAttributes(toggleBtn);
+    }
+
+    // Pause Button
+    if (pauseBtn) {
+        pauseBtn.textContent = isPaused ? "Resume" : "Pause";
+        pauseBtn.classList.toggle("paused", isPaused);
+        pauseBtn.disabled = !listening; // Can only pause/resume if listening
+        cleanupButtonAttributes(pauseBtn);
+    }
+
+    // Mode Toggle Button
+    if (modeToggle) {
+        modeToggle.textContent = isWalkieTalkieMode ? "Switch to Continuous Mode" : "Switch to Walkie-Talkie Mode";
+        modeToggle.classList.toggle("walkie-talkie", isWalkieTalkieMode);
+        modeToggle.disabled = listening; // Disable mode switching during active conversation
+        cleanupButtonAttributes(modeToggle);
+    }
+
+    // Orb State (visual only, not disabled state)
+    if (orb) {
+        // Clear previous states
+        orb.classList.remove("idle", "listening", "thinking", "speaking");
+
+        if (listening && !isPaused) {
+             // Reflecting recording state more accurately might need access to mediaRecorder state
+             // For now, just use 'listening' if conversation is active
+            orb.classList.add("listening");
+            // Potentially add 'thinking' or 'speaking' based on other state flags if available
         } else {
-            if (window.logDebug) window.logDebug("Stopping conversation via orb");
-            if (window.stopListening) window.stopListening();
-            window.nagState.listening = false;
-            if (window.nagElements.toggleBtn) {
-                window.nagElements.toggleBtn.textContent = "Start Conversation";
-                window.nagElements.toggleBtn.classList.remove("active");
-            }
+            orb.classList.add("idle");
         }
-        if (window.updateButtonStates) window.updateButtonStates();
+        cleanupButtonAttributes(orb);
     }
-};
 
-window.handleOrbDown = function(e) {
-    console.log("Orb pressed (mouse)");
-    if (window.logDebug) window.logDebug("Orb pressed");
-    
-    if (window.nagState.isWalkieTalkieMode) {
-        // Initialize audio context first
-        if (window.initializeAudioContext) {
-            window.initializeAudioContext().then(() => {
-                if (window.startListening) window.startListening();
-                window.nagState.listening = true;
-                if (window.nagElements.toggleBtn) {
-                    window.nagElements.toggleBtn.textContent = "Stop Conversation";
-                    window.nagElements.toggleBtn.classList.add("active");
-                }
-                if (window.updateButtonStates) window.updateButtonStates();
-            });
-        }
-    }
-};
-
-window.handleOrbUp = function(e) {
-    console.log("Orb released (mouse)");
-    if (window.logDebug) window.logDebug("Orb released");
-    
-    if (window.nagState.isWalkieTalkieMode) {
-        if (window.stopListening) window.stopListening();
-        window.nagState.listening = false;
-        if (window.nagElements.toggleBtn) {
-            window.nagElements.toggleBtn.textContent = "Start Conversation";
-            window.nagElements.toggleBtn.classList.remove("active");
-        }
-        if (window.updateButtonStates) window.updateButtonStates();
-    }
-};
-
-window.handleOrbTouchStart = function(e) {
-  console.log("Orb touched (touchstart)");
-  if (e && e.preventDefault) e.preventDefault(); // Essential for Safari
-  if (window.logDebug) window.logDebug("Orb touched");
-  
-  // Unlock audio on first touch (critical for Safari)
-  if (window.unlockAudio) window.unlockAudio();
-  
-  if (window.nagState.isWalkieTalkieMode) {
-    if (window.startListening) window.startListening();
-    window.nagState.listening = true;
-    window.nagState.walkieTalkieActive = true;
-    if (window.nagElements.toggleBtn) {
-      window.nagElements.toggleBtn.textContent = "Stop Conversation";
-      window.nagElements.toggleBtn.classList.add("active");
-    }
-    if (window.updateButtonStates) window.updateButtonStates();
-  }
-};
-
-window.handleOrbTouchEnd = function(e) {
-  console.log("Orb touch released (touchend)");
-  if (e && e.preventDefault) e.preventDefault(); // Essential for Safari
-  if (window.logDebug) window.logDebug("Orb touch released");
-  
-  if (window.nagState.isWalkieTalkieMode && window.nagState.walkieTalkieActive) {
-    window.nagState.walkieTalkieActive = false;
-    if (window.stopListening) window.stopListening();
-    window.nagState.listening = false;
-    if (window.nagElements.toggleBtn) {
-      window.nagElements.toggleBtn.textContent = "Start Conversation";
-      window.nagElements.toggleBtn.classList.remove("active");
-    }
-    if (window.updateButtonStates) window.updateButtonStates();
-  }
-};
-
-// Initialize UI components
-window.setupUI = function() {
-  console.log("Setting up UI components...");
-  
-  // Prevent recursive initialization
-  if (window.nagState && window.nagState.initialized) {
-    console.log("UI already initialized, skipping...");
-    return;
-  }
-  
-  // Ensure DOM is ready
-  if (document.readyState !== 'complete') {
-    console.log("DOM not ready, waiting...");
-    return;
-  }
-  
-  // Initialize state if not exists
-  if (!window.nagState) {
-    window.initializeState();
-  }
-  
-  // Cache DOM elements
-  window.nagElements = {
-    messageContainer: document.getElementById('messageContainer'),
-    orb: document.getElementById('orb'),
-    toggleBtn: document.getElementById('toggleBtn'),
-    pauseBtn: document.getElementById('pauseBtn'),
-    modeToggle: document.getElementById('modeToggle'),
-    modeHint: document.getElementById('modeHint'),
-    debugPanel: document.getElementById('debugPanel'),
-    debugToggle: document.getElementById('debugToggle'),
-    audio: document.getElementById('audio'),
-    volumeBar: document.getElementById('volumeBar')
-  };
-  
-  // Verify all required elements exist
-  const requiredElements = ['messageContainer', 'orb', 'toggleBtn', 'pauseBtn', 'modeToggle', 'modeHint', 'audio'];
-  const missingElements = requiredElements.filter(id => !window.nagElements[id]);
-  
-  if (missingElements.length > 0) {
-    console.error("Missing required elements:", missingElements);
-    return;
-  }
-
-  // Clean up all button attributes
-  const elements = [window.nagElements.toggleBtn, window.nagElements.pauseBtn, window.nagElements.modeToggle, window.nagElements.orb];
-  elements.forEach(element => {
-    if (element) {
-      cleanupButtonAttributes(element);
-    }
-  });
-
-  // Setup orb interactions
-  setupOrbInteractions(window.nagElements.orb);
-  
-  // Setup button event listeners
-  window.nagElements.toggleBtn.onclick = handleToggleClick;
-  window.nagElements.pauseBtn.onclick = handlePauseClick;
-  window.nagElements.modeToggle.onclick = handleModeToggleClick;
-  
-  // Initialize mode hint with default text
-  window.nagElements.modeHint.textContent = "Nag will listen continuously for your voice";
-  window.nagElements.modeHint.style.display = "block";
-  
-  // Show the mode hint for a few seconds then hide it
-  setTimeout(() => {
-    if (window.nagElements.modeHint) {
-      window.nagElements.modeHint.style.display = "none";
-    }
-  }, 5000);
-  
-  // Add initial welcome message if not already added
-  if (window.addMessage && !window.nagState.initialized) {
-    window.addMessage("Welcome to Nag's Digital Twin. How can I help you today?", false);
-  }
-  
-  // Setup debug panel
-  if (window.nagElements.debugToggle && window.nagElements.debugPanel) {
-    window.nagElements.debugToggle.onclick = function() {
-      window.nagElements.debugPanel.classList.toggle('active');
-    };
-  }
-  
-  // Mark UI as initialized
-  window.nagState.initialized = true;
-  console.log("UI setup complete");
-};
-
-// Improved Safari-compatible orb interaction setup
-window.setupOrbInteractions = function(orb) {
-  if (!orb) {
-    console.error("Orb element not found for interaction setup");
-    return;
-  }
-
-  // Remove any existing event listeners
-  orb.onclick = null;
-  orb.onmousedown = null;
-  orb.onmouseup = null;
-  orb.onmouseleave = null;
-  orb.ontouchstart = null;
-  orb.ontouchend = null;
-  orb.ontouchcancel = null;
-
-  // Setup new event listeners
-  orb.onclick = handleOrbClick;
-  orb.onmousedown = handleOrbDown;
-  orb.onmouseup = handleOrbUp;
-  orb.onmouseleave = handleOrbUp;
-  
-  // Touch events for mobile/Safari
-  orb.ontouchstart = handleOrbTouchStart;
-  orb.ontouchend = handleOrbTouchEnd;
-  orb.ontouchcancel = handleOrbTouchEnd;
-  
-  console.log("Orb interactions setup complete");
-};
-
-// Helper function to update mode hint
-window.updateModeHint = function(text) {
-  if (window.nagElements && window.nagElements.modeHint) {
-    window.nagElements.modeHint.textContent = text;
-    window.nagElements.modeHint.style.display = "block";
-    
-    // Auto-hide after a few seconds
-    setTimeout(() => {
-      if (window.nagElements.modeHint) {
-        window.nagElements.modeHint.style.display = "none";
-      }
-    }, 3000);
-  }
-};
-
-// Export functions for global use
-window.handleToggleClick = handleToggleClick;
-window.handlePauseClick = handlePauseClick;
-window.handleModeToggleClick = handleModeToggleClick;
-window.handleOrbClick = handleOrbClick;
-window.handleOrbDown = handleOrbDown;
-window.handleOrbUp = handleOrbUp;
-window.handleOrbTouchStart = handleOrbTouchStart;
-window.handleOrbTouchEnd = handleOrbTouchEnd;
-
-// Initialize UI when the script loads
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', function() {
-    if (!window.nagState || !window.nagState.initialized) {
-      setupUI();
-    }
-  });
-} else if (!window.nagState || !window.nagState.initialized) {
-  setupUI();
+    console.log("Button states updated:", { listening, isPaused, isWalkieTalkieMode });
 }
+
+
+// Orb Interaction Logic (Walkie-Talkie Mode)
+function setupWalkieTalkieMode() {
+    const orb = window.nagElements.orb;
+    if (!orb) return;
+
+    let isHeld = false;
+
+    // Mouse events
+    orb.addEventListener('mousedown', (e) => {
+        if (!window.nagState.isWalkieTalkieMode || !window.nagState.listening) return;
+        e.preventDefault(); // Prevent text selection/drag
+        isHeld = true;
+        orb.classList.add('listening'); // Show active state
+        if (window.startRecording) window.startRecording();
+    });
+
+    orb.addEventListener('mouseup', () => {
+        if (!window.nagState.isWalkieTalkieMode || !isHeld) return;
+        isHeld = false;
+        orb.classList.remove('listening');
+        if (window.stopRecording) window.stopRecording();
+    });
+
+    orb.addEventListener('mouseleave', () => {
+        if (!window.nagState.isWalkieTalkieMode || !isHeld) return;
+        isHeld = false;
+        orb.classList.remove('listening');
+        if (window.stopRecording) window.stopRecording(); // Stop if mouse leaves while held
+    });
+
+    // Touch events
+    orb.addEventListener('touchstart', (e) => {
+        if (!window.nagState.isWalkieTalkieMode || !window.nagState.listening) return;
+        e.preventDefault(); // Important for mobile to prevent scrolling/zooming
+        isHeld = true;
+        orb.classList.add('listening');
+        if (window.startRecording) window.startRecording();
+    }, { passive: false }); // Need passive: false to call preventDefault
+
+    orb.addEventListener('touchend', () => {
+        if (!window.nagState.isWalkieTalkieMode || !isHeld) return;
+        isHeld = false;
+        orb.classList.remove('listening');
+        if (window.stopRecording) window.stopRecording();
+    });
+
+     orb.addEventListener('touchcancel', () => {
+        if (!window.nagState.isWalkieTalkieMode || !isHeld) return;
+        isHeld = false;
+        orb.classList.remove('listening');
+        if (window.stopRecording) window.stopRecording(); // Stop if touch is cancelled
+    });
+}
+
+
+// Add event listeners after DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+    const { toggleBtn, pauseBtn, modeToggle, orb } = window.nagElements;
+
+    if (toggleBtn) {
+        toggleBtn.onclick = handleToggleClick;
+    } else {
+        console.error("Toggle button not found for event listener.");
+    }
+
+    if (pauseBtn) {
+        pauseBtn.onclick = handlePauseClick;
+    } else {
+        console.error("Pause button not found for event listener.");
+    }
+
+    if (modeToggle) {
+        modeToggle.onclick = handleModeToggleClick;
+    } else {
+        console.error("Mode toggle button not found for event listener.");
+    }
+
+    // Orb click listener (for non-walkie-talkie mode start)
+    if (orb) {
+        orb.onclick = () => {
+            // Only trigger if not listening and not in walkie-talkie mode (handled by touch/mouse)
+            if (!window.nagState.listening && !window.nagState.isWalkieTalkieMode) {
+                handleToggleClick(); // Simulate start button click
+            }
+        };
+        setupWalkieTalkieMode(); // Setup mouse/touch handlers for walkie-talkie
+    } else {
+         console.error("Orb element not found for event listener.");
+    }
+
+    // Initial state update
+    if (window.updateButtonStates) updateButtonStates();
+
+    console.log("UI Event listeners attached.");
+});
+
+// Example function to update orb state (call this from core logic)
+function setOrbState(state) { // state can be 'idle', 'listening', 'thinking', 'speaking'
+    const orb = window.nagElements.orb;
+    if (!orb) return;
+    orb.classList.remove('idle', 'listening', 'thinking', 'speaking');
+    orb.classList.add(state);
+    cleanupButtonAttributes(orb); // Clean after state change
+    console.log(`Orb state set to: ${state}`);
+}
+
+// Ensure updateButtonStates exists globally if called from elsewhere
+if (typeof window !== 'undefined') {
+    window.updateButtonStates = updateButtonStates;
+    window.setOrbState = setOrbState;
+    window.cleanupButtonAttributes = cleanupButtonAttributes; // Make cleanup accessible if needed
+    window.cleanupAllButtons = cleanupAllButtons; // Make full cleanup accessible if needed
+}
+
+console.log("nag-ui.js loaded");
+
+// Final check after everything
+window.addEventListener('load', () => {
+    console.log("Window load event: Running final button cleanup.");
+    cleanupAllButtons();
+});
