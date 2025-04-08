@@ -8,7 +8,9 @@ function cleanupButtonAttributes(element) {
     const attrsToRemove = [
         "iconName", "layoutTraits", "src", "icon", "data-icon", "style",
         "data-icon-name", "data-icon-src", "data-icon-type", "data-icon-size",
-        "data-layout-traits", "data-icon-layout", "data-icon-style"
+        "data-layout-traits", "data-icon-layout", "data-icon-style",
+        "data-pip", "data-placard", "data-inline", "data-macos",
+        "data-macos-layout", "data-macos-traits"
     ];
     
     attrsToRemove.forEach(attr => {
@@ -28,34 +30,45 @@ function cleanupButtonAttributes(element) {
         -webkit-user-select: none;
         text-align: center;
         text-decoration: none;
+        background: none;
+        border: none;
+        padding: 0;
+        margin: 0;
     `;
 }
 
 // Add this function to ensure all buttons are cleaned up
 function cleanupAllButtons() {
-    const buttons = document.querySelectorAll('button, [role="button"]');
+    const buttons = document.querySelectorAll('button, [role="button"], .orb');
     buttons.forEach(button => {
         cleanupButtonAttributes(button);
+        // Remove any data attributes that might be added by the browser
+        const attrs = button.attributes;
+        for (let i = attrs.length - 1; i >= 0; i--) {
+            const attr = attrs[i];
+            if (attr.name.startsWith('data-') || attr.name.startsWith('icon') || attr.name.startsWith('layout')) {
+                button.removeAttribute(attr.name);
+            }
+        }
     });
 }
 
 // Call cleanupAllButtons after DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
     cleanupAllButtons();
-});
-
-// Call cleanupAllButtons after any dynamic content changes
-const observer = new MutationObserver(function(mutations) {
-    mutations.forEach(function(mutation) {
-        if (mutation.addedNodes.length) {
-            cleanupAllButtons();
-        }
+    // Add a mutation observer to clean up any dynamically added buttons
+    const observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+            if (mutation.addedNodes.length) {
+                cleanupAllButtons();
+            }
+        });
     });
-});
-
-observer.observe(document.body, {
-    childList: true,
-    subtree: true
+    
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true
+    });
 });
 
 // Define handler functions
