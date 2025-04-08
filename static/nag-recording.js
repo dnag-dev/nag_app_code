@@ -50,9 +50,9 @@ function setupVolumeVisualization(stream) {
       // Voice activity detection for continuous mode
       if (!window.nagState.isWalkieTalkieMode) {
         // Speech threshold - use higher threshold for Safari to avoid false activations
-        const SPEECH_THRESHOLD = window.nagState.isSafari ? 15 : 10;
+        const SPEECH_THRESHOLD = window.nagState.isSafari ? 8 : 10; // Lowered threshold for Safari
         // Silence duration before stopping - longer for Safari
-        const SILENCE_DELAY = window.nagState.isSafari ? 2000 : 1500;
+        const SILENCE_DELAY = window.nagState.isSafari ? 3000 : 1500; // Increased silence delay for Safari
         
         if (volume < SPEECH_THRESHOLD) {
           if (!window.nagState.silenceTimer) {
@@ -206,19 +206,19 @@ function startRecording() {
     // Special handling for Safari to use timeslices
     if (window.nagState.isSafari) {
       // For Safari, use shorter timeslices to get more frequent chunks
-      window.nagState.mediaRecorder.start(100); // Get data every 100ms for better responsiveness
-      logDebug("🎙️ Safari recording with 100ms timeslices");
+      window.nagState.mediaRecorder.start(50); // Reduced to 50ms for more frequent chunks
+      logDebug("🎙️ Safari recording with 50ms timeslices");
       
       // Add Safari-specific event handler for dataavailable
       window.nagState.mediaRecorder.ondataavailable = function(e) {
         if (e.data && e.data.size > 0) {
           // For Safari, we need to ensure the chunk is large enough to contain meaningful audio
-          if (e.data.size > 200) { // Reduced threshold to 200 bytes
+          if (e.data.size > 100) { // Reduced threshold to 100 bytes
             window.nagState.audioChunks.push(e.data);
             logDebug(`🔊 Audio chunk received: ${e.data.size} bytes`);
             
             // Update speech detection based on chunk size
-            if (e.data.size > 1000) { // Reduced threshold to 1KB
+            if (e.data.size > 500) { // Reduced threshold to 500 bytes
               window.nagState.speechDetected = true;
             }
           }
@@ -230,7 +230,7 @@ function startRecording() {
     
     // Use different recording durations based on browser
     // Safari needs shorter recordings for reliability
-    const maxRecordingTime = window.nagState.isSafari ? 5000 : 20000; // Reduced to 5 seconds for Safari
+    const maxRecordingTime = window.nagState.isSafari ? 10000 : 20000; // Increased to 10 seconds for Safari
     
     // Set a maximum recording time to prevent hanging
     window.nagState.longRecordingTimer = setTimeout(() => {
