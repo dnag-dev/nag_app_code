@@ -201,6 +201,7 @@ function startRecording() {
   logDebug("🎙️ Starting recording...");
   window.nagState.audioChunks = [];
   window.nagState.speechDetected = false;
+  window.nagState.minimumChunksCollected = false;
   
   try {
     // Special handling for Safari to use timeslices
@@ -213,13 +214,18 @@ function startRecording() {
       window.nagState.mediaRecorder.ondataavailable = function(e) {
         if (e.data && e.data.size > 0) {
           // For Safari, we need to ensure the chunk is large enough to contain meaningful audio
-          if (e.data.size > 100) { // Reduced threshold to 100 bytes
+          if (e.data.size > 50) { // Reduced threshold to 50 bytes
             window.nagState.audioChunks.push(e.data);
             logDebug(`🔊 Audio chunk received: ${e.data.size} bytes`);
             
             // Update speech detection based on chunk size
-            if (e.data.size > 500) { // Reduced threshold to 500 bytes
+            if (e.data.size > 200) { // Reduced threshold to 200 bytes
               window.nagState.speechDetected = true;
+            }
+
+            // Check if we have enough chunks
+            if (window.nagState.audioChunks.length >= 5) {
+              window.nagState.minimumChunksCollected = true;
             }
           }
         }
@@ -230,7 +236,7 @@ function startRecording() {
     
     // Use different recording durations based on browser
     // Safari needs shorter recordings for reliability
-    const maxRecordingTime = window.nagState.isSafari ? 10000 : 20000; // Increased to 10 seconds for Safari
+    const maxRecordingTime = window.nagState.isSafari ? 15000 : 20000; // Increased to 15 seconds for Safari
     
     // Set a maximum recording time to prevent hanging
     window.nagState.longRecordingTimer = setTimeout(() => {
