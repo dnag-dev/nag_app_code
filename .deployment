@@ -1,2 +1,4 @@
 [config]
 SCM_DO_BUILD_DURING_DEPLOYMENT = true
+PYTHON_VERSION = 3.11
+STARTUP_COMMAND = python startup.py
