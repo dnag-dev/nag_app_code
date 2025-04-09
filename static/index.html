@@ -110,38 +110,47 @@
         width: 100%;
     }
 
-    .button {
-      background-color: var(--primary-blue);
-      color: var(--text-light);
-      border: none;
-      padding: 12px 20px;
-      border-radius: 8px;
-      font-size: 1rem;
-      cursor: pointer;
-      transition: background-color 0.2s ease, transform 0.1s ease;
-      -webkit-appearance: none; /* Safari reset */
-      appearance: none; /* Standard reset */
-      -webkit-tap-highlight-color: transparent; /* iOS tap reset */
-      user-select: none;
-      -webkit-user-select: none;
-      text-align: center;
-      flex-grow: 1; /* Allow buttons to grow */
-      max-width: 180px; /* Limit button width */
+    /* Completely reset button styles */
+    button {
+        all: unset;
+        display: inline-block;
+        padding: 8px 16px;
+        margin: 5px;
+        border-radius: 4px;
+        background-color: #007bff;
+        color: white;
+        font-size: 14px;
+        font-weight: 500;
+        text-align: center;
+        cursor: pointer;
+        -webkit-appearance: none;
+        appearance: none;
+        -webkit-tap-highlight-color: transparent;
+        user-select: none;
+        transition: background-color 0.2s;
     }
 
-    .button:hover:not(:disabled) {
-      background-color: #0056b3; /* Darker blue on hover */
+    button:hover {
+        background-color: #0056b3;
     }
 
-    .button:active:not(:disabled) {
-       transform: scale(0.97);
+    button:disabled {
+        background-color: #cccccc;
+        cursor: not-allowed;
     }
 
-    .button:disabled {
-      background-color: var(--medium-gray);
-      color: var(--dark-gray);
-      cursor: not-allowed;
-      opacity: 0.7;
+    /* Remove any pseudo-elements */
+    button::before,
+    button::after {
+        display: none !important;
+        content: none !important;
+    }
+
+    /* Remove any icon-related attributes */
+    [iconName],
+    [layoutTraits],
+    [src] {
+        display: none !important;
     }
 
     #statusPanel {
@@ -342,39 +351,6 @@
         cursor: not-allowed;
     }
 
-    /* Remove all icon-related styles */
-    button::before,
-    button::after {
-        display: none !important;
-    }
-    
-    /* Reset button attributes */
-    button {
-        -webkit-appearance: none;
-        appearance: none;
-        -webkit-tap-highlight-color: transparent;
-        text-align: center;
-        text-decoration: none;
-        user-select: none;
-        -webkit-user-select: none;
-        -moz-user-select: none;
-        -ms-user-select: none;
-        background: none;
-        border: none;
-        padding: 0;
-        margin: 0;
-        font: inherit;
-        color: inherit;
-        cursor: pointer;
-    }
-    
-    /* Remove any icon-related attributes */
-    button[iconName],
-    button[layoutTraits],
-    button[src] {
-        all: unset;
-    }
-
   </style>
 </head>
 <body>
@@ -394,10 +370,10 @@
     </div>
 
     <div class="controls">
-      <button id="toggleBtn" type="button" class="control-btn" aria-label="Toggle Conversation">Start Conversation</button>
-      <button id="pauseBtn" type="button" class="control-btn" disabled aria-label="Pause">Pause</button>
-      <button id="modeToggle" type="button" class="control-btn" aria-label="Switch Mode">Switch to Walkie-Talkie</button>
-      <button id="debugBtn" type="button" class="control-btn" aria-label="Toggle Debug">Show Debug</button>
+      <button id="toggleBtn" type="button">Start Conversation</button>
+      <button id="pauseBtn" type="button" disabled>Pause</button>
+      <button id="modeToggle" type="button">Switch to Walkie-Talkie</button>
+      <button id="debugBtn" type="button">Show Debug</button>
     </div>
 
     <div id="statusPanel" class="status-panel">
