@@ -296,15 +296,16 @@
 
   </div> <!-- end .app-container -->
 
-  <!-- Nag Global State -->
+  <!-- Nag Initialization and Script Loading -->
   <script>
+    // --- Define Initial State --- 
     window.nagState = {
       // Core State
-      listening: false, // Is the app actively listening/processing?
-      isPaused: false, // Is listening paused?
-      isWalkieTalkieMode: false, // Is walkie-talkie mode active?
-      walkieTalkieActive: false, // Is the orb currently held down in walkie-talkie mode?
-      interrupted: false, // Was the assistant interrupted mid-speech?
+      listening: false, 
+      isPaused: false, 
+      isWalkieTalkieMode: false, 
+      walkieTalkieActive: false, 
+      interrupted: false, 
 
       // Audio/Recording State
       mediaRecorder: null,
@@ -316,153 +317,127 @@
       volumeDataArray: null,
 
       // UI/Timing State
-      initialized: false, // Has the UI been fully initialized?
-      scriptLoadStatus: {}, // Track script loading
-      modeHintTimeout: null, // Timeout ID for hiding mode hint
+      initialized: false, 
+      scriptLoadStatus: {}, // Initialize directly here
+      modeHintTimeout: null, 
 
       // Configuration/Flags
-      debugEnabled: false, // Is debug logging active?
-
-      // Add other necessary state properties here
+      debugEnabled: false, 
     };
 
     window.nagElements = {}; // To cache DOM elements
     window.scriptsToLoad = [ // List of scripts needed
         'nag-utils.js',
-        // 'nag-config.js', // Removed - File does not exist
-        // 'nag-api.js', // Removed - File does not exist
         'nag-audio.js',
         'nag-recording.js',
         'nag-ui.js',
         'nag-core.js'
     ];
-  </script>
 
-  <!-- Script Loading Logic -->
-  <script>
-    // CRITICAL: Ensure window.nagState itself is initialized before proceeding
-    if (typeof window.nagState === 'undefined') {
-      console.error("FATAL: window.nagState is undefined before script loading begins! Cannot proceed.");
-      // You might want to display an error message to the user here if the DOM is ready
-      document.addEventListener('DOMContentLoaded', () => {
-          const panel = document.getElementById('statusPanel');
-          if (panel) {
-              const errDiv = document.createElement('div');
-              errDiv.className = 'status-message error';
-              errDiv.textContent = 'FATAL: Application state failed to initialize. Please refresh.';
-              panel.insertBefore(errDiv, panel.firstChild);
-          }
-      });
-      // Halt further script execution in this block if state is missing
-      // throw new Error("window.nagState not initialized!"); 
-    } else {
-      // Ensure scriptLoadStatus exists before starting
-      window.nagState.scriptLoadStatus = window.nagState.scriptLoadStatus || {};
+    // --- Define Loading Functions --- 
+    function checkAllScriptsLoaded() {
+      return window.scriptsToLoad.every(script => window.nagState.scriptLoadStatus[script]);
+    }
 
-      function checkAllScriptsLoaded() {
-        // Add safety check here too
-        if (!window.nagState || typeof window.nagState.scriptLoadStatus === 'undefined') {
-             console.error("checkAllScriptsLoaded: nagState or scriptLoadStatus missing!");
-             return false;
-        }
-        return window.scriptsToLoad.every(script => window.nagState.scriptLoadStatus[script]);
-      }
-
-      function onScriptLoad(scriptName) {
-        // Add more detailed safety checks and logging
-        console.log(`Entering onScriptLoad for: ${scriptName}`);
-        if (!window.nagState) {
-            console.error(`FATAL within onScriptLoad (${scriptName}): window.nagState is missing!`);
-            return;
-        }
-        if (typeof window.nagState.scriptLoadStatus === 'undefined') {
-            console.error(`FATAL within onScriptLoad (${scriptName}): window.nagState.scriptLoadStatus is undefined!`);
-            // Attempt to re-initialize as a last resort? Could mask the root cause.
-            // window.nagState.scriptLoadStatus = {}; 
-            return; 
-        }
-        
-        // Log state RIGHT BEFORE the assignment
-        console.log(`State before assigning status for ${scriptName}:`, {
-            nagStateExists: typeof window.nagState !== 'undefined',
-            scriptLoadStatusExists: typeof window.nagState.scriptLoadStatus !== 'undefined',
-            scriptLoadStatusValue: JSON.stringify(window.nagState.scriptLoadStatus) // Log the actual content
-        });
-
-        console.log(`Attempting to set status for ${scriptName}...`);
-        try {
-            window.nagState.scriptLoadStatus[scriptName] = true; // The problematic line
-            console.log(`Successfully set status for ${scriptName}.`);
-        } catch (error) {
-             console.error(`ERROR occurred trying to set status for ${scriptName}:`, error);
-             // Log state AGAIN right after the error
-             console.error('State AT THE MOMENT OF ERROR:', {
-                 nagStateExists: typeof window.nagState !== 'undefined',
-                 scriptLoadStatusExists: typeof window.nagState.scriptLoadStatus !== 'undefined',
-                 nagStateContent: JSON.stringify(window.nagState) // Log entire state on error
-             });
-             // Optionally re-throw or handle further
-             // throw error; 
-        }
-
-        // Check if all loaded AFTER attempting the update
-        if (checkAllScriptsLoaded()) {
-          console.log("All scripts loaded. Initializing app...");
-          if (typeof initializeApp === 'function') {
-            initializeApp();
-          } else {
-            console.error('Error: initializeApp function not found after loading scripts!');
-            if(window.addStatusMessage) addStatusMessage("Core initialization function missing!", "error");
-          }
-        }
-      }
-
-      function loadScript(src) {
-        return new Promise((resolve, reject) => {
-          const script = document.createElement('script');
-          script.src = src;
-          script.async = false;
-          script.onload = () => {
-            onScriptLoad(src);
-            resolve();
-          };
-          script.onerror = () => {
-            console.error(`Error loading script: ${src}`);
-            if(window.addStatusMessage) addStatusMessage(`Failed to load script: ${src}`, "error");
-            reject(new Error(`Script load error for ${src}`));
-          };
-          document.body.appendChild(script);
-        });
-      }
-
-      // Add initial message (use addStatusMessage if available)
-      if(typeof window.addStatusMessage === 'function') {
-          addStatusMessage("Loading application components...", "info");
-      } else {
-          // Fallback if utils hasn't loaded (e.g. if state failed above)
-          console.log("Loading application components...");
-      }
-
-      // Load all scripts sequentially
-      window.scriptsToLoad.reduce((promise, scriptSrc) => {
-          return promise.then(() => loadScript(scriptSrc));
-      }, Promise.resolve()).catch(err => {
-          console.error("Error during script loading sequence:", err);
+    function onScriptLoad(scriptName) {
+      console.log(`${scriptName} loaded.`);
+      // No need for extra checks now if initialization order is guaranteed
+      window.nagState.scriptLoadStatus[scriptName] = true; 
+      
+      if (checkAllScriptsLoaded()) {
+        console.log("All scripts loaded. Initializing app...");
+        if (typeof initializeApp === 'function') {
+          initializeApp(); // Call main initialization function from nag-core.js
+        } else {
+          console.error('Error: initializeApp function not found after loading scripts!');
+          // Use addStatusMessage if it was loaded (from nag-utils.js)
           if (window.addStatusMessage) {
-               window.addStatusMessage("Critical error loading application scripts. Please refresh.", "error");
+             window.addStatusMessage("Core initialization function missing!", "error");
           } else {
-              console.error("Critical error loading application scripts. Please refresh.");
+             console.error("[FATAL] Core initialization function missing AND cannot display status!");
           }
+        }
+      }
+    }
+
+    function loadScript(src) {
+      return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = src;
+        script.async = false; // Load in order
+        script.onload = () => {
+          onScriptLoad(src);
+          resolve();
+        };
+        script.onerror = () => {
+          const errorMsg = `Failed to load script: ${src}`;
+          console.error(`Error loading script: ${src}`);
+          // Use addStatusMessage if loaded
+          if(window.addStatusMessage) window.addStatusMessage(errorMsg, "error");
+          reject(new Error(`Script load error for ${src}`));
+        };
+        document.body.appendChild(script);
       });
-    } // End of the check for window.nagState
+    }
+    
+    // --- Temporary Status Message Function (until nag-utils loads) --- 
+    let _tempStatusQueue = [];
+    function _tempAddStatusMessage(message, type = 'info', isDebug = false) {
+        const statusPanel = document.getElementById('statusPanel');
+        if (statusPanel) {
+             // If panel exists, flush queue and add directly
+             while(_tempStatusQueue.length > 0) {
+                 const item = _tempStatusQueue.shift();
+                 _addMsgToPanel(statusPanel, item.message, item.type, item.isDebug);
+             }
+             _addMsgToPanel(statusPanel, message, type, isDebug);
+        } else {
+            // Panel not ready, queue message
+            _tempStatusQueue.push({message, type, isDebug});
+            // Try adding later on DOMContentLoaded
+            document.addEventListener('DOMContentLoaded', () => {
+                 const panel = document.getElementById('statusPanel');
+                 if (panel) {
+                     while(_tempStatusQueue.length > 0) {
+                         const item = _tempStatusQueue.shift();
+                         _addMsgToPanel(panel, item.message, item.type, item.isDebug);
+                     }
+                 }
+            }, { once: true });
+        }
+    }
+    function _addMsgToPanel(panel, message, type, isDebug) {
+         const messageDiv = document.createElement('div');
+         messageDiv.classList.add('status-message');
+         messageDiv.classList.add(type);
+         if (isDebug) { messageDiv.classList.add('debug'); }
+         messageDiv.textContent = message;
+         panel.insertBefore(messageDiv, panel.firstChild);
+    }
+
+    // --- Start Loading --- 
+    _tempAddStatusMessage("Loading application components...", "info");
+
+    window.scriptsToLoad.reduce((promise, scriptSrc) => {
+        return promise.then(() => loadScript(scriptSrc));
+    }, Promise.resolve()).catch(err => {
+        const errorMsg = "Critical error loading application scripts. Please refresh.";
+        console.error("Error during script loading sequence:", err);
+        // Use real addStatusMessage if available, otherwise the temp one
+        if (window.addStatusMessage) {
+             window.addStatusMessage(errorMsg, "error");
+        } else {
+            _tempAddStatusMessage(errorMsg, "error");
+        }
+    });
+
   </script>
 
-  <!-- Debug Toggle Logic -->
+  <!-- Debug Toggle Logic (Runs after DOM is ready) -->
   <script>
       document.addEventListener('DOMContentLoaded', () => {
           const debugCheckbox = document.getElementById('debugToggleCheckbox');
           if (debugCheckbox) {
-              // Initial state check (e.g., from localStorage or default)
               const showDebug = localStorage.getItem('nagDebugEnabled') === 'true';
               debugCheckbox.checked = showDebug;
               document.body.classList.toggle('show-debug', showDebug);
@@ -473,7 +448,12 @@
                   document.body.classList.toggle('show-debug', isChecked);
                   window.nagState.debugEnabled = isChecked; // Update state
                   localStorage.setItem('nagDebugEnabled', isChecked); // Persist preference
-                  addStatusMessage(`Debug info ${isChecked ? 'shown' : 'hidden'}.`, 'info');
+                  // Use the real status message function if available (should be by now)
+                  if (window.addStatusMessage) {
+                    window.addStatusMessage(`Debug info ${isChecked ? 'shown' : 'hidden'}.`, 'info');
+                  } else {
+                    console.log(`Debug info ${isChecked ? 'shown' : 'hidden'}.`);
+                  }
               });
           } else {
               console.error("Debug toggle checkbox not found.");
