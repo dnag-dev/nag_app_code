@@ -673,3 +673,56 @@ window.stopListening = async function() {
     if (window.logDebug) window.logDebug(`❌ Error stopping listening: ${error.message}`);
   }
 };
+
+async function processAudioAndTranscribe() {
+    try {
+        if (!window.nagState.audioChunks || window.nagState.audioChunks.length === 0) {
+            logDebug("No audio chunks to process");
+            return;
+        }
+
+        // Create a blob from the audio chunks
+        const audioBlob = new Blob(window.nagState.audioChunks, { type: 'audio/wav' });
+        
+        // Create a FormData object to send the audio
+        const formData = new FormData();
+        formData.append('audio', audioBlob, 'recording.wav');
+        
+        // Add any additional data needed for transcription
+        formData.append('mode', window.nagState.isWalkieTalkieMode ? 'walkie-talkie' : 'continuous');
+        
+        logDebug("📤 Sending audio for transcription...");
+        
+        // Send the audio to the server for transcription
+        const response = await fetch('/transcribe', {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Transcription failed: ${response.statusText}`);
+        }
+        
+        const result = await response.json();
+        
+        if (result.text) {
+            logDebug(`📝 Transcription: ${result.text}`);
+            if (window.addMessage) {
+                window.addMessage(result.text, true);
+            }
+            
+            // Process the transcribed text
+            if (window.processTranscribedText) {
+                window.processTranscribedText(result.text);
+            }
+        } else {
+            logDebug("No transcription returned");
+        }
+        
+    } catch (error) {
+        logDebug(`❌ Error processing audio: ${error.message}`);
+        if (window.addMessage) {
+            window.addMessage("Error processing audio. Please try again.", true);
+        }
+    }
+}

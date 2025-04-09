@@ -409,3 +409,66 @@ window.addEventListener('load', () => {
     console.log("Window load event: Running final button cleanup.");
     cleanupAllButtons();
 });
+
+function setupOrbInteractions(orb) {
+    if (!orb) return;
+
+    // Remove any existing event listeners
+    const newOrb = orb.cloneNode(true);
+    orb.parentNode.replaceChild(newOrb, orb);
+    window.nagElements.orb = newOrb;
+
+    // Add event listeners for mouse/touch events
+    newOrb.addEventListener('mousedown', handleOrbInteractionStart);
+    newOrb.addEventListener('touchstart', handleOrbInteractionStart);
+    newOrb.addEventListener('mouseup', handleOrbInteractionEnd);
+    newOrb.addEventListener('touchend', handleOrbInteractionEnd);
+    newOrb.addEventListener('mouseleave', handleOrbInteractionEnd);
+    newOrb.addEventListener('touchcancel', handleOrbInteractionEnd);
+
+    // Add keyboard support
+    newOrb.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            handleOrbInteractionStart(e);
+        }
+    });
+    newOrb.addEventListener('keyup', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            handleOrbInteractionEnd(e);
+        }
+    });
+}
+
+function handleOrbInteractionStart(e) {
+    e.preventDefault();
+    if (!window.nagState.isWalkieTalkieMode) return;
+
+    const orb = window.nagElements.orb;
+    if (!orb) return;
+
+    orb.classList.remove('idle');
+    orb.classList.add('listening');
+    window.nagState.walkieTalkieActive = true;
+
+    if (window.startRecording) {
+        window.startRecording();
+    }
+}
+
+function handleOrbInteractionEnd(e) {
+    e.preventDefault();
+    if (!window.nagState.isWalkieTalkieMode) return;
+
+    const orb = window.nagElements.orb;
+    if (!orb) return;
+
+    orb.classList.remove('listening');
+    orb.classList.add('idle');
+    window.nagState.walkieTalkieActive = false;
+
+    if (window.stopRecording) {
+        window.stopRecording();
+    }
+}
