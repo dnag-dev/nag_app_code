@@ -110,57 +110,52 @@
         width: 100%;
     }
 
-    /* Remove all button-related styles and start fresh */
+    /* Replace button styles with div styles */
+    .button-like {
+        display: inline-block;
+        padding: 8px 16px;
+        margin: 5px;
+        border-radius: 4px;
+        background-color: #007bff;
+        color: white;
+        font-size: 14px;
+        font-weight: 500;
+        text-align: center;
+        cursor: pointer;
+        user-select: none;
+        transition: background-color 0.2s;
+        box-sizing: border-box;
+        border: none;
+        outline: none;
+        text-decoration: none;
+        font-family: inherit;
+        line-height: normal;
+        vertical-align: middle;
+        white-space: nowrap;
+        overflow: visible;
+        position: relative;
+        z-index: 1;
+    }
+
+    .button-like:hover {
+        background-color: #0056b3;
+    }
+
+    .button-like:disabled {
+        background-color: #cccccc;
+        cursor: not-allowed;
+    }
+
+    /* Remove all button-related styles */
     button {
-        all: unset !important;
-        display: inline-block !important;
-        padding: 8px 16px !important;
-        margin: 5px !important;
-        border-radius: 4px !important;
-        background-color: #007bff !important;
-        color: white !important;
-        font-size: 14px !important;
-        font-weight: 500 !important;
-        text-align: center !important;
-        cursor: pointer !important;
-        -webkit-appearance: none !important;
-        appearance: none !important;
-        -webkit-tap-highlight-color: transparent !important;
-        user-select: none !important;
-        transition: background-color 0.2s !important;
-        box-sizing: border-box !important;
-        border: none !important;
-        outline: none !important;
-        text-decoration: none !important;
-        font-family: inherit !important;
-        line-height: normal !important;
-        vertical-align: middle !important;
-        white-space: nowrap !important;
-        overflow: visible !important;
-        position: relative !important;
-        z-index: 1 !important;
-    }
-
-    button:hover {
-        background-color: #0056b3 !important;
-    }
-
-    button:disabled {
-        background-color: #cccccc !important;
-        cursor: not-allowed !important;
-    }
-
-    /* Remove any potential icon-related styles */
-    button::before,
-    button::after,
-    button *::before,
-    button *::after {
         display: none !important;
-        content: none !important;
-        background: none !important;
-        border: none !important;
-        padding: 0 !important;
-        margin: 0 !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+        position: absolute !important;
+        width: 0 !important;
+        height: 0 !important;
+        overflow: hidden !important;
     }
 
     /* Hide any elements with icon-related attributes */
@@ -397,10 +392,10 @@
     </div>
 
     <div class="controls">
-      <button id="toggleBtn" type="button" aria-label="Start Conversation">Start Conversation</button>
-      <button id="pauseBtn" type="button" disabled aria-label="Pause">Pause</button>
-      <button id="modeToggle" type="button" aria-label="Switch Mode">Switch to Walkie-Talkie</button>
-      <button id="debugBtn" type="button" aria-label="Toggle Debug">Show Debug</button>
+      <div id="toggleBtn" class="button-like" role="button" tabindex="0" aria-label="Start Conversation">Start Conversation</div>
+      <div id="pauseBtn" class="button-like" role="button" tabindex="0" aria-label="Pause" aria-disabled="true">Pause</div>
+      <div id="modeToggle" class="button-like" role="button" tabindex="0" aria-label="Switch Mode">Switch to Walkie-Talkie</div>
+      <div id="debugBtn" class="button-like" role="button" tabindex="0" aria-label="Toggle Debug">Show Debug</div>
     </div>
 
     <div id="statusPanel" class="status-panel">
