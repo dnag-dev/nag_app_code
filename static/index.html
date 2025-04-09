@@ -301,6 +301,47 @@
       color: var(--dark-gray);
     }
 
+    .debug-panel {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        width: 300px;
+        max-height: 200px;
+        background: rgba(0, 0, 0, 0.8);
+        color: #fff;
+        padding: 10px;
+        border-radius: 5px;
+        overflow-y: auto;
+        z-index: 1000;
+    }
+
+    .debug-message {
+        margin: 5px 0;
+        padding: 5px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        font-family: monospace;
+        font-size: 12px;
+    }
+
+    .control-btn {
+        margin: 5px;
+        padding: 8px 16px;
+        border: none;
+        border-radius: 4px;
+        background: #007bff;
+        color: white;
+        cursor: pointer;
+    }
+
+    .control-btn:hover {
+        background: #0056b3;
+    }
+
+    .control-btn:disabled {
+        background: #cccccc;
+        cursor: not-allowed;
+    }
+
   </style>
 </head>
 <body>
@@ -320,22 +361,19 @@
     </div>
 
     <div class="controls">
-      <div class="button-row">
-        <button id="toggleBtn" class="button" type="button">Toggle Listening</button>
-        <button id="pauseBtn" class="button" type="button" disabled>Pause</button>
-      </div>
-      <div class="button-row">
-        <button id="modeToggle" class="button" type="button">Switch Mode</button>
-      </div>
+      <button id="toggleBtn" type="button" class="control-btn" aria-label="Toggle Conversation">Start Conversation</button>
+      <button id="pauseBtn" type="button" class="control-btn" disabled aria-label="Pause">Pause</button>
+      <button id="modeToggle" type="button" class="control-btn" aria-label="Switch Mode">Switch to Walkie-Talkie</button>
+      <button id="debugBtn" type="button" class="control-btn" aria-label="Toggle Debug">Show Debug</button>
     </div>
 
     <div id="statusPanel" class="status-panel">
       <!-- Status messages will be added here -->
     </div>
 
-    <div class="debug-control">
-      <input type="checkbox" id="debugToggle">
-      <label for="debugToggle">Show Debug Messages</label>
+    <div id="debugPanel" class="debug-panel" style="display: none;">
+      <h3>Debug Information</h3>
+      <div id="debugMessages"></div>
     </div>
 
     <audio id="audio" style="display: none;"></audio>

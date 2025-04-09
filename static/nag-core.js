@@ -688,3 +688,105 @@ window.unlockAudioContext = unlockAudioContext;
 window.getBestAudioFormat = getBestAudioFormat;
 window.cacheElements = cacheElements;
 window.setupEventListeners = setupEventListeners;
+
+// Function to toggle debug panel
+function toggleDebugPanel() {
+    const debugPanel = document.getElementById('debugPanel');
+    if (!debugPanel) {
+        logDebug("Debug panel not found in DOM");
+        return;
+    }
+    
+    const isVisible = debugPanel.style.display === 'block';
+    debugPanel.style.display = isVisible ? 'none' : 'block';
+    
+    // Update debug button text
+    const debugBtn = document.getElementById('debugBtn');
+    if (debugBtn) {
+        debugBtn.textContent = isVisible ? 'Show Debug' : 'Hide Debug';
+    }
+}
+
+// Function to add debug message
+function addDebugMessage(message) {
+    const debugPanel = document.getElementById('debugPanel');
+    if (!debugPanel) {
+        console.log("[Debug] " + message);
+        return;
+    }
+    
+    const messageElement = document.createElement('div');
+    messageElement.textContent = message;
+    messageElement.className = 'debug-message';
+    debugPanel.appendChild(messageElement);
+    debugPanel.scrollTop = debugPanel.scrollHeight;
+}
+
+// Function to set up orb interactions
+window.setupOrbInteractions = function(orb) {
+    if (!orb) return;
+    
+    // Mouse events
+    orb.addEventListener('mousedown', function() {
+        if (window.nagState.isWalkieTalkieMode && !window.nagState.isPaused) {
+            window.nagState.walkieTalkieActive = true;
+            startListening();
+        }
+    });
+    
+    orb.addEventListener('mouseup', function() {
+        if (window.nagState.isWalkieTalkieMode && window.nagState.walkieTalkieActive) {
+            window.nagState.walkieTalkieActive = false;
+            stopRecording();
+        }
+    });
+    
+    orb.addEventListener('mouseleave', function() {
+        if (window.nagState.isWalkieTalkieMode && window.nagState.walkieTalkieActive) {
+            window.nagState.walkieTalkieActive = false;
+            stopRecording();
+        }
+    });
+    
+    // Touch events
+    orb.addEventListener('touchstart', function(e) {
+        e.preventDefault();
+        if (window.nagState.isWalkieTalkieMode && !window.nagState.isPaused) {
+            window.nagState.walkieTalkieActive = true;
+            startListening();
+        }
+    });
+    
+    orb.addEventListener('touchend', function(e) {
+        e.preventDefault();
+        if (window.nagState.isWalkieTalkieMode && window.nagState.walkieTalkieActive) {
+            window.nagState.walkieTalkieActive = false;
+            stopRecording();
+        }
+    });
+    
+    // Click event for non-walkie-talkie mode
+    orb.addEventListener('click', function() {
+        if (!window.nagState.isWalkieTalkieMode && !window.nagState.isPaused) {
+            if (window.nagState.listening) {
+                stopRecording();
+            } else {
+                startListening();
+            }
+        }
+    });
+    
+    // Keyboard accessibility
+    orb.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            if (!window.nagState.isWalkieTalkieMode && !window.nagState.isPaused) {
+                if (window.nagState.listening) {
+                    stopRecording();
+                } else {
+                    startListening();
+                }
+            }
+        }
+    });
+};
