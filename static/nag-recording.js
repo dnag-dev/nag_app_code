@@ -195,59 +195,34 @@ function setupWalkieTalkieMode() {
 }
 
 // Start recording audio
-function startRecording() {
-  if (!window.nagState.mediaRecorder || window.nagState.mediaRecorder.state === "recording") return;
-  
-  logDebug("🎙️ Starting recording...");
-  window.nagState.audioChunks = [];
-  window.nagState.speechDetected = false;
-  window.nagState.minimumChunksCollected = false;
-  
-  try {
-    // Special handling for Safari to use timeslices
-    if (window.nagState.isSafari) {
-      // For Safari, use shorter timeslices to get more frequent chunks
-      window.nagState.mediaRecorder.start(50); // Reduced to 50ms for more frequent chunks
-      logDebug("🎙️ Safari recording with 50ms timeslices");
-      
-      // Add Safari-specific event handler for dataavailable
-      window.nagState.mediaRecorder.ondataavailable = function(e) {
-        if (e.data && e.data.size > 0) {
-          // For Safari, we need to ensure the chunk is large enough to contain meaningful audio
-          if (e.data.size > 50) { // Reduced threshold to 50 bytes
-            window.nagState.audioChunks.push(e.data);
-            logDebug(`🔊 Audio chunk received: ${e.data.size} bytes`);
-            
-            // Update speech detection based on chunk size
-            if (e.data.size > 200) { // Reduced threshold to 200 bytes
-              window.nagState.speechDetected = true;
-            }
-
-            // Check if we have enough chunks
-            if (window.nagState.audioChunks.length >= 5) {
-              window.nagState.minimumChunksCollected = true;
-            }
-          }
+async function startRecording() {
+    try {
+        if (!window.nagState.mediaRecorder) {
+            throw new Error("MediaRecorder not initialized");
         }
-      };
-    } else {
-      window.nagState.mediaRecorder.start();
+        
+        if (window.nagState.mediaRecorder.state === 'recording') {
+            logDebug("🎤 Already recording");
+            return;
+        }
+        
+        window.nagState.mediaRecorder.start();
+        window.nagState.recording = true;
+        logDebug("🎤 Recording started");
+        
+        if (window.updateButtonStates) {
+            window.updateButtonStates();
+        }
+    } catch (e) {
+        logDebug("❌ Error starting recording: " + e.message);
+        if (window.addMessage) {
+            window.addMessage("Error starting recording. Please try again.", true);
+        }
+        window.nagState.recording = false;
+        if (window.updateButtonStates) {
+            window.updateButtonStates();
+        }
     }
-    
-    // Use different recording durations based on browser
-    // Safari needs shorter recordings for reliability
-    const maxRecordingTime = window.nagState.isSafari ? 15000 : 20000; // Increased to 15 seconds for Safari
-    
-    // Set a maximum recording time to prevent hanging
-    window.nagState.longRecordingTimer = setTimeout(() => {
-      if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state === "recording") {
-        logDebug("⏱️ Maximum recording time reached");
-        stopRecording();
-      }
-    }, maxRecordingTime);
-  } catch (e) {
-    logDebug("❌ Error starting recording: " + e.message);
-  }
 }
 
 // Stop recording audio
@@ -334,139 +309,56 @@ async function initializeAudioContext() {
         return true;
     } catch (e) {
         logDebug("❌ Error initializing AudioContext: " + e.message);
+        if (window.addMessage) {
+            window.addMessage("Error initializing audio. Please refresh the page and try again.", true);
+        }
         return false;
     }
 }
 
 // Start listening for audio
 async function startListening() {
-  const orb = window.nagElements.orb;
-  const pauseBtn = window.nagElements.pauseBtn;
-  
-  if (window.nagState.isUploading || window.nagState.isPaused) return;
-  
-  try {
-    // Initialize audio context first
-    const audioContextInitialized = await initializeAudioContext();
-    if (!audioContextInitialized) {
-      throw new Error("Failed to initialize audio context");
-    }
-    
-    removePlayButton();
-    window.nagState.emptyTranscriptionCount = 0;
-    window.nagState.speechDetected = false;
-    
-    orb.classList.remove("idle", "speaking", "thinking");
-    orb.classList.add("listening");
-    
-    // Log detailed mode info
-    logDebug("🎙️ Listening... (" + 
-      (window.nagState.isWalkieTalkieMode ? "walkie-talkie mode" : "continuous mode") + 
-      (window.nagState.isSafari ? ", Safari optimized)" : ")"));
-
-    // Get microphone access with optimal constraints for Safari
-    window.nagState.stream = await navigator.mediaDevices.getUserMedia({ 
-      audio: {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
-        // Safari-specific optimizations:
-        sampleRate: 44100,
-        channelCount: 1,
-        // Try higher bitrate for clearer audio
-        googEchoCancellation: true,
-        googAutoGainControl: true,
-        googNoiseSuppression: true
-      },
-      video: false
-    });
-    
-    // Setup volume visualization
-    setupVolumeVisualization(window.nagState.stream);
-
-    // Get the best MIME type for this browser
-    const mimeType = getBestAudioMimeType();
-    logDebug(`Using audio format: ${mimeType || "browser default"}`);
-    
-    // Create MediaRecorder with optimized settings
-    const recorderOptions = {
-      mimeType: mimeType || undefined,
-      audioBitsPerSecond: window.nagState.isSafari ? 256000 : 128000  // Higher bitrate for Safari
-    };
-    
-    // Create new recorder
     try {
-      window.nagState.mediaRecorder = new MediaRecorder(window.nagState.stream, mimeType ? recorderOptions : {});
+        if (!window.nagState.audioContext) {
+            await initializeAudioContext();
+        }
+        
+        if (!window.nagState.audioContext) {
+            throw new Error("Failed to initialize audio context");
+        }
+        
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        if (!stream) {
+            throw new Error("Failed to access microphone");
+        }
+        
+        window.nagState.mediaStream = stream;
+        window.nagState.mediaRecorder = new MediaRecorder(stream);
+        window.nagState.audioChunks = [];
+        
+        window.nagState.mediaRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0) {
+                window.nagState.audioChunks.push(e.data);
+            }
+        };
+        
+        window.nagState.mediaRecorder.onstop = async () => {
+            const audioBlob = new Blob(window.nagState.audioChunks, { type: 'audio/wav' });
+            const audioUrl = URL.createObjectURL(audioBlob);
+            const audio = new Audio(audioUrl);
+            audio.play();
+        };
+        
+        logDebug("🎤 Microphone access granted");
+        if (window.addMessage) {
+            window.addMessage("Microphone access granted. You can start recording.", false);
+        }
     } catch (e) {
-      // If specified MIME type fails, try with default options
-      logDebug(`❌ MediaRecorder error with mime type: ${e.message}, trying default`);
-      window.nagState.mediaRecorder = new MediaRecorder(window.nagState.stream);
-    }
-    
-    window.nagState.audioChunks = [];
-
-    // Handle data from recorder with more detailed logging for Safari
-    window.nagState.mediaRecorder.ondataavailable = e => {
-      if (e.data && e.data.size > 0) {
-        window.nagState.audioChunks.push(e.data);
-        // Log chunk size for debugging
-        if (window.nagState.isSafari) {
-          logDebug(`🔊 Audio chunk received: ${e.data.size} bytes`);
+        logDebug("❌ Error accessing microphone: " + e.message);
+        if (window.addMessage) {
+            window.addMessage("Error accessing microphone. Please check your permissions and try again.", true);
         }
-      } else {
-        logDebug("⚠️ Empty audio chunk received");
-      }
-    };
-
-    // Handle recording stopped
-    window.nagState.mediaRecorder.onstop = async () => {
-      if (window.nagState.interrupted) return;
-      orb.classList.remove("listening");
-      
-      // Clear timers
-      if (window.nagState.longRecordingTimer) {
-        clearTimeout(window.nagState.longRecordingTimer);
-        window.nagState.longRecordingTimer = null;
-      }
-      
-      if (window.nagState.silenceTimer) {
-        clearTimeout(window.nagState.silenceTimer);
-        window.nagState.silenceTimer = null;
-      }
-      
-      // Check if we got any audio
-      if (window.nagState.audioChunks.length === 0) {
-        logDebug("⚠️ No audio recorded. Please try again.");
-        orb.classList.add("idle");
-        if (!window.nagState.isWalkieTalkieMode && !window.nagState.isPaused) {
-          setTimeout(() => {
-            if (!window.nagState.interrupted && !window.nagState.isPaused) startListening();
-          }, 1000);
-        }
-        return;
-      }
-      
-      // Process the recorded audio
-      await processAudioAndTranscribe();
-    };
-
-    // Start recording immediately in continuous mode
-    if (!window.nagState.isWalkieTalkieMode) {
-      startRecording();
     }
-    
-    pauseBtn.disabled = false;
-    window.nagState.listening = true;
-  } catch (e) {
-    logDebug("🚫 Mic access failed: " + e.message);
-    orb.classList.remove("listening");
-    orb.classList.add("idle");
-    
-    // If permissions were denied, provide guidance
-    if (e.name === 'NotAllowedError') {
-      logDebug("🎤 Microphone access was denied. Please allow microphone access in your browser settings.");
-    }
-  }
 }
 
 // Stop listening
