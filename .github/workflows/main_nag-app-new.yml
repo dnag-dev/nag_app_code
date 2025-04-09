@@ -24,17 +24,19 @@ jobs:
         sed -i 's/elevenlabs>=.*/elevenlabs==1.5.0/' requirements.txt
         sed -i 's/openai>=.*/openai==1.70.0/' requirements.txt
 
-    - name: 📝 Confirm .deployment config for Oryx build
+    - name: 📝 Update .deployment config for Oryx build
       run: |
         echo "[config]" > .deployment
         echo "SCM_DO_BUILD_DURING_DEPLOYMENT = true" >> .deployment
         echo "SCM_REBUILD_ALL_DEPENDENCIES = true" >> .deployment
+        echo "PYTHON_VERSION = 3.11" >> .deployment
+        echo "STARTUP_COMMAND = python startup.py" >> .deployment
 
     - name: 📁 Create deploy.zip
       run: |
         zip -r deploy.zip . \
           -x "*.git*" "*.DS_Store*" "__pycache__/*" "antenv/*" "node_modules/*" \
-          "deploy.sh" "startup.sh" "web.config"
+          "deploy.sh" "startup.sh"
 
     - name: 🚀 Deploy to Azure Web App
       uses: azure/webapps-deploy@v2
