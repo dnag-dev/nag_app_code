@@ -66,50 +66,50 @@ window.addEventListener('error', function(event) {
   document.body.appendChild(errorDiv);
 });
 
-// Global state object for sharing between modules
-window.nagState = {
-  // Recording state
-  mediaRecorder: null,
-  audioChunks: [],
-  stream: null,
-  listening: false,
-  isUploading: false,
-  
-  // UI state
-  interrupted: false,
-  isPaused: false,
-  
-  // Mode state
-  isWalkieTalkieMode: true,
-  walkieTalkieActive: false,
-  
-  // Audio processing
-  analyserNode: null,
-  silenceTimer: null,
-  longRecordingTimer: null,
-  audioUnlocked: false,
-  speechDetected: false,
-  
-  // Transcription handling
-  lastTranscription: "",
-  consecutiveIdenticalTranscriptions: 0,
-  emptyTranscriptionCount: 0,
-  
-  // UI elements cache
-  currentPlayButton: null,
-  
-  // Connection state
-  isConnected: false,
-  connectionAttempted: false,
-  
-  // Browser detection
-  isiOS: /iPad|iPhone|iPod/.test(navigator.userAgent) || 
-    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1),
-  isSafari: /^((?!chrome|android).)*safari/i.test(navigator.userAgent),
-  
-  // Initialization flag
-  initialized: false
-};
+// // Global state object for sharing between modules
+// window.nagState = {
+//   // Recording state
+//   mediaRecorder: null,
+//   audioChunks: [],
+//   stream: null,
+//   listening: false,
+//   isUploading: false,
+//   
+//   // UI state
+//   interrupted: false,
+//   isPaused: false,
+//   
+//   // Mode state
+//   isWalkieTalkieMode: true,
+//   walkieTalkieActive: false,
+//   
+//   // Audio processing
+//   analyserNode: null,
+//   silenceTimer: null,
+//   longRecordingTimer: null,
+//   audioUnlocked: false,
+//   speechDetected: false,
+//   
+//   // Transcription handling
+//   lastTranscription: "",
+//   consecutiveIdenticalTranscriptions: 0,
+//   emptyTranscriptionCount: 0,
+//   
+//   // UI elements cache
+//   currentPlayButton: null,
+//   
+//   // Connection state
+//   isConnected: false,
+//   connectionAttempted: false,
+//   
+//   // Browser detection
+//   isiOS: /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+//     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1),
+//   isSafari: /^((?!chrome|android).)*safari/i.test(navigator.userAgent),
+//   
+//   // Initialization flag
+//   initialized: false
+// };
 
 // DOM references - will be populated once document is loaded
 window.nagElements = {
