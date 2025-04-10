@@ -128,13 +128,18 @@
 
     /* Simple span-based controls */
     .control-span {
-        display: inline-block;
+        display: inline-block !important;
         padding: 8px 16px;
         margin: 5px;
         background: #007bff;
         color: white;
         border-radius: 4px;
         cursor: pointer;
+        pointer-events: auto !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+        position: relative !important;
+        z-index: 1;
     }
 
     .control-span:hover {
@@ -144,6 +149,7 @@
     .control-span.disabled {
         background: #cccccc;
         cursor: not-allowed;
+        pointer-events: none;
     }
 
     /* Remove any icon-related attributes */
@@ -161,6 +167,19 @@
         width: 0 !important;
         height: 0 !important;
         overflow: hidden !important;
+    }
+
+    /* Ensure orb is clickable */
+    .orb {
+        display: flex !important;
+        justify-content: center !important;
+        align-items: center !important;
+        cursor: pointer !important;
+        pointer-events: auto !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+        position: relative !important;
+        z-index: 1;
     }
 
     #statusPanel {

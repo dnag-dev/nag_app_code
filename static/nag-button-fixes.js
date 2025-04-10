@@ -32,7 +32,24 @@
         console.log(`Found ${elements.length} button elements to fix`);
         
         elements.forEach(element => {
+            // Preserve click handlers
+            const clickHandler = element.onclick;
             cleanButtonAttributes(element);
+            if (clickHandler) {
+                element.onclick = clickHandler;
+            }
+            
+            // Ensure element is visible and clickable
+            element.style.display = 'inline-block';
+            element.style.visibility = 'visible';
+            element.style.opacity = '1';
+            element.style.pointerEvents = 'auto';
+            element.style.cursor = 'pointer';
+            
+            // Remove any styles that might block interaction
+            element.style.webkitAppearance = 'none';
+            element.style.appearance = 'none';
+            element.style.webkitTapHighlightColor = 'transparent';
         });
     }
     
@@ -70,31 +87,15 @@
         console.log("Button observer started");
     }
     
-    // Make sure buttons are actually clickable
-    function ensureButtonsAreClickable() {
-        const controls = document.querySelectorAll('.control-span');
-        controls.forEach(control => {
-            if (!control.classList.contains('disabled')) {
-                control.style.display = 'inline-block';
-                control.style.visibility = 'visible';
-                control.style.opacity = '1';
-                control.style.pointerEvents = 'auto';
-                control.style.cursor = 'pointer';
-            }
-        });
-    }
-    
     // Main initialization function
     function initButtonFix() {
         console.log("Initializing button fix...");
         processExistingButtons();
         observeButtonChanges();
-        ensureButtonsAreClickable();
         
         // Make functions available globally for debugging
         window.cleanButtonAttributes = cleanButtonAttributes;
         window.processExistingButtons = processExistingButtons;
-        window.ensureButtonsAreClickable = ensureButtonsAreClickable;
         
         console.log("Button fix initialized");
     }
@@ -110,7 +111,6 @@
     window.addEventListener('load', function() {
         setTimeout(function() {
             processExistingButtons();
-            ensureButtonsAreClickable();
         }, 500);
     });
     
