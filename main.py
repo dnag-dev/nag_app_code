@@ -123,25 +123,8 @@ async def read_root():
         raise HTTPException(status_code=500, detail="Error loading application")
 
 @app.get("/health")
-async def health():
-    try:
-        api_key_status = "present" if os.getenv("OPENAI_API_KEY") else "missing"
-        return {
-            "status": "ok",
-            "timestamp": datetime.datetime.now().isoformat(),
-            "api_key_status": api_key_status,
-            "openai_client": {
-                "base_url": client.base_url,
-                "api_key_present": bool(client.api_key)
-            }
-        }
-    except Exception as e:
-        logger.error(f"Health check error: {str(e)}")
-        return {
-            "status": "error",
-            "error": str(e),
-            "timestamp": datetime.datetime.now().isoformat()
-        }
+async def health_check():
+    return {"status": "healthy", "timestamp": datetime.datetime.utcnow().isoformat()}
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):

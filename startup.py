@@ -87,7 +87,7 @@ def start_application():
         except Exception as pkg_err:
             logger.warning(f"Could not log installed packages: {pkg_err}")
 
-        # Start uvicorn
+        # Start uvicorn with proper configuration
         uvicorn.run(
             "main:app",
             host="0.0.0.0",
@@ -95,10 +95,14 @@ def start_application():
             reload=False,
             log_level="debug",
             access_log=True,
-            workers=1
+            workers=1,
+            timeout_keep_alive=60,  # Keep connections alive for 60 seconds
+            timeout_graceful_shutdown=30,  # Allow 30 seconds for graceful shutdown
+            proxy_headers=True,  # Trust proxy headers
+            forwarded_allow_ips="*"  # Allow all forwarded IPs
         )
     except Exception as e:
-        logger.error(f"Error starting application: {str(e)}", exc_info=True)
+        logger.error(f"Failed to start application: {e}")
         raise
 
 if __name__ == "__main__":
