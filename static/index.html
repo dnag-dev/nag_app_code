@@ -110,44 +110,8 @@
         width: 100%;
     }
 
-    /* Replace button styles with div styles */
-    .button-like {
-        display: inline-block;
-        padding: 8px 16px;
-        margin: 5px;
-        border-radius: 4px;
-        background-color: #007bff;
-        color: white;
-        font-size: 14px;
-        font-weight: 500;
-        text-align: center;
-        cursor: pointer;
-        user-select: none;
-        transition: background-color 0.2s;
-        box-sizing: border-box;
-        border: none;
-        outline: none;
-        text-decoration: none;
-        font-family: inherit;
-        line-height: normal;
-        vertical-align: middle;
-        white-space: nowrap;
-        overflow: visible;
-        position: relative;
-        z-index: 1;
-    }
-
-    .button-like:hover {
-        background-color: #0056b3;
-    }
-
-    .button-like:disabled {
-        background-color: #cccccc;
-        cursor: not-allowed;
-    }
-
     /* Remove all button-related styles */
-    button {
+    button, .button-like, .control-btn {
         display: none !important;
         visibility: hidden !important;
         opacity: 0 !important;
@@ -158,7 +122,34 @@
         overflow: hidden !important;
     }
 
-    /* Hide any elements with icon-related attributes */
+    /* Simple link-based controls */
+    .control-link {
+        display: inline-block;
+        padding: 8px 16px;
+        margin: 5px;
+        border-radius: 4px;
+        background-color: #007bff;
+        color: white;
+        font-size: 14px;
+        font-weight: 500;
+        text-align: center;
+        cursor: pointer;
+        text-decoration: none;
+        transition: background-color 0.2s;
+    }
+
+    .control-link:hover {
+        background-color: #0056b3;
+        color: white;
+    }
+
+    .control-link:disabled {
+        background-color: #cccccc;
+        cursor: not-allowed;
+        pointer-events: none;
+    }
+
+    /* Remove any icon-related attributes */
     [iconName],
     [layoutTraits],
     [src],
@@ -392,10 +383,10 @@
     </div>
 
     <div class="controls">
-      <div id="toggleBtn" class="button-like" role="button" tabindex="0" aria-label="Start Conversation">Start Conversation</div>
-      <div id="pauseBtn" class="button-like" role="button" tabindex="0" aria-label="Pause" aria-disabled="true">Pause</div>
-      <div id="modeToggle" class="button-like" role="button" tabindex="0" aria-label="Switch Mode">Switch to Walkie-Talkie</div>
-      <div id="debugBtn" class="button-like" role="button" tabindex="0" aria-label="Toggle Debug">Show Debug</div>
+      <a href="#" id="toggleBtn" class="control-link" role="button" tabindex="0">Start Conversation</a>
+      <a href="#" id="pauseBtn" class="control-link" role="button" tabindex="0" aria-disabled="true">Pause</a>
+      <a href="#" id="modeToggle" class="control-link" role="button" tabindex="0">Switch to Walkie-Talkie</a>
+      <a href="#" id="debugBtn" class="control-link" role="button" tabindex="0">Show Debug</a>
     </div>
 
     <div id="statusPanel" class="status-panel">
