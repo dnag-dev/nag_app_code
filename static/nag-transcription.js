@@ -259,6 +259,11 @@ async function sendToChat(message) {
     // Log full response structure for debugging
     logDebug("📝 Chat response structure: " + JSON.stringify(data));
     
+    // Display the AI's text response
+    if (data.message) {
+      addStatusMessage(data.message, 'assistant');
+    }
+    
     // Check for different possible response formats
     if (data.audio_url) {
       await playAudioResponse(data.audio_url);

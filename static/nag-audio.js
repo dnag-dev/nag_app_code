@@ -2,215 +2,101 @@
 
 // Function to play audio response with Safari compatibility
 async function playAudioResponse(audioUrl) {
-    const orb = window.nagElements.orb;
-    const audio = window.nagElements.audio;
-    
-    orb.classList.add("speaking");
-    
     try {
-        // Ensure audio context is initialized and unlocked
-        if (!window.nagState.audioUnlocked) {
-            const unlocked = await unlockAudio();
-            if (!unlocked) {
-                throw new Error("Audio context not unlocked");
-            }
+        // Check if we're in Safari
+        const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+        
+        // For Safari, ensure audio is unlocked and user has interacted
+        if (isSafari && !window.audioUnlocked) {
+            await unlockAudio();
         }
 
-        // Preload audio for faster response
-        await new Promise((resolve) => {
-            const onready = () => {
-                audio.oncanplaythrough = null;
-                audio.onerror = null;
-                resolve();
-            };
-            
-            audio.oncanplaythrough = onready;
-            audio.onerror = (e) => {
-                logDebug("⚠️ Audio preload error: " + (e.message || "unknown error"));
-                resolve();
-            };
-            
-            const timeout = setTimeout(() => {
-                logDebug("⚠️ Audio preload timeout");
-                resolve();
-            }, 5000);
-            
-            const clearTimeoutWrapper = () => {
-                clearTimeout(timeout);
-                onready();
-            };
-            
-            audio.oncanplaythrough = clearTimeoutWrapper;
-            audio.onerror = clearTimeoutWrapper;
-            
-            audio.src = audioUrl;
-            audio.load();
+        // Create audio element
+        const audio = new Audio(audioUrl);
+        
+        // Set up event listeners
+        audio.addEventListener('canplaythrough', () => {
+            console.log('Audio ready to play');
         });
 
-        // Special handling for Safari/iOS first play
-        if ((window.nagState.isSafari || window.nagState.isiOS) && !window.nagState.audioUnlocked) {
-            logDebug("🔊 Safari/iOS first play - showing play button");
+        audio.addEventListener('error', (e) => {
+            console.error('Audio playback error:', e);
             showPlayButton(audioUrl);
-            return;
-        }
-        
-        // Attempt to play with promise handling
-        const playResult = audio.play();
-        
-        if (playResult && playResult.then) {
-            await playResult;
-            logDebug("🔊 Audio playback started successfully");
-        }
-        
-        // Set up onended handler for continuous mode
-        audio.onended = () => {
-            orb.classList.remove("speaking");
-            orb.classList.add("idle");
-            if (!window.nagState.isWalkieTalkieMode && !window.nagState.isPaused && !window.nagState.interrupted) {
-                startListening();
+        });
+
+        // Try to play
+        try {
+            const playPromise = audio.play();
+            if (playPromise !== undefined) {
+                playPromise.catch(error => {
+                    console.log('Auto-play prevented:', error.message);
+                    if (isSafari) {
+                        showPlayButton(audioUrl);
+                    } else {
+                        // For non-Safari browsers, retry once
+                        setTimeout(() => {
+                            audio.play().catch(e => {
+                                console.error('Retry play failed:', e);
+                                showPlayButton(audioUrl);
+                            });
+                        }, 1000);
+                    }
+                });
             }
-        };
-        
-    } catch (e) {
-        logDebug("🔇 Audio play exception: " + e.message);
+        } catch (error) {
+            console.error('Play failed:', error);
+            showPlayButton(audioUrl);
+        }
+    } catch (error) {
+        console.error('Audio setup failed:', error);
         showPlayButton(audioUrl);
     }
 }
 
 // Show play button for manual audio playback
 function showPlayButton(audioUrl) {
-    const orb = window.nagElements.orb;
-    const audio = window.nagElements.audio;
-    const debugBox = window.nagElements.debugBox;
-    
-    orb.classList.remove("speaking", "thinking");
-    orb.classList.add("idle");
-    
-    removePlayButton();
-    
-    let playButton = document.createElement("button");
-    playButton.innerText = "▶️ Play Response";
-    playButton.className = "play-button";
-    
-    if (window.nagState.isSafari || window.nagState.isiOS) {
-        playButton.className = "play-button safari";
-        playButton.innerText = "▶️ Tap to Play Response";
-        
-        if (!window.nagState.audioUnlocked) {
-            const hint = document.createElement("p");
-            hint.className = "safari-hint";
-            hint.innerText = "Safari requires a tap to play audio";
-            document.body.insertBefore(hint, debugBox);
-        }
-    }
-    
-    window.nagState.currentPlayButton = playButton;
-    document.body.insertBefore(playButton, debugBox);
-    setTimeout(() => playButton.focus(), 100);
-    
+    const playButton = document.createElement('button');
+    playButton.textContent = 'Play Response';
+    playButton.className = 'play-button';
     playButton.onclick = async () => {
         try {
-            // Unlock audio for future playbacks
-            window.nagState.audioUnlocked = true;
-            
-            orb.classList.remove("idle");
-            orb.classList.add("speaking");
-            
-            audio.src = audioUrl;
-            audio.load();
-            
-            // Remove any safari hints
-            const hint = document.querySelector(".safari-hint");
-            if (hint) hint.remove();
-            
+            const audio = new Audio(audioUrl);
             await audio.play();
-            removePlayButton();
-            
-            audio.onended = () => {
-                orb.classList.remove("speaking");
-                orb.classList.add("idle");
-                if (!window.nagState.isWalkieTalkieMode && !window.nagState.isPaused && !window.nagState.interrupted) {
-                    startListening();
-                }
-            };
-        } catch (err) {
-            logDebug("🔇 Manual play failed: " + err.message);
-            orb.classList.remove("speaking");
-            orb.classList.add("idle");
+            playButton.remove();
+        } catch (error) {
+            console.error('Manual play failed:', error);
         }
     };
-}
-
-// Remove play button if exists
-function removePlayButton() {
-    if (window.nagState.currentPlayButton) {
-        window.nagState.currentPlayButton.remove();
-        window.nagState.currentPlayButton = null;
-    }
     
-    const hint = document.querySelector(".safari-hint");
-    if (hint) hint.remove();
+    // Add to UI
+    const responseDiv = document.querySelector('.response-container');
+    if (responseDiv) {
+        responseDiv.appendChild(playButton);
+    }
 }
 
 // Nag Digital Twin v2.0.0 - Audio Module
 
 // Improved audio unlocking for Safari
 async function unlockAudio() {
-    console.log("Attempting to unlock audio...");
-    
-    if (window.nagState.audioUnlocked) {
-        console.log("Audio already unlocked");
-        return true;
-    }
-    
     try {
-        // Create and immediately suspend an audio context
+        // Create and play a silent audio buffer
         const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        window.nagState.audioContext = audioContext;
-        
-        // For Safari, we need to resume the context during a user gesture
-        await audioContext.resume();
-        
-        // Create and play a silent buffer (crucial for Safari)
         const buffer = audioContext.createBuffer(1, 1, 22050);
         const source = audioContext.createBufferSource();
         source.buffer = buffer;
         source.connect(audioContext.destination);
-        
-        // Define a completion function
-        const unlockComplete = () => {
-            window.nagState.audioUnlocked = true;
-            console.log("Audio successfully unlocked");
-            logDebug("🔊 Audio unlocked successfully");
-        };
-        
-        // Start the source and mark as completed
-        source.onended = unlockComplete;
         source.start(0);
         
-        // Backup timeout in case onended doesn't fire
-        setTimeout(unlockComplete, 1000);
-        
-        // Also try to play the audio element if it exists
-        if (window.nagElements && window.nagElements.audio) {
-            const audio = window.nagElements.audio;
-            
-            // Set a silent audio source
-            audio.src = "data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAADQgD///////////////////////////////////////////8AAAA8TEFNRTMuMTAwAQAAAAAAAAAAABSAJAJAQgAAgAAAA0L2YLwAAAAAAAAAAAAAAAAAAAAA//sQZAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//sQZB4P8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAEVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU=";
-            
-            try {
-                await audio.play();
-                audio.pause();
-                audio.currentTime = 0;
-            } catch (e) {
-                console.log("Auto-play prevented: User interaction needed");
-            }
+        // Resume audio context
+        if (audioContext.state === 'suspended') {
+            await audioContext.resume();
         }
         
-        return true;
+        window.audioUnlocked = true;
+        console.log('Audio successfully unlocked');
     } catch (error) {
-        console.error("Error unlocking audio:", error);
-        return false;
+        console.error('Failed to unlock audio:', error);
     }
 }
 
