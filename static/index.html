@@ -85,14 +85,53 @@
       -webkit-user-select: none;
       -webkit-tap-highlight-color: transparent;
       box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-      position: relative; /* For potential future animations/indicators */
+      position: relative;
+      background-color: var(--orb-idle-color);
     }
 
     /* Orb States */
-    .orb.idle { background-color: var(--orb-idle-color); }
-    .orb.listening { background-color: var(--orb-listening-color); }
-    .orb.thinking { background-color: var(--orb-thinking-color); }
-    .orb.speaking { background-color: var(--orb-speaking-color); }
+    .orb.idle { 
+      background-color: var(--orb-idle-color);
+      color: var(--text-light);
+    }
+    .orb.listening { 
+      background-color: var(--orb-listening-color);
+      color: var(--text-light);
+      animation: pulse 1.5s infinite;
+    }
+    .orb.thinking { 
+      background-color: var(--orb-thinking-color);
+      color: var(--text-dark);
+      animation: spin 2s linear infinite;
+    }
+    .orb.speaking { 
+      background-color: var(--orb-speaking-color);
+      color: var(--text-light);
+    }
+
+    @keyframes pulse {
+      0% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7);
+      }
+      70% {
+        transform: scale(1.05);
+        box-shadow: 0 0 0 10px rgba(40, 167, 69, 0);
+      }
+      100% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(40, 167, 69, 0);
+      }
+    }
+
+    @keyframes spin {
+      0% {
+        transform: rotate(0deg);
+      }
+      100% {
+        transform: rotate(360deg);
+      }
+    }
 
     .orb:active {
       transform: scale(0.95);
@@ -214,31 +253,27 @@
     }
 
     .status-message {
-      padding: 6px 8px;
-      margin-bottom: 6px; /* Space between messages */
+      padding: 8px 12px;
+      margin-bottom: 8px;
       border-radius: 4px;
-      font-size: 0.85rem;
+      font-size: 0.9rem;
       line-height: 1.4;
-      word-wrap: break-word;
+      color: var(--text-dark);
     }
 
     .status-message:last-child {
        margin-bottom: 0; /* No margin for the oldest message */
     }
 
-    .status-message.user { /* Example for user message styling */
-        background-color: #e7f3ff;
-        color: #004085;
-        align-self: flex-end; /* Align user messages right */
-        max-width: 80%;
+    .status-message.user {
+      background-color: var(--primary-blue);
+      color: var(--text-light);
     }
 
-    .status-message.assistant { /* Example for assistant message styling */
-        background-color: #f8f9fa;
-        color: #383d41;
-        border: 1px solid #d6d8db;
-        align-self: flex-start; /* Align assistant messages left */
-        max-width: 80%;
+    .status-message.assistant {
+      background-color: var(--light-gray);
+      color: var(--text-dark);
+      border: 1px solid var(--medium-gray);
     }
 
     .status-message.info {
@@ -330,17 +365,12 @@
 
     .message-container {
       width: 100%;
-      min-height: 200px;
-      max-height: 40vh;
-      border: 1px solid var(--medium-gray);
-      border-radius: 8px;
-      overflow-y: auto;
+      max-width: 400px;
+      margin: 20px 0;
       padding: 15px;
-      background-color: #ffffff;
-      box-sizing: border-box;
-      margin-bottom: 15px;
-      display: flex;
-      flex-direction: column;
+      background-color: var(--light-gray);
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
 
     .mode-hint {
@@ -355,25 +385,24 @@
     }
 
     .debug-panel {
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        width: 300px;
-        max-height: 200px;
-        background: rgba(0, 0, 0, 0.8);
-        color: #fff;
-        padding: 10px;
-        border-radius: 5px;
-        overflow-y: auto;
-        z-index: 1000;
+      width: 100%;
+      max-width: 400px;
+      margin-top: 20px;
+      padding: 15px;
+      background-color: var(--light-gray);
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      color: var(--text-dark);
     }
 
     .debug-message {
-        margin: 5px 0;
-        padding: 5px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        font-family: monospace;
-        font-size: 12px;
+      padding: 8px 12px;
+      margin-bottom: 8px;
+      border-radius: 4px;
+      font-size: 0.8rem;
+      line-height: 1.4;
+      background-color: var(--white);
+      color: var(--text-dark);
     }
 
     .control-btn {

@@ -7,85 +7,78 @@ async function playAudioResponse(audioUrl) {
     
     orb.classList.add("speaking");
     
-    // Preload audio for faster response
     try {
-      await new Promise((resolve) => {
-        const onready = () => {
-          audio.oncanplaythrough = null;
-          audio.onerror = null;
-          resolve();
-        };
-        
-        // Set both success and error handlers to resolve
-        // to avoid hanging if the audio file has issues
-        audio.oncanplaythrough = onready;
-        audio.onerror = (e) => {
-          logDebug("⚠️ Audio preload error: " + (e.message || "unknown error"));
-          resolve(); // Still resolve to continue the flow
-        };
-        
-        // Set a timeout to avoid hanging if events don't fire
-        const timeout = setTimeout(() => {
-          logDebug("⚠️ Audio preload timeout");
-          resolve();
-        }, 5000);
-        
-        // When either event fires, clear the timeout
-        const clearTimeoutWrapper = () => {
-          clearTimeout(timeout);
-          onready();
-        };
-        
-        audio.oncanplaythrough = clearTimeoutWrapper;
-        audio.onerror = clearTimeoutWrapper;
-        
-        // Set source and load
-        audio.src = audioUrl;
-        audio.load();
-      });
-    } catch (e) {
-      logDebug("⚠️ Audio preload exception: " + e.message);
-    }
-    
-    // Try to unlock audio again (every time for Safari)
-    const unlocked = await unlockAudio();
-    
-    try {
-      // Special handling for Safari/iOS first play
-      if ((window.nagState.isSafari || window.nagState.isiOS) && !window.nagState.audioUnlocked) {
-        logDebug("🔊 Safari/iOS first play - showing play button");
-        showPlayButton(audioUrl);
-        return;
-      }
-      
-      // Attempt to play with promise handling
-      let playResult = audio.play();
-      
-      // Set up onended handler for continuous mode
-      audio.onended = () => {
-        orb.classList.remove("speaking");
-        orb.classList.add("idle");
-        if (!window.nagState.isWalkieTalkieMode && !window.nagState.isPaused && !window.nagState.interrupted) {
-          startListening();
+        // Ensure audio context is initialized and unlocked
+        if (!window.nagState.audioUnlocked) {
+            const unlocked = await unlockAudio();
+            if (!unlocked) {
+                throw new Error("Audio context not unlocked");
+            }
         }
-      };
-      
-      // Handle the play promise (modern browsers return a promise)
-      if (playResult && playResult.then) {
-        playResult.catch(e => {
-          logDebug("🔇 Auto-play failed: " + e.message);
-          // Fall back to manual play button
-          showPlayButton(audioUrl);
+
+        // Preload audio for faster response
+        await new Promise((resolve) => {
+            const onready = () => {
+                audio.oncanplaythrough = null;
+                audio.onerror = null;
+                resolve();
+            };
+            
+            audio.oncanplaythrough = onready;
+            audio.onerror = (e) => {
+                logDebug("⚠️ Audio preload error: " + (e.message || "unknown error"));
+                resolve();
+            };
+            
+            const timeout = setTimeout(() => {
+                logDebug("⚠️ Audio preload timeout");
+                resolve();
+            }, 5000);
+            
+            const clearTimeoutWrapper = () => {
+                clearTimeout(timeout);
+                onready();
+            };
+            
+            audio.oncanplaythrough = clearTimeoutWrapper;
+            audio.onerror = clearTimeoutWrapper;
+            
+            audio.src = audioUrl;
+            audio.load();
         });
-      }
+
+        // Special handling for Safari/iOS first play
+        if ((window.nagState.isSafari || window.nagState.isiOS) && !window.nagState.audioUnlocked) {
+            logDebug("🔊 Safari/iOS first play - showing play button");
+            showPlayButton(audioUrl);
+            return;
+        }
+        
+        // Attempt to play with promise handling
+        const playResult = audio.play();
+        
+        if (playResult && playResult.then) {
+            await playResult;
+            logDebug("🔊 Audio playback started successfully");
+        }
+        
+        // Set up onended handler for continuous mode
+        audio.onended = () => {
+            orb.classList.remove("speaking");
+            orb.classList.add("idle");
+            if (!window.nagState.isWalkieTalkieMode && !window.nagState.isPaused && !window.nagState.interrupted) {
+                startListening();
+            }
+        };
+        
     } catch (e) {
-      logDebug("🔇 Audio play exception: " + e.message);
-      showPlayButton(audioUrl);
+        logDebug("🔇 Audio play exception: " + e.message);
+        showPlayButton(audioUrl);
     }
-  }
-  
-  // Show play button for manual audio playback (for Safari/iOS autoplay restrictions)
-  function showPlayButton(audioUrl) {
+}
+
+// Show play button for manual audio playback
+function showPlayButton(audioUrl) {
     const orb = window.nagElements.orb;
     const audio = window.nagElements.audio;
     const debugBox = window.nagElements.debugBox;
@@ -99,70 +92,65 @@ async function playAudioResponse(audioUrl) {
     playButton.innerText = "▶️ Play Response";
     playButton.className = "play-button";
     
-    // Make it more visible on Safari/iOS
     if (window.nagState.isSafari || window.nagState.isiOS) {
-      playButton.className = "play-button safari";
-      playButton.innerText = "▶️ Tap to Play Response";
-      
-      // Add hint for Safari users
-      if (!window.nagState.audioUnlocked) {
-        const hint = document.createElement("p");
-        hint.className = "safari-hint";
-        hint.innerText = "Safari requires a tap to play audio";
-        document.body.insertBefore(hint, debugBox);
-      }
+        playButton.className = "play-button safari";
+        playButton.innerText = "▶️ Tap to Play Response";
+        
+        if (!window.nagState.audioUnlocked) {
+            const hint = document.createElement("p");
+            hint.className = "safari-hint";
+            hint.innerText = "Safari requires a tap to play audio";
+            document.body.insertBefore(hint, debugBox);
+        }
     }
     
     window.nagState.currentPlayButton = playButton;
-    
     document.body.insertBefore(playButton, debugBox);
     setTimeout(() => playButton.focus(), 100);
     
-    playButton.onclick = () => {
-      // Unlock audio for future playbacks
-      window.nagState.audioUnlocked = true;
-      
-      orb.classList.remove("idle");
-      orb.classList.add("speaking");
-      
-      audio.src = audioUrl;
-      audio.load();
-      
-      // Remove any safari hints
-      const hint = document.querySelector(".safari-hint");
-      if (hint) hint.remove();
-      
-      audio.play()
-        .then(() => {
-          removePlayButton();
-        })
-        .catch(err => {
-          logDebug("🔇 Manual play failed: " + err.message);
-          orb.classList.remove("speaking");
-          orb.classList.add("idle");
-        });
-      
-      audio.onended = () => {
-        orb.classList.remove("speaking");
-        orb.classList.add("idle");
-        if (!window.nagState.isWalkieTalkieMode && !window.nagState.isPaused && !window.nagState.interrupted) {
-          startListening();
+    playButton.onclick = async () => {
+        try {
+            // Unlock audio for future playbacks
+            window.nagState.audioUnlocked = true;
+            
+            orb.classList.remove("idle");
+            orb.classList.add("speaking");
+            
+            audio.src = audioUrl;
+            audio.load();
+            
+            // Remove any safari hints
+            const hint = document.querySelector(".safari-hint");
+            if (hint) hint.remove();
+            
+            await audio.play();
+            removePlayButton();
+            
+            audio.onended = () => {
+                orb.classList.remove("speaking");
+                orb.classList.add("idle");
+                if (!window.nagState.isWalkieTalkieMode && !window.nagState.isPaused && !window.nagState.interrupted) {
+                    startListening();
+                }
+            };
+        } catch (err) {
+            logDebug("🔇 Manual play failed: " + err.message);
+            orb.classList.remove("speaking");
+            orb.classList.add("idle");
         }
-      };
     };
-  }
-  
-  // Remove play button if exists
-  function removePlayButton() {
+}
+
+// Remove play button if exists
+function removePlayButton() {
     if (window.nagState.currentPlayButton) {
-      window.nagState.currentPlayButton.remove();
-      window.nagState.currentPlayButton = null;
+        window.nagState.currentPlayButton.remove();
+        window.nagState.currentPlayButton = null;
     }
     
-    // Also remove any safari hints
     const hint = document.querySelector(".safari-hint");
     if (hint) hint.remove();
-  }
+}
 
 // Nag Digital Twin v2.0.0 - Audio Module
 
@@ -170,7 +158,6 @@ async function playAudioResponse(audioUrl) {
 async function unlockAudio() {
     console.log("Attempting to unlock audio...");
     
-    // If already unlocked, don't try again
     if (window.nagState.audioUnlocked) {
         console.log("Audio already unlocked");
         return true;
@@ -179,6 +166,7 @@ async function unlockAudio() {
     try {
         // Create and immediately suspend an audio context
         const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        window.nagState.audioContext = audioContext;
         
         // For Safari, we need to resume the context during a user gesture
         await audioContext.resume();
@@ -210,20 +198,12 @@ async function unlockAudio() {
             // Set a silent audio source
             audio.src = "data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAADQgD///////////////////////////////////////////8AAAA8TEFNRTMuMTAwAQAAAAAAAAAAABSAJAJAQgAAgAAAA0L2YLwAAAAAAAAAAAAAAAAAAAAA//sQZAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//sQZB4P8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAEVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU=";
             
-            // Try to play it (this may fail on first try on Safari)
-            const playPromise = audio.play();
-            
-            // Handle the play promise if supported
-            if (playPromise !== undefined) {
-                playPromise
-                    .then(() => {
-                        console.log("Audio element played successfully");
-                        window.nagState.audioUnlocked = true;
-                    })
-                    .catch(e => {
-                        console.log("Audio play failed, will retry on user interaction:", e);
-                        // This is expected on Safari before user interaction
-                    });
+            try {
+                await audio.play();
+                audio.pause();
+                audio.currentTime = 0;
+            } catch (e) {
+                console.log("Auto-play prevented: User interaction needed");
             }
         }
         
@@ -280,42 +260,82 @@ async function stopListening() {
 
 // Function to start recording
 async function startRecording() {
-  console.log("Starting recording...");
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    window.nagState.stream = stream;
-    
-    const mediaRecorder = new MediaRecorder(stream);
-    window.nagState.mediaRecorder = mediaRecorder;
-    window.nagState.audioChunks = [];
-    
-    mediaRecorder.ondataavailable = (event) => {
-      window.nagState.audioChunks.push(event.data);
-    };
-    
-    mediaRecorder.start();
-    console.log("Recording started");
-    return true;
-  } catch (error) {
-    console.error("Error starting recording:", error);
-    return false;
-  }
+    console.log("Starting recording...");
+    try {
+        // Ensure audio context is initialized
+        if (!window.nagState.audioUnlocked) {
+            const unlocked = await unlockAudio();
+            if (!unlocked) {
+                throw new Error("Audio context not unlocked");
+            }
+        }
+
+        // Get audio stream
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        window.nagState.stream = stream;
+
+        // Initialize MediaRecorder with proper format
+        const mimeType = window.nagState.isSafari ? "audio/mp4" : "audio/webm";
+        window.nagState.mediaRecorder = new MediaRecorder(stream, {
+            mimeType: mimeType,
+            audioBitsPerSecond: 128000
+        });
+
+        // Set up event handlers
+        window.nagState.mediaRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0) {
+                window.nagState.audioChunks.push(e.data);
+            }
+        };
+
+        window.nagState.mediaRecorder.onstop = async () => {
+            if (window.nagState.stream) {
+                window.nagState.stream.getTracks().forEach(track => track.stop());
+                window.nagState.stream = null;
+            }
+            window.nagState.mediaRecorder = null;
+            window.nagState.audioChunks = [];
+        };
+
+        // Start recording
+        window.nagState.mediaRecorder.start();
+        window.nagState.recording = true;
+        logDebug("🎤 Recording started");
+
+        return true;
+    } catch (error) {
+        console.error("Error starting recording:", error);
+        return false;
+    }
 }
 
 // Function to stop recording
 async function stopRecording() {
-  console.log("Stopping recording...");
-  try {
-    if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state === "recording") {
-      window.nagState.mediaRecorder.stop();
-      window.nagState.stream.getTracks().forEach(track => track.stop());
+    console.log("Stopping recording...");
+    try {
+        if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state === "recording") {
+            // For Safari, request final data before stopping
+            if (window.nagState.isSafari) {
+                window.nagState.mediaRecorder.requestData();
+                await new Promise(resolve => setTimeout(resolve, 300));
+            }
+            
+            window.nagState.mediaRecorder.stop();
+            
+            // Clean up stream
+            if (window.nagState.stream) {
+                window.nagState.stream.getTracks().forEach(track => track.stop());
+                window.nagState.stream = null;
+            }
+            
+            window.nagState.recording = false;
+            logDebug("✅ Recording stopped");
+        }
+        return true;
+    } catch (error) {
+        console.error("Error stopping recording:", error);
+        return false;
     }
-    console.log("Recording stopped");
-    return true;
-  } catch (error) {
-    console.error("Error stopping recording:", error);
-    return false;
-  }
 }
 
 // Export functions
