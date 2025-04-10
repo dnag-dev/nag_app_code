@@ -124,7 +124,11 @@ async def read_root():
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy", "timestamp": datetime.datetime.utcnow().isoformat()}
+    """Health check endpoint for container monitoring"""
+    return {
+        "status": "healthy",
+        "timestamp": datetime.datetime.utcnow().isoformat()
+    }
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
@@ -181,7 +185,7 @@ async def chat(request: Request):
                 audio_url = await generate_tts(assistant_message)
                 logger.info("[chat] TTS generated successfully")
                 return {
-                    "message": assistant_message,
+                    "response": assistant_message,
                     "audio_url": audio_url,
                     "tts_url": audio_url  # For backward compatibility
                 }
@@ -189,7 +193,7 @@ async def chat(request: Request):
                 logger.error(f"[chat] TTS generation failed: {str(e)}")
                 logger.error(traceback.format_exc())
                 return {
-                    "message": assistant_message,
+                    "response": assistant_message,
                     "error": "TTS generation failed",
                     "audio_url": None,
                     "tts_url": None  # For backward compatibility
@@ -319,6 +323,14 @@ async def serve_static(file_path: str):
         return FileResponse(file_location)
     else:
         raise HTTPException(status_code=404, detail=f"File {file_path} not found")
+
+@app.get("/nag", response_class=HTMLResponse)
+async def read_nag():
+    try:
+        return FileResponse(os.path.join(STATIC_BASE, "nag", "nag.html"), media_type="text/html")
+    except Exception as e:
+        logger.error(f"Error serving nag.html: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error loading application")
 
 @app.on_event("startup")
 async def on_startup():
