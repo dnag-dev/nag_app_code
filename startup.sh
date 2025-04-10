@@ -35,15 +35,16 @@ install_dependencies() {
 export PYTHONUNBUFFERED=1
 export LOG_LEVEL=DEBUG
 
+log "🚀 Startup script initiated..."
+log "Python version: $(python --version)"
+
+# Run initialization steps
+create_directories
+install_dependencies
+
 # Start uvicorn in the foreground
-echo "Starting uvicorn server..."
+log "Starting uvicorn server..."
 exec uvicorn main:app --host 0.0.0.0 --port 8000 --log-level debug --reload
 
 # Note: Using exec replaces the shell process with uvicorn
 # This ensures proper signal handling and prevents the container from terminating
-
-log "🚀 Startup script initiated..."
-log "Python version: $(python --version)"
-
-create_directories
-install_dependencies
