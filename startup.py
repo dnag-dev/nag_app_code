@@ -101,13 +101,10 @@ def start_application():
             access_log=True,
             workers=1,
             timeout_keep_alive=60,
-            timeout_graceful_shutdown=30,
             proxy_headers=True,
             forwarded_allow_ips="*",
             server_header=False,  # Security: Don't expose server info
-            date_header=False,    # Security: Don't expose server time
-            limit_concurrency=100,  # Limit concurrent connections
-            limit_max_requests=1000  # Limit requests per worker
+            date_header=False     # Security: Don't expose server time
         )
     except Exception as e:
         logger.error(f"Failed to start application: {e}")
