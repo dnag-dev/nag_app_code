@@ -3,7 +3,7 @@
     console.log("Nag Button Fix (Minimal Version) loading...");
     
     // Only target these specific problematic attributes
-    const PROBLEMATIC_ATTRS = ['iconName', 'layoutTraits', 'data-icon', 'data-src', 'data-layout'];
+    const PROBLEMATIC_ATTRS = ['iconName', 'layoutTraits', 'data-icon', 'data-src', 'data-layout', 'src'];
     
     // Simple function to remove problematic attributes only
     function cleanButtonAttributes(element) {
@@ -32,12 +32,22 @@
         console.log(`Found ${elements.length} button elements to fix`);
         
         elements.forEach(element => {
-            // Preserve click handlers
+            // Preserve click handlers and important attributes
             const clickHandler = element.onclick;
+            const id = element.id;
+            const className = element.className;
+            const role = element.getAttribute('role');
+            const tabindex = element.getAttribute('tabindex');
+            
+            // Clean the element
             cleanButtonAttributes(element);
-            if (clickHandler) {
-                element.onclick = clickHandler;
-            }
+            
+            // Restore important attributes
+            if (id) element.id = id;
+            if (className) element.className = className;
+            if (role) element.setAttribute('role', role);
+            if (tabindex) element.setAttribute('tabindex', tabindex);
+            if (clickHandler) element.onclick = clickHandler;
             
             // Ensure element is visible and clickable
             element.style.display = 'inline-block';
