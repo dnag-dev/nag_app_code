@@ -159,6 +159,7 @@ async function startRecording() {
         // Get audio stream
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         window.nagState.stream = stream;
+        window.nagState.audioChunks = []; // Reset audio chunks
 
         // Initialize MediaRecorder with proper format
         const mimeType = window.nagState.isSafari ? "audio/mp4" : "audio/webm";
@@ -171,10 +172,20 @@ async function startRecording() {
         window.nagState.mediaRecorder.ondataavailable = (e) => {
             if (e.data.size > 0) {
                 window.nagState.audioChunks.push(e.data);
+                logDebug(`🔊 Audio chunk received: ${e.data.size} bytes`);
             }
         };
 
         window.nagState.mediaRecorder.onstop = async () => {
+            logDebug("✅ MediaRecorder stopped successfully");
+            logDebug(`📊 Audio chunks collected: ${window.nagState.audioChunks.length}`);
+            
+            if (window.nagState.audioChunks.length > 0) {
+                // Process the audio and transcribe
+                await processAudioAndTranscribe();
+            }
+            
+            // Clean up
             if (window.nagState.stream) {
                 window.nagState.stream.getTracks().forEach(track => track.stop());
                 window.nagState.stream = null;

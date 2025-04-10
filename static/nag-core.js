@@ -730,6 +730,8 @@ window.setupOrbInteractions = function(orb) {
     orb.addEventListener('mousedown', function() {
         if (window.nagState.isWalkieTalkieMode && !window.nagState.isPaused) {
             window.nagState.walkieTalkieActive = true;
+            orb.classList.remove('idle');
+            orb.classList.add('listening');
             startListening();
         }
     });
@@ -737,6 +739,8 @@ window.setupOrbInteractions = function(orb) {
     orb.addEventListener('mouseup', function() {
         if (window.nagState.isWalkieTalkieMode && window.nagState.walkieTalkieActive) {
             window.nagState.walkieTalkieActive = false;
+            orb.classList.remove('listening');
+            orb.classList.add('idle');
             stopRecording();
         }
     });
@@ -744,6 +748,8 @@ window.setupOrbInteractions = function(orb) {
     orb.addEventListener('mouseleave', function() {
         if (window.nagState.isWalkieTalkieMode && window.nagState.walkieTalkieActive) {
             window.nagState.walkieTalkieActive = false;
+            orb.classList.remove('listening');
+            orb.classList.add('idle');
             stopRecording();
         }
     });
@@ -753,6 +759,8 @@ window.setupOrbInteractions = function(orb) {
         e.preventDefault();
         if (window.nagState.isWalkieTalkieMode && !window.nagState.isPaused) {
             window.nagState.walkieTalkieActive = true;
+            orb.classList.remove('idle');
+            orb.classList.add('listening');
             startListening();
         }
     });
@@ -761,6 +769,8 @@ window.setupOrbInteractions = function(orb) {
         e.preventDefault();
         if (window.nagState.isWalkieTalkieMode && window.nagState.walkieTalkieActive) {
             window.nagState.walkieTalkieActive = false;
+            orb.classList.remove('listening');
+            orb.classList.add('idle');
             stopRecording();
         }
     });
@@ -769,8 +779,12 @@ window.setupOrbInteractions = function(orb) {
     orb.addEventListener('click', function() {
         if (!window.nagState.isWalkieTalkieMode && !window.nagState.isPaused) {
             if (window.nagState.listening) {
+                orb.classList.remove('listening');
+                orb.classList.add('idle');
                 stopRecording();
             } else {
+                orb.classList.remove('idle');
+                orb.classList.add('listening');
                 startListening();
             }
         }
@@ -782,8 +796,12 @@ window.setupOrbInteractions = function(orb) {
             e.preventDefault();
             if (!window.nagState.isWalkieTalkieMode && !window.nagState.isPaused) {
                 if (window.nagState.listening) {
+                    orb.classList.remove('listening');
+                    orb.classList.add('idle');
                     stopRecording();
                 } else {
+                    orb.classList.remove('idle');
+                    orb.classList.add('listening');
                     startListening();
                 }
             }

@@ -80,33 +80,42 @@
       color: var(--text-light);
       text-align: center;
       cursor: pointer;
-      transition: background-color 0.3s ease, transform 0.1s ease;
+      transition: all 0.3s ease;
       user-select: none;
       -webkit-user-select: none;
       -webkit-tap-highlight-color: transparent;
       box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
       position: relative;
       background-color: var(--orb-idle-color);
+      transform: scale(1);
     }
 
     /* Orb States */
     .orb.idle { 
       background-color: var(--orb-idle-color);
       color: var(--text-light);
+      transform: scale(1);
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
     }
     .orb.listening { 
       background-color: var(--orb-listening-color);
       color: var(--text-light);
       animation: pulse 1.5s infinite;
+      transform: scale(1.1);
+      box-shadow: 0 0 20px rgba(40, 167, 69, 0.5);
     }
     .orb.thinking { 
       background-color: var(--orb-thinking-color);
       color: var(--text-dark);
       animation: spin 2s linear infinite;
+      transform: scale(1.1);
+      box-shadow: 0 0 20px rgba(255, 193, 7, 0.5);
     }
     .orb.speaking { 
       background-color: var(--orb-speaking-color);
       color: var(--text-light);
+      transform: scale(1.1);
+      box-shadow: 0 0 20px rgba(23, 162, 184, 0.5);
     }
 
     @keyframes pulse {
@@ -115,8 +124,8 @@
         box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7);
       }
       70% {
-        transform: scale(1.05);
-        box-shadow: 0 0 0 10px rgba(40, 167, 69, 0);
+        transform: scale(1.1);
+        box-shadow: 0 0 0 15px rgba(40, 167, 69, 0);
       }
       100% {
         transform: scale(1);
@@ -126,10 +135,10 @@
 
     @keyframes spin {
       0% {
-        transform: rotate(0deg);
+        transform: rotate(0deg) scale(1.1);
       }
       100% {
-        transform: rotate(360deg);
+        transform: rotate(360deg) scale(1.1);
       }
     }
 

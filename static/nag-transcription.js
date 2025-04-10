@@ -15,21 +15,6 @@ async function processAudioAndTranscribe() {
         handleTranscriptionError("Not enough audio data. Please try speaking again.");
         return;
       }
-      
-      // Calculate total size of audio chunks
-      const totalSize = window.nagState.audioChunks.reduce((sum, chunk) => sum + chunk.size, 0);
-      logDebug(`📊 Safari: Total audio size before processing: ${totalSize} bytes`);
-      
-      // For Safari, ensure we request a larger time slice for data
-      if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state === "recording") {
-        try {
-          // Request data now to ensure we get the current buffer
-          window.nagState.mediaRecorder.requestData();
-          await new Promise(resolve => setTimeout(resolve, 300)); // Wait for data to be processed
-        } catch (e) {
-          logDebug("⚠️ requestData error: " + e.message);
-        }
-      }
     }
     
     // Get the appropriate MIME type for the blob
@@ -52,23 +37,14 @@ async function processAudioAndTranscribe() {
     // Create blob with appropriate type
     const blob = new Blob(window.nagState.audioChunks, mimeType ? { type: mimeType } : {});
     
-    // Log blob size for Safari debugging
-    if (window.nagState.isSafari) {
-      logDebug(`📊 Safari: Final blob size: ${blob.size} bytes`);
-      logDebug(`📊 Safari: Using MIME type: ${mimeType}`);
-    }
+    // Log blob size for debugging
+    logDebug(`📊 Final blob size: ${blob.size} bytes`);
+    logDebug(`📊 Using MIME type: ${mimeType}`);
     
     // Check if we have enough audio data
     if (blob.size < 1000) { // Less than 1KB is probably just noise
       logDebug("⚠️ Audio too small to process: " + blob.size + " bytes");
       handleTranscriptionError("Audio too quiet or too short. Please speak louder or longer.");
-      return;
-    }
-    
-    // Check if audio is too large
-    if (blob.size > 25 * 1024 * 1024) { // 25MB limit
-      logDebug("⚠️ Audio too large: " + blob.size + " bytes");
-      handleTranscriptionError("Audio too long. Please keep your message under 25MB.");
       return;
     }
     
@@ -99,104 +75,32 @@ async function processAudioAndTranscribe() {
     orb.classList.add("thinking");
     logDebug("📤 Uploading voice...");
     
-    // Add retry logic for transcription
-    let attempts = 0;
-    const maxAttempts = 3;
+    // Send to server for transcription
+    const res = await fetch("/transcribe", { 
+      method: "POST", 
+      body: formData 
+    });
     
-    while (attempts < maxAttempts) {
-      try {
-        // Send to server for transcription
-        const res = await fetch("/transcribe", { 
-          method: "POST", 
-          body: formData 
-        });
-        
-        // Process response
-        let data;
-        try {
-          data = await res.json();
-          // Log the full server response for debugging
-          logDebug(`📝 Server response: ${JSON.stringify(data)}`);
-        } catch (jsonError) {
-          logDebug("❌ Failed to parse JSON response: " + jsonError.message);
-          throw new Error("Invalid server response");
-        }
-        
-        // If successful, process response
-        if (res.ok) {
-          window.nagState.isUploading = false;
-          
-          // Get transcribed message - handle both transcription and transcript keys
-          const message = (data.transcription || data.transcript || "").trim();
-          logDebug("📝 Transcribed: " + (message || "No speech detected"));
-          
-          // Check for repeated identical transcriptions to avoid loops
-          if (message === window.nagState.lastTranscription) {
-            window.nagState.consecutiveIdenticalTranscriptions++;
-            
-            if (window.nagState.consecutiveIdenticalTranscriptions >= 2) {
-              logDebug("⚠️ Multiple identical transcriptions detected. Skipping to avoid loop.");
-              handleTranscriptionError("Multiple identical transcriptions detected. Please try speaking again.");
-              
-              // Reset and wait longer before trying again
-              window.nagState.consecutiveIdenticalTranscriptions = 0;
-              window.nagState.lastTranscription = "";
-              return;
-            }
-          } else {
-            // Different transcription, reset counter
-            window.nagState.consecutiveIdenticalTranscriptions = 0;
-            window.nagState.lastTranscription = message;
-          }
-          
-          // Check for empty or short messages
-          const wordCount = message.split(/\s+/).filter(Boolean).length;
-          if (wordCount < 2) {
-            logDebug("⚠️ Too short or empty message. Continuing to listen...");
-            handleTranscriptionError("Message too short. Please speak at least two words.");
-            if (!window.nagState.isWalkieTalkieMode && !window.nagState.isPaused) {
-              setTimeout(() => {
-                if (!window.nagState.interrupted && !window.nagState.isPaused) startListening();
-              }, 1000);
-            }
-            return;
-          }
-          
-          // Send to chat if we have a valid message
-          await sendToChat(message);
-          
-          // Successful, break out of retry loop
-          break;
-        } else {
-          // Handle error response
-          attempts++;
-          const errorMessage = data.error || 'Unknown error';
-          logDebug(`❌ Transcription request failed (attempt ${attempts}/${maxAttempts}). Status: ${res.status}`);
-          logDebug(`Error details: ${errorMessage}`);
-          
-          if (attempts >= maxAttempts) {
-            handleTranscriptionError(`Failed to transcribe audio: ${errorMessage}`);
-            window.nagState.isUploading = false;
-            return;
-          }
-          
-          // Wait before retrying
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-      } catch (fetchError) {
-        attempts++;
-        logDebug(`❌ Fetch error during transcription (attempt ${attempts}/${maxAttempts}): ${fetchError.message}`);
-        
-        if (attempts >= maxAttempts) {
-          handleTranscriptionError("Network error while transcribing. Please check your connection.");
-          window.nagState.isUploading = false;
-          return;
-        }
-        
-        // Wait before retrying
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
+    if (!res.ok) {
+      const errorData = await res.json();
+      throw new Error(errorData.detail || "Failed to transcribe audio");
     }
+    
+    const data = await res.json();
+    logDebug(`📝 Server response: ${JSON.stringify(data)}`);
+    
+    // Get transcribed message
+    const message = (data.transcription || data.transcript || "").trim();
+    logDebug("📝 Transcribed: " + (message || "No speech detected"));
+    
+    if (message) {
+      // Send to chat if we have a valid message
+      await sendToChat(message);
+    } else {
+      logDebug("⚠️ No transcription returned");
+      handleTranscriptionError("No speech detected. Please try speaking again.");
+    }
+    
   } catch (e) {
     logDebug("❌ Processing error: " + e.message);
     handleTranscriptionError("Error processing audio: " + e.message);

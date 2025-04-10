@@ -91,7 +91,7 @@ def start_application():
         port = int(os.getenv("PORT", "8000"))
         logger.info(f"Starting server on port {port}")
 
-        # Start uvicorn with proper configuration for Linux container
+        # Start uvicorn with improved configuration for Linux container
         uvicorn.run(
             "main:app",
             host="0.0.0.0",
@@ -100,11 +100,15 @@ def start_application():
             log_level="debug",
             access_log=True,
             workers=1,
-            timeout_keep_alive=60,
+            timeout_keep_alive=120,  # Increased from 60 to 120 seconds
+            timeout_graceful_shutdown=30,  # Added graceful shutdown timeout
             proxy_headers=True,
             forwarded_allow_ips="*",
             server_header=False,  # Security: Don't expose server info
-            date_header=False     # Security: Don't expose server time
+            date_header=False,    # Security: Don't expose server time
+            limit_concurrency=1000,  # Added concurrency limit
+            limit_max_requests=1000,  # Added max requests limit
+            backlog=2048  # Increased backlog for better connection handling
         )
     except Exception as e:
         logger.error(f"Failed to start application: {e}")
