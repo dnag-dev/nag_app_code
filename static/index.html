@@ -110,8 +110,8 @@
         width: 100%;
     }
 
-    /* Remove all button-related styles */
-    button, .button-like, .control-btn {
+    /* Remove ALL button-related styles */
+    button, .button-like, .control-btn, .control-link {
         display: none !important;
         visibility: hidden !important;
         opacity: 0 !important;
@@ -122,31 +122,24 @@
         overflow: hidden !important;
     }
 
-    /* Simple link-based controls */
-    .control-link {
+    /* Simple span-based controls */
+    .control-span {
         display: inline-block;
         padding: 8px 16px;
         margin: 5px;
+        background: #007bff;
+        color: white;
         border-radius: 4px;
-        background-color: #007bff;
-        color: white;
-        font-size: 14px;
-        font-weight: 500;
-        text-align: center;
         cursor: pointer;
-        text-decoration: none;
-        transition: background-color 0.2s;
     }
 
-    .control-link:hover {
-        background-color: #0056b3;
-        color: white;
+    .control-span:hover {
+        background: #0056b3;
     }
 
-    .control-link:disabled {
-        background-color: #cccccc;
+    .control-span.disabled {
+        background: #cccccc;
         cursor: not-allowed;
-        pointer-events: none;
     }
 
     /* Remove any icon-related attributes */
@@ -383,10 +376,10 @@
     </div>
 
     <div class="controls">
-      <a href="#" id="toggleBtn" class="control-link" role="button" tabindex="0">Start Conversation</a>
-      <a href="#" id="pauseBtn" class="control-link" role="button" tabindex="0" aria-disabled="true">Pause</a>
-      <a href="#" id="modeToggle" class="control-link" role="button" tabindex="0">Switch to Walkie-Talkie</a>
-      <a href="#" id="debugBtn" class="control-link" role="button" tabindex="0">Show Debug</a>
+      <span id="toggleBtn" class="control-span">Start Conversation</span>
+      <span id="pauseBtn" class="control-span disabled">Pause</span>
+      <span id="modeToggle" class="control-span">Switch to Walkie-Talkie</span>
+      <span id="debugBtn" class="control-span">Show Debug</span>
     </div>
 
     <div id="statusPanel" class="status-panel">
