@@ -5,6 +5,31 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Nag - AI Assistant 3</title>
   <link rel="stylesheet" href="styles.css"> <!-- Keep if you have external styles -->
+  
+  <!-- Button Fix Script Override -->
+  <script>
+    // Override document.createElement to block problematic attributes immediately
+    const originalCreateElement = document.createElement;
+    document.createElement = function(tagName) {
+      const element = originalCreateElement.call(document, tagName);
+      // Block addition of problematic attributes
+      const blockedAttrs = ['iconName', 'layoutTraits', 'src', 'data-icon', 'data-src', 'data-layout'];
+      
+      blockedAttrs.forEach(attr => {
+        Object.defineProperty(element, attr, {
+          get: function() { return null; },
+          set: function() { return false; },
+          configurable: true
+        });
+      });
+      
+      return element;
+    };
+  </script>
+  
+  <!-- Load Button Fixes Script -->
+  <script src="nag-button-fixes.js"></script>
+  
   <style>
     :root {
       --primary-blue: #007bff;
@@ -425,6 +450,7 @@
 
     window.nagElements = {}; // To cache DOM elements
     window.scriptsToLoad = [ // List of scripts needed
+        'nag-button-fixes.js', // Add button fixes first
         'nag-utils.js',
         'nag-audio.js',
         'nag-recording.js',
