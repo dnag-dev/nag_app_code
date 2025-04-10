@@ -299,52 +299,52 @@
     }
 
     .debug-control {
-      margin-top: auto; /* Push to bottom if space allows */
+      margin-top: 10px;
       display: flex;
       align-items: center;
-      justify-content: center;
-      width: 100%;
-      padding: 10px 0;
+      gap: 8px;
+    }
+
+    .debug-control input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      margin: 0;
     }
 
     .debug-control label {
-      margin-left: 8px;
-      font-size: 0.9rem;
-      color: var(--dark-gray);
+      font-size: 14px;
+      color: #666;
       cursor: pointer;
     }
 
-    /* Hide original checkbox */
-    .debug-control input[type="checkbox"] {
-       opacity: 0;
-       position: absolute;
-       width: 0;
-       height: 0;
+    .debug-panel {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: rgba(0, 0, 0, 0.9);
+      color: #fff;
+      padding: 10px;
+      font-family: monospace;
+      font-size: 12px;
+      max-height: 200px;
+      overflow-y: auto;
+      display: none;
+      z-index: 1000;
     }
 
-    /* Style the label to look like a checkbox */
-   .debug-control label::before {
-        content: '';
-        display: inline-block;
-        width: 16px;
-        height: 16px;
-        border: 1px solid var(--medium-gray);
-        border-radius: 3px;
-        margin-right: 8px;
-        background-color: white;
-        vertical-align: middle;
-        cursor: pointer;
+    .debug-panel h3 {
+      margin: 0 0 10px 0;
+      font-size: 14px;
+      color: #fff;
     }
 
-    /* Style the checkmark */
-   .debug-control input[type="checkbox"]:checked + label::before {
-        content: '\2714'; /* Checkmark symbol */
-        background-color: var(--primary-blue);
-        border-color: var(--primary-blue);
-        color: white;
-        font-size: 12px;
-        text-align: center;
-        line-height: 16px; /* Center checkmark */
+    .debug-content {
+      white-space: pre-wrap;
+    }
+
+    .debug-panel.visible {
+      display: block;
     }
 
     .status-panel {
@@ -382,17 +382,6 @@
       border-radius: 4px;
       font-size: 0.9rem;
       color: var(--dark-gray);
-    }
-
-    .debug-panel {
-      width: 100%;
-      max-width: 400px;
-      margin-top: 20px;
-      padding: 15px;
-      background-color: var(--light-gray);
-      border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-      color: var(--text-dark);
     }
 
     .debug-message {
@@ -446,16 +435,19 @@
       <span id="toggleBtn" class="control-span">Start Conversation</span>
       <span id="pauseBtn" class="control-span disabled">Pause</span>
       <span id="modeToggle" class="control-span">Switch to Walkie-Talkie</span>
-      <span id="debugBtn" class="control-span">Show Debug</span>
+      <div class="debug-control">
+        <input type="checkbox" id="debugToggle" name="debugToggle">
+        <label for="debugToggle">Show Debug</label>
+      </div>
     </div>
 
     <div id="statusPanel" class="status-panel">
       <!-- Status messages will be added here -->
     </div>
 
-    <div id="debugPanel" class="debug-panel" style="display: none;">
+    <div id="debugPanel" class="debug-panel">
       <h3>Debug Information</h3>
-      <div id="debugMessages"></div>
+      <div class="debug-content"></div>
     </div>
 
     <audio id="audio" style="display: none;"></audio>
@@ -625,6 +617,65 @@
               console.error("Debug toggle checkbox not found.");
           }
       });
+  </script>
+
+  <!-- Debug panel functionality
+  <script>
+    // Debug panel functionality
+    const debugToggle = document.getElementById('debugToggle');
+    const debugPanel = document.getElementById('debugPanel');
+    const debugContent = document.querySelector('.debug-content');
+
+    function toggleDebugPanel() {
+      debugPanel.classList.toggle('visible');
+      if (debugPanel.classList.contains('visible')) {
+        debugContent.scrollTop = debugContent.scrollHeight;
+      }
+    }
+
+    function addDebugMessage(message) {
+      const timestamp = new Date().toISOString();
+      const debugMessage = `[${timestamp}] ${message}\n`;
+      debugContent.textContent += debugMessage;
+      if (debugPanel.classList.contains('visible')) {
+        debugContent.scrollTop = debugContent.scrollHeight;
+      }
+    }
+
+    // Initialize debug panel
+    debugToggle.addEventListener('change', toggleDebugPanel);
+
+    // Add debug message when page loads
+    addDebugMessage('Debug panel initialized');
+  </script> -->
+
+  <script>
+    // Debug panel functionality
+    const debugToggle = document.getElementById('debugToggle');
+    const debugPanel = document.getElementById('debugPanel');
+    const debugContent = document.querySelector('.debug-content');
+
+    function toggleDebugPanel() {
+      debugPanel.classList.toggle('visible');
+      if (debugPanel.classList.contains('visible')) {
+        debugContent.scrollTop = debugContent.scrollHeight;
+      }
+    }
+
+    function addDebugMessage(message) {
+      const timestamp = new Date().toISOString();
+      const debugMessage = `[${timestamp}] ${message}\n`;
+      debugContent.textContent += debugMessage;
+      if (debugPanel.classList.contains('visible')) {
+        debugContent.scrollTop = debugContent.scrollHeight;
+      }
+    }
+
+    // Initialize debug panel
+    debugToggle.addEventListener('change', toggleDebugPanel);
+
+    // Add debug message when page loads
+    addDebugMessage('Debug panel initialized');
   </script>
 
 </body>
