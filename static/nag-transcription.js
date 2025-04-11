@@ -222,39 +222,61 @@ async function transcribeAudio(audioBlob) {
       throw new Error("Invalid audio data");
     }
     
+    // Set uploading state
+    if (window.nagState) {
+      window.nagState.isUploading = true;
+      window.nagState.listening = false;
+    }
+    
     // Create form data
     const formData = new FormData();
     formData.append('audio', audioBlob, 'recording.webm');
     
-    // Add retry logic
+    // Add retry logic with exponential backoff
     let retries = 3;
     let lastError = null;
+    let delay = 1000; // Start with 1 second delay
     
     while (retries > 0) {
       try {
+        console.log(`Attempting transcription (${retries} attempts left)...`);
+        
         const response = await fetch('/transcribe', {
           method: 'POST',
-          body: formData
+          body: formData,
+          headers: {
+            'Accept': 'application/json'
+          }
         });
         
         if (!response.ok) {
-          throw new Error(`Server responded with status ${response.status}`);
+          const errorText = await response.text();
+          throw new Error(`Server error: ${response.status} - ${errorText}`);
         }
         
         const data = await response.json();
         
         if (!data || !data.text) {
-          throw new Error("Invalid response from server");
+          throw new Error("Invalid response from server: Missing transcription text");
         }
         
-        return data.text;
+        // Validate transcription text
+        const transcription = data.text.trim();
+        if (transcription === '') {
+          throw new Error("Empty transcription received");
+        }
+        
+        console.log("Transcription successful:", transcription);
+        return transcription;
+        
       } catch (error) {
         lastError = error;
         retries--;
         
         if (retries > 0) {
-          console.log(`Retrying transcription (${retries} attempts left)...`);
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          console.log(`Transcription attempt failed: ${error.message}. Retrying in ${delay/1000} seconds...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          delay *= 2; // Exponential backoff
         }
       }
     }
@@ -282,10 +304,19 @@ function handleTranscriptionResponse(text) {
     // Reset state
     if (window.nagState) {
       window.nagState.isUploading = false;
+      window.nagState.listening = false;
+      window.nagState.lastTranscription = text;
     }
     
     // Update button states
-    if (window.updateButtonStates) window.updateButtonStates();
+    if (window.updateButtonStates) {
+      window.updateButtonStates();
+    }
+    
+    // Log successful transcription
+    if (window.logDebug) {
+      window.logDebug(`✅ Transcription: "${text}"`);
+    }
   } catch (error) {
     console.error("Error handling transcription response:", error);
     handleTranscriptionError(error);
@@ -296,3 +327,4 @@ function handleTranscriptionResponse(text) {
 window.transcribeAudio = transcribeAudio;
 window.handleTranscriptionResponse = handleTranscriptionResponse;
 window.handleTranscriptionError = handleTranscriptionError;
+window.base64ToBlob = base64ToBlob;

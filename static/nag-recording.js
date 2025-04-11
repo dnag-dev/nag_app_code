@@ -255,9 +255,15 @@ function initializeMediaRecorder(stream) {
         if (window.nagState.isSafari || window.nagState.isiOS) {
             // Safari needs lower bitrate for stability
             options.audioBitsPerSecond = 96000;
-            if (mimeType.includes('mp4')) {
-                options.mimeType = mimeType;
+            
+            // Always use MP4 format for Safari when available
+            if (testMimeTypeSupport('audio/mp4')) {
+                options.mimeType = 'audio/mp4';
+                window.logDebug("Using audio/mp4 for Safari");
             }
+            
+            // Force setting to ensure compatibility
+            window.nagState.forceSafariHandling = true;
         } else if (/Firefox/.test(navigator.userAgent)) {
             // Firefox works well with opus codec
             if (testMimeTypeSupport('audio/webm;codecs=opus')) {
@@ -267,6 +273,9 @@ function initializeMediaRecorder(stream) {
             // Chrome can handle higher bitrate
             options.audioBitsPerSecond = 192000;
         }
+        
+        // Log chosen options for debugging
+        window.logDebug(`MediaRecorder options: ${JSON.stringify(options)}`);
         
         // Create the MediaRecorder
         const mediaRecorder = new MediaRecorder(stream, options);
@@ -293,10 +302,26 @@ function initializeMediaRecorder(stream) {
                 const totalSize = window.nagState.audioChunks.reduce((acc, chunk) => acc + chunk.size, 0);
                 window.logDebug(`Total audio size: ${totalSize} bytes in ${window.nagState.audioChunks.length} chunks`);
                 
+                // NEW: For Safari, ensure we have multiple chunks before processing
+                if (window.nagState.isSafari && window.nagState.audioChunks.length < 2 && !window.nagState.forceSafariProcessing) {
+                    window.logDebug("Safari recording has too few chunks, not processing");
+                    window.addStatusMessage("Not enough audio recorded. Please try again and speak longer.", "info");
+                    resetRecordingUI();
+                    return;
+                }
+                
                 if (totalSize > 1000) { // Minimum size threshold (1KB)
                     // IMPORTANT: We call processAudioAndTranscribe from core to avoid duplicates
                     if (window.processAudioAndTranscribe) {
-                        window.processAudioAndTranscribe();
+                        // NEW: For safety, wait a bit before processing in Safari
+                        if (window.nagState.isSafari || window.nagState.isiOS) {
+                            window.logDebug("Safari: waiting 300ms before processing audio");
+                            setTimeout(() => {
+                                window.processAudioAndTranscribe();
+                            }, 300);
+                        } else {
+                            window.processAudioAndTranscribe();
+                        }
                     } else {
                         window.logDebug("processAudioAndTranscribe function not available");
                         
@@ -386,10 +411,12 @@ async function startRecording() {
         if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state !== "recording") {
             window.nagState.audioChunks = []; // Reset chunks
             
-            // CRITICAL FIX: Use a smaller timeslice (500ms) for better chunk collection
-            // This is crucial for Safari/iOS to capture complete sentences
-            window.nagState.mediaRecorder.start(500);
-            window.logDebug("Recording started with 500ms timeslice - critical for sentence capture");
+            // ENHANCED: Use different timeslice for Safari vs other browsers
+            // Safari works better with a smaller timeslice to capture more chunks
+            const timeslice = (window.nagState.isSafari || window.nagState.isiOS) ? 250 : 500;
+            
+            window.nagState.mediaRecorder.start(timeslice);
+            window.logDebug(`Recording started with ${timeslice}ms timeslice - optimized for ${window.nagState.isSafari ? 'Safari' : 'standard browser'}`);
             
             // Update UI
             if (window.nagElements.orb) {
@@ -406,11 +433,15 @@ async function startRecording() {
             window.nagState.silenceStartTime = null;
             window.nagState.silenceDetectionEnabled = true;
             
-            // Safety timeout - stop after 30 seconds max
+            // ENHANCED: Adjust max recording time based on browser
+            // Longer for Safari to ensure complete capture
+            const maxRecordingTime = (window.nagState.isSafari || window.nagState.isiOS) ? 35000 : 30000;
+            
+            // Safety timeout - stop after max time
             window.nagState.recordingTimeout = setTimeout(() => {
                 if (window.nagState.mediaRecorder && 
                     window.nagState.mediaRecorder.state === "recording") {
-                    window.logDebug("Maximum recording time reached (30 seconds), stopping");
+                    window.logDebug(`Maximum recording time reached (${maxRecordingTime/1000} seconds), stopping`);
                     
                     // First update UI to show we're stopping
                     if (window.nagElements.orb) {
@@ -418,9 +449,14 @@ async function startRecording() {
                         window.nagElements.orb.classList.add("thinking");
                     }
                     
+                    // Force Safari to process even with few chunks in timeout scenario
+                    if (window.nagState.isSafari || window.nagState.isiOS) {
+                        window.nagState.forceSafariProcessing = true;
+                    }
+                    
                     stopRecording();
                 }
-            }, 30000); // 30 seconds max recording time
+            }, maxRecordingTime);
             
             // Show recording time indicator
             window.nagState.recordingStartTime = Date.now();
@@ -502,17 +538,35 @@ function stopRecording() {
                     // Log the current chunks count
                     window.logDebug(`Stopping Safari recording with ${window.nagState.audioChunks.length} chunks so far`);
                     
-                    // Allow a bit more time for Safari to process the data
+                    // ENHANCED: Add a much longer delay for Safari to ensure all audio is captured
+                    // Increased from 300ms to 1000ms (1 second)
                     setTimeout(() => {
                         try {
-                            window.nagState.mediaRecorder.stop();
-                            window.logDebug("Safari recording stopped after timeout");
+                            // Request data one more time to ensure we have the latest audio
+                            window.nagState.mediaRecorder.requestData();
+                            
+                            // Then wait a bit more before stopping
+                            setTimeout(() => {
+                                try {
+                                    window.nagState.mediaRecorder.stop();
+                                    window.logDebug("Safari recording stopped after extended timeout");
+                                } catch (e) {
+                                    window.logDebug("Error stopping Safari recording: " + e.message);
+                                    // In case of error, try to reset the UI
+                                    resetRecordingUI();
+                                }
+                            }, 500); // Additional 500ms wait
+                            
                         } catch (e) {
-                            window.logDebug("Error stopping Safari recording: " + e.message);
-                            // In case of error, try to reset the UI
-                            resetRecordingUI();
+                            window.logDebug("Error requesting final Safari data: " + e.message);
+                            try {
+                                window.nagState.mediaRecorder.stop();
+                            } catch (e2) {
+                                window.logDebug("Subsequent stop also failed: " + e2.message);
+                                resetRecordingUI();
+                            }
                         }
-                    }, 300); // Increased delay for Safari
+                    }, 1000); // Increased delay for Safari from 300ms to 1000ms
                 } catch (e) {
                     window.logDebug("Error in Safari recording stop sequence: " + e.message);
                     // Try direct stop as fallback
@@ -524,12 +578,13 @@ function stopRecording() {
                     }
                 }
             } else {
-                // For other browsers, simpler approach
+                // For other browsers, simpler approach but still improved
                 try {
                     // Ensure we get the final chunk of data
                     window.nagState.mediaRecorder.requestData();
                     
                     // Small delay to ensure all data is captured
+                    // ENHANCED: Increased from 100ms to 300ms for better reliability
                     setTimeout(() => {
                         try {
                             window.nagState.mediaRecorder.stop();
@@ -538,7 +593,7 @@ function stopRecording() {
                             window.logDebug("Error stopping recording: " + e.message);
                             resetRecordingUI();
                         }
-                    }, 100);
+                    }, 300); // Increased from 100ms to 300ms
                 } catch (e) {
                     window.logDebug("Error in recording stop sequence: " + e.message);
                     // Try direct stop as fallback
