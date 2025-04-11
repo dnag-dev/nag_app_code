@@ -38,11 +38,4 @@ create_directories
 
 # Start uvicorn in the foreground with additional settings
 log "Starting uvicorn server..."
-exec uvicorn main:app \
-    --host 0.0.0.0 \
-    --port ${PORT:-8000} \
-    --log-level debug \
-    --timeout-keep-alive 60 \
-    --timeout-graceful-shutdown 30 \
-    --proxy-headers \
-    --forwarded-allow-ips "*"
+exec uvicorn main:app --host 0.0.0.0 --port $PORT --log-level debug
