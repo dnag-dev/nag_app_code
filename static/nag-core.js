@@ -271,25 +271,40 @@ function connectWebSocket() {
         
         nagWebSocket.onmessage = (event) => {
             try {
-                const data = JSON.parse(event.data);
-                
-                // Handle different message types
-                switch (data.type) {
-                    case 'status':
-                        window.addStatusMessage(data.message, data.status || 'info');
-                        break;
-                    case 'pong':
-                        window.logDebug("Received pong from server");
-                        break;
-                    case 'command':
-                        handleServerCommand(data);
-                        break;
-                    default:
-                        window.logDebug("Received unknown message type: " + data.type);
+                // First check if data is valid JSON
+                if (typeof event.data === 'string') {
+                    // Handle some non-JSON messages that start with "Message"
+                    if (event.data.startsWith('Message')) {
+                        window.logDebug("Received non-JSON message from server: " + event.data.substring(0, 50) + "...");
+                        return; // Skip processing for these messages
+                    }
+                    
+                    try {
+                        const data = JSON.parse(event.data);
+                        
+                        // Handle different message types
+                        switch (data.type) {
+                            case 'status':
+                                window.addStatusMessage(data.message, data.status || 'info');
+                                break;
+                            case 'pong':
+                                window.logDebug("Received pong from server");
+                                break;
+                            case 'command':
+                                handleServerCommand(data);
+                                break;
+                            default:
+                                window.logDebug("Received unknown message type: " + (data.type || 'undefined'));
+                        }
+                    } catch (e) {
+                        window.logDebug("Error parsing WebSocket message: " + e.message + " (data: " + 
+                                       event.data.substring(0, 50) + "...)");
+                    }
+                } else {
+                    window.logDebug("Received non-string WebSocket message");
                 }
             } catch (e) {
-                console.error('Error parsing WebSocket message:', e);
-                window.logDebug("Error parsing WebSocket message: " + e.message);
+                window.logDebug("Error handling WebSocket message: " + e.message);
             }
         };
         
@@ -416,25 +431,9 @@ function detectBrowserCapabilities() {
         // Check for AudioContext support
         window.nagState.hasAudioContext = !!(window.AudioContext || window.webkitAudioContext);
         
-        // Safely check for AudioWorklet support - FIXED VERSION
-        let hasAudioWorklet = false;
-        if (window.nagState.hasAudioContext) {
-            try {
-                // Create a temporary context just for feature detection
-                const tempContext = new (window.AudioContext || window.webkitAudioContext)();
-                // Safely check if audioWorklet exists on this instance
-                hasAudioWorklet = !!(tempContext && tempContext.audioWorklet);
-                // Clean up
-                if (tempContext && typeof tempContext.close === 'function') {
-                    tempContext.close().catch(() => {});
-                }
-            } catch (e) {
-                console.error("Error checking AudioWorklet support:", e);
-                hasAudioWorklet = false;
-            }
-        }
-        // Force disable AudioWorklet since we're missing the file
-        window.nagState.hasAudioWorklet = false; // Explicitly disable since file is missing
+        // Safe check for AudioWorklet
+        window.nagState.hasAudioWorklet = false; // Explicitly disable
+        window.logDebug("AudioWorklet support: DISABLED (to avoid errors)");
         
         // Log capabilities
         window.logDebug(`Browser detection: ${isSafari ? 'Safari' : isChrome ? 'Chrome' : isFirefox ? 'Firefox' : isEdge ? 'Edge' : 'Other'}`);
@@ -442,7 +441,6 @@ function detectBrowserCapabilities() {
         window.logDebug(`MediaRecorder support: ${window.nagState.hasMediaRecorder}`);
         window.logDebug(`WebRTC support: ${window.nagState.hasWebRTC}`);
         window.logDebug(`AudioContext support: ${window.nagState.hasAudioContext}`);
-        window.logDebug(`AudioWorklet support: DISABLED (missing file)`);
         
         // Apply browser-specific settings
         applyBrowserSpecificSettings();
@@ -995,14 +993,13 @@ function setupContinuousMode() {
     const orb = window.nagElements.orb;
     if (!orb) return;
     
+    window.logDebug("Setting up continuous mode...");
+    
     // Create a debounced click handler to prevent double-click issues
     let lastClickTime = 0;
     let clickInProgress = false;
     
-    orb.addEventListener('click', async function(e) {
-        // Prevent default to avoid double-triggers
-        e.preventDefault();
-        
+    orb.addEventListener('click', function(e) {
         // Skip if in walkie-talkie mode or paused
         if (window.nagState.isWalkieTalkieMode || window.nagState.isPaused) {
             window.logDebug("Click ignored - in walkie-talkie mode or paused");
@@ -1022,53 +1019,41 @@ function setupContinuousMode() {
         try {
             window.logDebug("Orb clicked in continuous mode");
             
-            // Determine the current state based on the orb's class list
+            // Check if we're currently listening
             const isListening = orb.classList.contains("listening");
             
             if (isListening) {
-                // We're currently listening, so stop recording
-                window.logDebug("Stopping recording...");
+                // We're listening, stop recording
+                window.logDebug("Stopping recording via orb click (was listening)");
                 
-                // Update UI first for immediate feedback
+                // Update UI immediately
                 orb.classList.remove("listening");
                 orb.classList.add("thinking");
                 
-                // Call the appropriate stop function
+                // Use stopRecording or stopListening
                 if (typeof window.stopRecording === 'function') {
                     window.stopRecording();
                 } else if (typeof window.stopListening === 'function') {
                     window.stopListening();
                 } else {
-                    window.logDebug("Warning: No stop function available!");
+                    window.logDebug("ERROR: No stop function available!");
                 }
             } else {
-                // We're idle or in another state, try to start recording
-                window.logDebug("Starting recording...");
+                // We're not listening, try to start
+                window.logDebug("Starting recording via orb click (was not listening)");
                 
-                // Update UI first for immediate feedback
+                // Update UI immediately
                 orb.classList.remove("idle", "thinking", "speaking");
                 orb.classList.add("listening");
                 
-                // Try to unlock audio context first
-                if (typeof window.unlockAudioContext === 'function') {
-                    await window.unlockAudioContext();
-                }
-                
-                // Call the appropriate start function
+                // Use startRecording or startListening
                 if (typeof window.startRecording === 'function') {
-                    if (!await window.startRecording()) {
-                        // Reset UI if recording failed to start
-                        orb.classList.remove("listening");
-                        orb.classList.add("idle");
-                    }
+                    window.startRecording();
                 } else if (typeof window.startListening === 'function') {
-                    if (!await window.startListening()) {
-                        // Reset UI if listening failed to start
-                        orb.classList.remove("listening");
-                        orb.classList.add("idle");
-                    }
+                    window.startListening();
                 } else {
-                    window.logDebug("Warning: No start function available!");
+                    window.logDebug("ERROR: No start function available!");
+                    
                     // Reset UI if we couldn't start
                     orb.classList.remove("listening");
                     orb.classList.add("idle");
@@ -1076,11 +1061,12 @@ function setupContinuousMode() {
             }
         } catch (error) {
             window.logDebug("Error handling orb click: " + error.message);
+            
             // Reset UI in case of error
             orb.classList.remove("listening", "thinking", "speaking");
             orb.classList.add("idle");
         } finally {
-            // Always release the click lock
+            // Release click lock after a short delay
             setTimeout(() => {
                 clickInProgress = false;
             }, 500);
