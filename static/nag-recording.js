@@ -53,6 +53,7 @@ function setupVolumeVisualization(stream) {
         return true;
     } catch (error) {
         console.error("Error setting up volume visualization:", error);
+        window.logDebug("Volume visualization error: " + error.message);
         return false;
     }
 }
@@ -89,12 +90,11 @@ function updateVolumeVisualization() {
             }
         }
         
-        // NO MORE SILENCE DETECTION - REMOVED COMPLETELY
-
         // Continue updating
         requestAnimationFrame(updateVolumeVisualization);
     } catch (error) {
         console.error("Error updating volume visualization:", error);
+        window.logDebug("Volume update error: " + error.message);
     }
 }
 
@@ -153,6 +153,15 @@ function initializeMediaRecorder(stream) {
             options.mimeType = mimeType;
         }
         
+        // For Safari, use lower bitrate and ensure it's properly configured
+        if (window.nagState.isSafari || window.nagState.isiOS) {
+            options.audioBitsPerSecond = 96000; // Lower bitrate for Safari
+            if (mimeType === 'audio/mp4') {
+                options.mimeType = mimeType;
+            }
+        }
+        
+        // Create the MediaRecorder
         const mediaRecorder = new MediaRecorder(stream, options);
         window.nagState.mediaRecorder = mediaRecorder;
         window.nagState.audioChunks = [];
@@ -162,6 +171,8 @@ function initializeMediaRecorder(stream) {
             if (event.data && event.data.size > 0) {
                 window.nagState.audioChunks.push(event.data);
                 window.logDebug(`Audio chunk received: ${event.data.size} bytes`);
+            } else {
+                window.logDebug("Received empty audio chunk");
             }
         };
         
@@ -173,34 +184,62 @@ function initializeMediaRecorder(stream) {
             if (window.nagState.audioChunks && window.nagState.audioChunks.length > 0) {
                 // Calculate total audio size
                 const totalSize = window.nagState.audioChunks.reduce((acc, chunk) => acc + chunk.size, 0);
-                window.logDebug(`Total audio size: ${totalSize} bytes`);
+                window.logDebug(`Total audio size: ${totalSize} bytes in ${window.nagState.audioChunks.length} chunks`);
                 
                 if (totalSize > 1000) { // Minimum size threshold (1KB)
                     if (window.processAudioAndTranscribe) {
                         window.processAudioAndTranscribe();
+                    } else {
+                        window.logDebug("processAudioAndTranscribe function not available");
+                        
+                        // Reset UI
+                        if (window.nagElements && window.nagElements.orb) {
+                            window.nagElements.orb.classList.remove("listening", "thinking");
+                            window.nagElements.orb.classList.add("idle");
+                        }
+                        
+                        window.addStatusMessage("Error processing audio: transcription function not found", "error");
                     }
                 } else {
                     window.logDebug("Audio too small, not processing");
                     window.addStatusMessage("Not enough audio recorded. Please try again.", "info");
                     
-                    // Reset UI state
-                    if (window.nagElements.orb) {
+                    // Reset UI
+                    if (window.nagElements && window.nagElements.orb) {
                         window.nagElements.orb.classList.remove("listening", "thinking");
                         window.nagElements.orb.classList.add("idle");
                     }
+                }
+            } else {
+                // No audio chunks or empty chunks
+                window.logDebug("No valid audio chunks recorded");
+                window.addStatusMessage("No audio recorded. Please try again.", "info");
+                
+                // Reset UI
+                if (window.nagElements && window.nagElements.orb) {
+                    window.nagElements.orb.classList.remove("listening", "thinking");
+                    window.nagElements.orb.classList.add("idle");
                 }
             }
         };
         
         mediaRecorder.onerror = (event) => {
             console.error("MediaRecorder error:", event.error);
-            window.logDebug(`MediaRecorder error: ${event.error.name}`);
+            window.logDebug(`MediaRecorder error: ${event.error ? event.error.name : 'unknown'}`);
+            window.addStatusMessage("Recording error. Please try again.", "error");
+            
+            // Reset UI
+            if (window.nagElements && window.nagElements.orb) {
+                window.nagElements.orb.classList.remove("listening", "thinking");
+                window.nagElements.orb.classList.add("idle");
+            }
         };
         
         return mediaRecorder;
     } catch (error) {
         console.error("Error initializing MediaRecorder:", error);
         window.logDebug("MediaRecorder initialization error: " + error.message);
+        window.addStatusMessage("Error initializing recorder: " + error.message, "error");
         return null;
     }
 }
@@ -208,6 +247,16 @@ function initializeMediaRecorder(stream) {
 // Manual recording mode with user controls
 async function startRecording() {
     try {
+        // First try to unlock audio context
+        try {
+            if (window.unlockAudioContext) {
+                await window.unlockAudioContext();
+            }
+        } catch (e) {
+            window.logDebug("Audio context unlock warning: " + e.message);
+            // Continue anyway - we'll try to record
+        }
+        
         // Get microphone access
         const stream = await requestMicrophoneAccess();
         if (!stream) {
@@ -223,9 +272,17 @@ async function startRecording() {
         if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state !== "recording") {
             window.nagState.audioChunks = []; // Reset chunks
             
-            // Use timeslice to get data more frequently - important for transcription
-            window.nagState.mediaRecorder.start(500); // Get data every 500ms
-            window.logDebug("Recording started with timeslice");
+            // Use different timeslice values based on browser
+            let timeslice = 500; // Default 500ms for most browsers
+            
+            // For Safari, use larger timeslice to avoid excessive chunks
+            if (window.nagState.isSafari || window.nagState.isiOS) {
+                timeslice = 1000; // 1 second for Safari
+            }
+            
+            // Use timeslice to get data chunks during recording
+            window.nagState.mediaRecorder.start(timeslice);
+            window.logDebug(`Recording started with timeslice: ${timeslice}ms`);
             
             // Update UI
             if (window.nagElements.orb) {
@@ -238,12 +295,18 @@ async function startRecording() {
                 clearTimeout(window.nagState.recordingTimeout);
             }
             
-            // Change the recording behavior to use MANUAL mode - only stop when told to
-            // or after 30 seconds (safety timeout)
+            // Safety timeout - stop after 30 seconds max
             window.nagState.recordingTimeout = setTimeout(() => {
                 if (window.nagState.mediaRecorder && 
                     window.nagState.mediaRecorder.state === "recording") {
                     window.logDebug("Maximum recording time reached (30 seconds), stopping");
+                    
+                    // First update UI to show we're stopping
+                    if (window.nagElements.orb) {
+                        window.nagElements.orb.classList.remove("listening");
+                        window.nagElements.orb.classList.add("thinking");
+                    }
+                    
                     stopRecording();
                 }
             }, 30000); // 30 seconds max recording time
@@ -275,28 +338,14 @@ async function startRecording() {
         console.error("Error starting recording:", error);
         window.logDebug("Error starting recording: " + error.message);
         window.addStatusMessage("Error starting recording: " + error.message, "error");
+        
+        // Reset UI in case of error
+        if (window.nagElements && window.nagElements.orb) {
+            window.nagElements.orb.classList.remove("listening", "thinking");
+            window.nagElements.orb.classList.add("idle");
+        }
+        
         return false;
-    }
-}
-
-// Add recording time indicator
-function updateRecordingTimeIndicator() {
-    if (!window.nagState.recordingStartTime || !window.nagState.mediaRecorder || 
-        window.nagState.mediaRecorder.state !== "recording") {
-        return;
-    }
-    
-    const elapsedMs = Date.now() - window.nagState.recordingStartTime;
-    const seconds = Math.floor(elapsedMs / 1000);
-    
-    // Update hint text with recording time
-    if (window.nagElements.modeHint) {
-        window.nagElements.modeHint.textContent = `Recording: ${seconds}s (Click orb to stop)`;
-    }
-    
-    // Continue updating
-    if (seconds < 30) { // Only update until max recording time
-        requestAnimationFrame(updateRecordingTimeIndicator);
     }
 }
 
@@ -325,48 +374,160 @@ function stopRecording() {
             }
         }
         
-        // If we're recording, stop
-        if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state === "recording") {
-            // For Safari, first request data
-            if (window.nagState.isSafari) {
-                window.nagState.mediaRecorder.requestData();
-                
-                // Allow a bit more time for Safari to process the data
-                setTimeout(() => {
-                    window.nagState.mediaRecorder.stop();
-                }, 300); // Increased delay for Safari
-            } else {
-                // Ensure we get the final chunk of data
-                window.nagState.mediaRecorder.requestData();
-                
-                // Small delay to ensure all data is captured
-                setTimeout(() => {
-                    window.nagState.mediaRecorder.stop();
-                }, 100);
-            }
-            
-            window.logDebug("Recording stopped with final data request");
-            return true;
+        // Update UI first to show we're processing
+        if (window.nagElements && window.nagElements.orb) {
+            window.nagElements.orb.classList.remove("listening");
+            window.nagElements.orb.classList.add("thinking");
         }
         
-        return false;
+        // If we're recording, stop
+        if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state === "recording") {
+            // Different handling based on browser
+            if (window.nagState.isSafari || window.nagState.isiOS) {
+                // For Safari, we need to be extra careful with timing
+                try {
+                    // First request the current data
+                    window.nagState.mediaRecorder.requestData();
+                    
+                    // Log the current chunks count
+                    window.logDebug(`Stopping Safari recording with ${window.nagState.audioChunks.length} chunks so far`);
+                    
+                    // Allow a bit more time for Safari to process the data
+                    setTimeout(() => {
+                        try {
+                            window.nagState.mediaRecorder.stop();
+                            window.logDebug("Safari recording stopped after timeout");
+                        } catch (e) {
+                            window.logDebug("Error stopping Safari recording: " + e.message);
+                            // In case of error, try to reset the UI
+                            resetRecordingUI();
+                        }
+                    }, 300); // Increased delay for Safari
+                } catch (e) {
+                    window.logDebug("Error in Safari recording stop sequence: " + e.message);
+                    // Try direct stop as fallback
+                    try {
+                        window.nagState.mediaRecorder.stop();
+                    } catch (e2) {
+                        window.logDebug("Fallback stop also failed: " + e2.message);
+                        resetRecordingUI();
+                    }
+                }
+            } else {
+                // For other browsers, simpler approach
+                try {
+                    // Ensure we get the final chunk of data
+                    window.nagState.mediaRecorder.requestData();
+                    
+                    // Small delay to ensure all data is captured
+                    setTimeout(() => {
+                        try {
+                            window.nagState.mediaRecorder.stop();
+                            window.logDebug("Recording stopped successfully");
+                        } catch (e) {
+                            window.logDebug("Error stopping recording: " + e.message);
+                            resetRecordingUI();
+                        }
+                    }, 100);
+                } catch (e) {
+                    window.logDebug("Error in recording stop sequence: " + e.message);
+                    // Try direct stop as fallback
+                    try {
+                        window.nagState.mediaRecorder.stop();
+                    } catch (e2) {
+                        window.logDebug("Fallback stop also failed: " + e2.message);
+                        resetRecordingUI();
+                    }
+                }
+            }
+            
+            window.logDebug("Recording stop sequence initiated");
+            return true;
+        } else {
+            // We weren't recording, reset UI
+            resetRecordingUI();
+            return false;
+        }
     } catch (error) {
         console.error("Error stopping recording:", error);
         window.logDebug("Error stopping recording: " + error.message);
+        resetRecordingUI();
         return false;
+    }
+}
+
+// Helper function to reset UI if recording fails
+function resetRecordingUI() {
+    if (window.nagElements && window.nagElements.orb) {
+        window.nagElements.orb.classList.remove("thinking", "listening");
+        window.nagElements.orb.classList.add("idle");
+    }
+    
+    window.addStatusMessage("Recording failed or no audio captured. Please try again.", "error");
+}
+
+// Add recording time indicator
+function updateRecordingTimeIndicator() {
+    if (!window.nagState.recordingStartTime || 
+        !window.nagState.mediaRecorder || 
+        window.nagState.mediaRecorder.state !== "recording") {
+        return;
+    }
+    
+    const elapsedMs = Date.now() - window.nagState.recordingStartTime;
+    const seconds = Math.floor(elapsedMs / 1000);
+    
+    // Update hint text with recording time
+    if (window.nagElements.modeHint) {
+        window.nagElements.modeHint.textContent = `Recording: ${seconds}s (Click orb to stop)`;
+    }
+    
+    // Continue updating 
+    if (seconds < 30) { // Only update until max recording time
+        requestAnimationFrame(updateRecordingTimeIndicator);
+    } else {
+        // If we hit 30 seconds, update hint to show we're stopping
+        if (window.nagElements.modeHint) {
+            window.nagElements.modeHint.textContent = "Maximum recording time reached, processing...";
+        }
     }
 }
 
 // Clean up resources
 function cleanupRecording() {
+    // Clear any timeouts
+    if (window.nagState.recordingTimeout) {
+        clearTimeout(window.nagState.recordingTimeout);
+        window.nagState.recordingTimeout = null;
+    }
+    
+    if (window.nagState.instructionTimeout) {
+        clearTimeout(window.nagState.instructionTimeout);
+        window.nagState.instructionTimeout = null;
+    }
+    
     // Stop any active recordings
     if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state === "recording") {
-        window.nagState.mediaRecorder.stop();
+        try {
+            window.nagState.mediaRecorder.stop();
+        } catch (e) {
+            window.logDebug("Error stopping recorder during cleanup: " + e.message);
+        }
     }
     
     // Stop and release audio stream tracks
     if (window.nagState.audioStream) {
-        window.nagState.audioStream.getTracks().forEach(track => track.stop());
+        try {
+            window.nagState.audioStream.getTracks().forEach(track => {
+                try {
+                    track.stop();
+                } catch (e) {
+                    // Ignore errors stopping individual tracks
+                }
+            });
+        } catch (e) {
+            window.logDebug("Error stopping audio stream: " + e.message);
+        }
         window.nagState.audioStream = null;
     }
     
@@ -376,7 +537,104 @@ function cleanupRecording() {
     window.nagState.analyserNode = null;
     window.nagState.recordingStartTime = null;
     
+    // Reset UI
+    if (window.nagElements && window.nagElements.orb) {
+        window.nagElements.orb.classList.remove("listening", "thinking");
+        window.nagElements.orb.classList.add("idle");
+    }
+    
+    if (window.nagElements && window.nagElements.modeHint) {
+        window.nagElements.modeHint.textContent = window.nagState.isWalkieTalkieMode ? 
+            "Press and hold the orb to speak" : "Click the orb to start recording";
+    }
+    
     window.logDebug("Recording resources cleaned up");
+    return true;
+}
+
+// Handle silence detection
+function detectSilence(threshold = 15, duration = 1500) {
+    if (!window.nagState.audioContext || !window.nagState.analyserNode || !window.nagState.volumeDataArray) {
+        return false;
+    }
+    
+    try {
+        // Get current volume
+        window.nagState.analyserNode.getByteFrequencyData(window.nagState.volumeDataArray);
+        const sum = window.nagState.volumeDataArray.reduce((a, b) => a + b, 0);
+        const avg = sum / window.nagState.volumeDataArray.length;
+        
+        // If we don't have a silence start time and volume is below threshold
+        if (!window.nagState.silenceStartTime && avg < threshold) {
+            window.nagState.silenceStartTime = Date.now();
+            window.logDebug(`Silence detected, starting timer (avg: ${avg.toFixed(2)})`);
+        }
+        // If we have a silence start time but volume is above threshold, reset
+        else if (window.nagState.silenceStartTime && avg >= threshold) {
+            window.nagState.silenceStartTime = null;
+            window.logDebug(`Silence ended, resetting timer (avg: ${avg.toFixed(2)})`);
+        }
+        
+        // If silence has continued for the specified duration
+        if (window.nagState.silenceStartTime && (Date.now() - window.nagState.silenceStartTime > duration)) {
+            window.logDebug(`Silence threshold reached after ${duration}ms, stopping recording`);
+            window.nagState.silenceStartTime = null;
+            return true;
+        }
+        
+        return false;
+    } catch (error) {
+        window.logDebug("Error in silence detection: " + error.message);
+        return false;
+    }
+}
+
+// Function to periodically check for silence
+function monitorForSilence() {
+    if (!window.nagState.isMonitoringSilence) return;
+    
+    try {
+        // Only check if we're recording
+        if (window.nagState.mediaRecorder && 
+            window.nagState.mediaRecorder.state === "recording" &&
+            !window.nagState.isWalkieTalkieMode) {
+            
+            // Check if we've been silent for too long
+            if (detectSilence()) {
+                // Stop recording due to extended silence
+                window.logDebug("Extended silence detected, stopping recording");
+                
+                // Update UI to show we're stopping
+                if (window.nagElements.orb) {
+                    window.nagElements.orb.classList.remove("listening");
+                    window.nagElements.orb.classList.add("thinking");
+                }
+                
+                stopRecording();
+                return; // Stop monitoring
+            }
+        }
+        
+        // Continue monitoring
+        requestAnimationFrame(monitorForSilence);
+    } catch (error) {
+        window.logDebug("Error monitoring silence: " + error.message);
+    }
+}
+
+// Start silence monitoring
+function startSilenceMonitoring() {
+    window.nagState.isMonitoringSilence = true;
+    window.nagState.silenceStartTime = null;
+    monitorForSilence();
+    window.logDebug("Silence monitoring started");
+}
+
+// Stop silence monitoring
+function stopSilenceMonitoring() {
+    window.nagState.isMonitoringSilence = false;
+    window.nagState.silenceStartTime = null;
+    window.logDebug("Silence monitoring stopped");
 }
 
 // Make functions globally available
@@ -387,5 +645,10 @@ window.stopRecording = stopRecording;
 window.cleanupRecording = cleanupRecording;
 window.getBestAudioFormat = getBestAudioFormat;
 window.setupVolumeVisualization = setupVolumeVisualization;
+window.resetRecordingUI = resetRecordingUI;
+window.updateRecordingTimeIndicator = updateRecordingTimeIndicator;
+window.detectSilence = detectSilence;
+window.startSilenceMonitoring = startSilenceMonitoring;
+window.stopSilenceMonitoring = stopSilenceMonitoring;
 
 console.log("nag-recording.js loaded");

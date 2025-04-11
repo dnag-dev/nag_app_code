@@ -14,7 +14,7 @@ function initializeApp() {
     
     // Try to unlock audio context (especially important for Safari)
     unlockAudioContext().then(unlocked => {
-        console.log("Audio context unlock attempt:", unlocked ? "success" : "waiting for user interaction");
+        console.log("Audio context unlock attempt: " + (unlocked ? "success" : "waiting for user interaction"));
         window.logDebug("Audio context unlock: " + (unlocked ? "success" : "waiting for user interaction"));
     });
     
@@ -138,55 +138,80 @@ function setupEventListeners() {
     
     // Orb interactions
     if (orb) {
-        // For walkie-talkie mode: press and hold
+        // For manual recording mode
+        orb.addEventListener('click', function() {
+            window.logDebug("Orb clicked");
+            
+            // Always try to unlock audio on click
+            unlockAudioContext().then(() => {
+                if (window.nagState.isWalkieTalkieMode) return; // Don't handle click in walkie-talkie mode
+                
+                if (window.nagState.isPaused) {
+                    window.addStatusMessage("Conversation is paused. Press Resume to continue.", "info");
+                    return;
+                }
+                
+                // If we're in the middle of processing audio, ignore clicks
+                if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state === "recording") {
+                    // Stop the current recording
+                    stopRecording();
+                } else if (orb.classList.contains("thinking") || orb.classList.contains("speaking")) {
+                    // Already processing or speaking, do nothing
+                    window.logDebug("Ignoring orb click while processing/speaking");
+                } else if (orb.classList.contains("listening")) {
+                    // We're listening, stop
+                    stopListening();
+                } else {
+                    // We're idle, start recording
+                    startRecording();
+                }
+            });
+        });
+        
+        // For walkie-talkie mode: mousedown/mouseup
         orb.addEventListener('mousedown', function(e) {
-            if (window.nagState.isWalkieTalkieMode && !window.nagState.isPaused) {
+            if (!window.nagState.isWalkieTalkieMode || window.nagState.isPaused) return;
+            
+            // Try to unlock audio
+            unlockAudioContext().then(() => {
                 e.preventDefault();
                 window.nagState.walkieTalkieActive = true;
                 orb.classList.remove("idle");
                 orb.classList.add("listening");
                 startRecording();
-            }
+            });
         });
         
         orb.addEventListener('mouseup', function() {
-            if (window.nagState.isWalkieTalkieMode && window.nagState.walkieTalkieActive) {
-                window.nagState.walkieTalkieActive = false;
-                orb.classList.remove("listening");
-                orb.classList.add("idle");
-                stopRecording();
-            }
+            if (!window.nagState.isWalkieTalkieMode || !window.nagState.walkieTalkieActive) return;
+            
+            window.nagState.walkieTalkieActive = false;
+            orb.classList.remove("listening");
+            orb.classList.add("thinking");
+            stopRecording();
         });
         
         // Touch events for mobile
         orb.addEventListener('touchstart', function(e) {
-            if (window.nagState.isWalkieTalkieMode && !window.nagState.isPaused) {
+            if (!window.nagState.isWalkieTalkieMode || window.nagState.isPaused) return;
+            
+            // Try to unlock audio (crucial for iOS)
+            unlockAudioContext().then(() => {
                 e.preventDefault(); // Important for mobile
                 window.nagState.walkieTalkieActive = true;
                 orb.classList.remove("idle");
                 orb.classList.add("listening");
                 startRecording();
-            }
-        });
+            });
+        }, { passive: false }); // Non-passive to allow preventDefault
         
         orb.addEventListener('touchend', function() {
-            if (window.nagState.isWalkieTalkieMode && window.nagState.walkieTalkieActive) {
-                window.nagState.walkieTalkieActive = false;
-                orb.classList.remove("listening");
-                orb.classList.add("idle");
-                stopRecording();
-            }
-        });
-        
-        // For continuous mode: simple click
-        orb.addEventListener('click', function() {
-            if (!window.nagState.isWalkieTalkieMode && !window.nagState.isPaused) {
-                if (window.nagState.listening) {
-                    stopListening();
-                } else {
-                    startListening();
-                }
-            }
+            if (!window.nagState.isWalkieTalkieMode || !window.nagState.walkieTalkieActive) return;
+            
+            window.nagState.walkieTalkieActive = false;
+            orb.classList.remove("listening");
+            orb.classList.add("thinking");
+            stopRecording();
         });
     }
 }
@@ -262,21 +287,33 @@ async function unlockAudioContext() {
         // Also try to play the audio element (extra safety for Safari)
         if (window.nagElements.audio) {
             const audio = window.nagElements.audio;
+            audio.preload = "auto";
+            audio.controls = false;
+            audio.muted = true;
+            audio.volume = 0;
             audio.src = "data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAADQgD///////////////////////////////////////////8AAAA8TEFNRTMuMTAwAQAAAAAAAAAAABSAJAJAQgAAgAAAA0L2YLwAAAAAAAAAAAAAAAAAAAAA//sQZAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//sQZB4P8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAEVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU=";
+            audio.setAttribute('playsinline', '');
+            audio.setAttribute('webkit-playsinline', '');
             
             try {
                 await audio.play();
                 audio.pause();
                 audio.currentTime = 0;
+                audio.muted = false;
+                audio.volume = 1.0;
             } catch (e) {
                 console.log("Auto-play prevented: User interaction needed");
+                window.logDebug("Auto-play prevented: " + e.message);
+                return false;
             }
         }
         
         window.nagState.audioContextUnlocked = true;
+        window.logDebug("Audio context unlocked successfully");
         return true;
     } catch (error) {
         console.error("Error unlocking audio context:", error);
+        window.logDebug("Error unlocking audio context: " + error.message);
         return false;
     }
 }
@@ -284,11 +321,22 @@ async function unlockAudioContext() {
 // Start listening for audio
 async function startListening() {
     try {
+        // If we're already listening, don't do anything
+        if (window.nagState.listening) return true;
+        
         // Unlock audio context first
         await unlockAudioContext();
         
         // Request microphone access
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+            audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true,
+                channelCount: 1,
+                sampleRate: 44100
+            } 
+        });
         window.nagState.audioStream = stream;
         
         // Setup recording
@@ -314,6 +362,9 @@ async function startListening() {
 // Stop listening
 function stopListening() {
     try {
+        // If we're not listening, don't do anything
+        if (!window.nagState.listening) return true;
+        
         // Stop all active media
         if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state === "recording") {
             window.nagState.mediaRecorder.stop();
@@ -383,7 +434,7 @@ function setupRecording(stream) {
         };
         
         // Handle recording stop
-        window.nagState.mediaRecorder.onstop = async function() {
+        window.nagState.mediaRecorder.onstop = function() {
             window.logDebug("MediaRecorder stopped");
             
             // Process audio if we have enough data
@@ -396,7 +447,19 @@ function setupRecording(stream) {
                 } else {
                     window.logDebug("Audio too small to process");
                     window.addStatusMessage("Not enough audio captured. Please try again.", "info");
+                    
+                    // Reset UI
+                    window.nagElements.orb.classList.remove("thinking");
+                    window.nagElements.orb.classList.add("idle");
                 }
+            } else {
+                // No audio chunks received
+                window.logDebug("No audio chunks received");
+                window.addStatusMessage("No audio recorded. Please try again.", "info");
+                
+                // Reset UI
+                window.nagElements.orb.classList.remove("thinking");
+                window.nagElements.orb.classList.add("idle");
             }
         };
         
@@ -430,6 +493,10 @@ function startRecording() {
                     console.error("Error accessing microphone:", error);
                     window.logDebug("Microphone access error: " + error.message);
                     window.addStatusMessage("Error accessing microphone", "error");
+                    
+                    // Reset UI
+                    window.nagElements.orb.classList.remove("listening", "thinking");
+                    window.nagElements.orb.classList.add("idle");
                 });
         } else if (window.nagState.audioStream && !window.nagState.mediaRecorder) {
             // Stream exists but recorder doesn't
@@ -438,33 +505,72 @@ function startRecording() {
             // Recorder exists but not recording
             window.nagState.audioChunks = [];
             window.nagState.mediaRecorder.start();
-            window.logDebug("Started recording (walkie-talkie)");
+            window.logDebug("Started recording (manual mode)");
         }
+        
+        // Set a safety timeout to prevent infinite recording
+        if (window.nagState.recordingTimeout) {
+            clearTimeout(window.nagState.recordingTimeout);
+        }
+        
+        window.nagState.recordingTimeout = setTimeout(() => {
+            if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state === "recording") {
+                window.logDebug("Maximum recording time reached (30 seconds)");
+                
+                // Update UI to show we're stopping
+                window.nagElements.orb.classList.remove("listening");
+                window.nagElements.orb.classList.add("thinking");
+                
+                // Stop recording
+                stopRecording();
+            }
+        }, 30000); // 30 seconds max
     } catch (error) {
         console.error("Error starting recording:", error);
         window.logDebug("Error starting recording: " + error.message);
+        
+        // Reset UI
+        window.nagElements.orb.classList.remove("listening", "thinking");
+        window.nagElements.orb.classList.add("idle");
     }
 }
 
 // Stop recording in walkie-talkie mode
 function stopRecording() {
     try {
+        // Clear the safety timeout
+        if (window.nagState.recordingTimeout) {
+            clearTimeout(window.nagState.recordingTimeout);
+            window.nagState.recordingTimeout = null;
+        }
+        
         if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state === "recording") {
+            // Update UI to show we're processing
+            window.nagElements.orb.classList.remove("listening");
+            window.nagElements.orb.classList.add("thinking");
+            
             // For Safari, request final data chunk
             if (window.nagState.isSafari) {
                 window.nagState.mediaRecorder.requestData();
                 // Small delay to ensure data is processed
                 setTimeout(() => {
                     window.nagState.mediaRecorder.stop();
-                }, 200);
+                }, 300);
             } else {
-                window.nagState.mediaRecorder.stop();
+                window.nagState.mediaRecorder.requestData();
+                setTimeout(() => {
+                    window.nagState.mediaRecorder.stop();
+                }, 100);
             }
-            window.logDebug("Stopped recording (walkie-talkie)");
+            window.logDebug("Stopped recording");
         }
     } catch (error) {
         console.error("Error stopping recording:", error);
         window.logDebug("Error stopping recording: " + error.message);
+        
+        // Reset UI in case of error
+        window.nagElements.orb.classList.remove("thinking", "listening");
+        window.nagElements.orb.classList.add("idle");
     }
 }
 
@@ -497,12 +603,20 @@ async function processAudioAndTranscribe() {
             formData.append("mime_type", mimeType);
         }
         
+        // Set a timeout to prevent getting stuck in thinking state
+        const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error("Transcription request timed out")), 10000);
+        });
+        
         // Send to server
         window.logDebug("Sending audio for transcription...");
-        const response = await fetch("/transcribe", {
+        const fetchPromise = fetch("/transcribe", {
             method: "POST",
             body: formData
         });
+        
+        // Use Promise.race to implement timeout
+        const response = await Promise.race([fetchPromise, timeoutPromise]);
         
         if (!response.ok) {
             const errorData = await response.json();
@@ -527,7 +641,7 @@ async function processAudioAndTranscribe() {
             
             // Reset UI
             window.nagElements.orb.classList.remove("thinking");
-            window.nagElements.orb.classList.add(window.nagState.listening ? "listening" : "idle");
+            window.nagElements.orb.classList.add("idle");
         }
     } catch (error) {
         console.error("Error processing audio:", error);
@@ -536,7 +650,7 @@ async function processAudioAndTranscribe() {
         
         // Reset UI
         window.nagElements.orb.classList.remove("thinking");
-        window.nagElements.orb.classList.add(window.nagState.listening ? "listening" : "idle");
+        window.nagElements.orb.classList.add("idle");
     }
 }
 
@@ -548,9 +662,14 @@ async function sendToChat(message) {
         window.nagElements.orb.classList.add("thinking");
         window.addStatusMessage("Thinking...", "info");
         
+        // Set a timeout to prevent getting stuck
+        const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error("Chat request timed out")), 15000);
+        });
+        
         // Send request
         window.logDebug("Sending to chat endpoint...");
-        const response = await fetch("/chat", {
+        const fetchPromise = fetch("/chat", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json"
@@ -562,6 +681,9 @@ async function sendToChat(message) {
             })
         });
         
+        // Use Promise.race to implement timeout
+        const response = await Promise.race([fetchPromise, timeoutPromise]);
+        
         if (!response.ok) {
             const errorData = await response.json();
             throw new Error(errorData.detail || "Chat response failed");
@@ -571,8 +693,8 @@ async function sendToChat(message) {
         window.logDebug("Chat response received");
         
         // Display response message
-        if (data.message) {
-            window.addStatusMessage(data.message, "assistant");
+        if (data.response) {
+            window.addStatusMessage(data.response, "assistant");
         }
         
         // Play audio if available
@@ -588,11 +710,16 @@ async function sendToChat(message) {
             const audio = window.nagElements.audio;
             audio.src = audioUrl;
             
+            // Set up event handlers
             audio.onloadeddata = () => {
                 window.logDebug("Audio loaded, playing...");
                 audio.play().catch(error => {
                     console.error("Error playing audio:", error);
                     window.logDebug("Error playing audio: " + error.message);
+                    
+                    // Reset UI in case of error
+                    window.nagElements.orb.classList.remove("speaking");
+                    window.nagElements.orb.classList.add("idle");
                 });
             };
             
@@ -600,13 +727,13 @@ async function sendToChat(message) {
                 window.logDebug("Audio playback ended");
                 // Reset UI
                 window.nagElements.orb.classList.remove("speaking");
-                window.nagElements.orb.classList.add(window.nagState.listening ? "listening" : "idle");
+                window.nagElements.orb.classList.add("idle");
                 
                 // In continuous mode, start listening again if not paused
                 if (!window.nagState.isWalkieTalkieMode && 
                     window.nagState.listening && 
                     !window.nagState.isPaused) {
-                    startListening();
+                    startRecording();
                 }
             };
             
@@ -614,13 +741,30 @@ async function sendToChat(message) {
                 window.logDebug("Audio playback error");
                 // Reset UI
                 window.nagElements.orb.classList.remove("speaking");
-                window.nagElements.orb.classList.add(window.nagState.listening ? "listening" : "idle");
+                window.nagElements.orb.classList.add("idle");
             };
+            
+            // Set a maximum playback timeout
+            const maxPlaytime = setTimeout(() => {
+                if (audio.currentTime > 0 && !audio.paused) {
+                    window.logDebug("Maximum playback time reached");
+                    audio.pause();
+                    
+                    // Reset UI
+                    window.nagElements.orb.classList.remove("speaking");
+                    window.nagElements.orb.classList.add("idle");
+                }
+            }, 120000); // 2 minutes max
+            
+            // Clear timeout when audio ends
+            audio.addEventListener('ended', () => {
+                clearTimeout(maxPlaytime);
+            }, { once: true });
         } else {
             window.logDebug("No audio URL in response");
             // Reset UI
             window.nagElements.orb.classList.remove("thinking");
-            window.nagElements.orb.classList.add(window.nagState.listening ? "listening" : "idle");
+            window.nagElements.orb.classList.add("idle");
         }
     } catch (error) {
         console.error("Error sending to chat:", error);
@@ -629,7 +773,7 @@ async function sendToChat(message) {
         
         // Reset UI
         window.nagElements.orb.classList.remove("thinking");
-        window.nagElements.orb.classList.add(window.nagState.listening ? "listening" : "idle");
+        window.nagElements.orb.classList.add("idle");
     }
 }
 
