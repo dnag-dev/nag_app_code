@@ -1,20 +1,22 @@
 import os
 import sys
-import subprocess
 import logging
-import time
 import platform
 import uvicorn
-from datetime import datetime
 import json
+import pip
+from datetime import datetime
+from dotenv import load_dotenv
 
-# Azure logging path
+# Load environment variables from .env file if present
+load_dotenv()
+
+# Azure logging paths
 azure_log_path = '/home/LogFiles/application/app.log'
-
-# Ensure log directory exists in the directory
+startup_log_path = '/home/LogFiles/startup.log'
 os.makedirs(os.path.dirname(azure_log_path), exist_ok=True)
 
-# Configure logging
+# JSON logger setup
 class JSONFormatter(logging.Formatter):
     def format(self, record):
         log_data = {
@@ -23,102 +25,106 @@ class JSONFormatter(logging.Formatter):
             'logger': record.name,
             'message': record.getMessage(),
         }
-        
         if record.exc_info:
             log_data['exc_info'] = self.formatException(record.exc_info)
-            
         if hasattr(record, 'extra'):
             log_data.update(record.extra)
-            
         return json.dumps(log_data)
 
-# Set up logging
+# Configure logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-# Add JSON handler
+# JSON file logger
 json_handler = logging.FileHandler(azure_log_path, mode='a')
 json_handler.setFormatter(JSONFormatter())
 logger.addHandler(json_handler)
 
-# Add regular handler for non-JSON logs
+# Console logger
 console_handler = logging.StreamHandler(sys.stdout)
-console_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+console_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 logger.addHandler(console_handler)
 
-logger.info("Starting application with debug logging enabled")
+# Startup log file
+startup_handler = logging.FileHandler(startup_log_path, mode='a')
+startup_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+logger.addHandler(startup_handler)
+
+logger.info("🚀 Startup script initiated...")
 
 def create_directories():
-    """Create necessary directories if they don't exist."""
     try:
-        os.makedirs('static', exist_ok=True)
-        os.makedirs(os.path.join('static', 'audio'), exist_ok=True)
-        logger.info("Created static directories")
+        base_path = "/home/site/wwwroot"
+        required_dirs = ['data', 'static', 'cache', 'memory', 'audio', 'models']
+        
+        for dir_name in required_dirs:
+            dir_path = os.path.join(base_path, dir_name)
+            os.makedirs(dir_path, exist_ok=True)
+            logger.info(f"Ensured directory exists: {dir_path}")
+            
+        # Create static/audio directory
+        os.makedirs('static/audio', exist_ok=True)
+        logger.info("Static directories created or already exist.")
     except Exception as e:
-        logger.error(f"Failed to create directories: {e}")
+        logger.error("Directory creation failed", exc_info=True)
+        raise
 
-def check_and_install_dependencies():
-    """Check if required packages are installed and install them if needed."""
+def install_dependencies():
     try:
-        import fastapi
-        import openai
-        import elevenlabs
-        import ffmpeg
-        import dotenv
-        import uvicorn
-        import aiofiles
-        logger.info("All required packages are installed")
-    except ImportError as e:
-        logger.error(f"Missing dependency: {e}")
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"])
+        logger.info("Installing Python dependencies...")
+        pip.main(['install', '--upgrade', 'pip'])
+        pip.main(['install', '--no-cache-dir', '-r', '/home/site/wwwroot/requirements.txt'])
+        logger.info("Dependencies installed successfully")
+    except Exception as e:
+        logger.error("Dependency installation failed", exc_info=True)
+        raise
 
 def start_application():
     try:
-        logger.info("Starting application...")
-        logger.info(f"Python version: {sys.version}")
-        logger.info(f"Current working directory: {os.getcwd()}")
-        logger.info(f"Environment variables: {os.environ}")
-
+        port = int(os.getenv("PORT", "8000"))
+        logger.info(f"Environment: {os.getenv('ENV', 'production')}")
+        logger.info(f"Python version: {platform.python_version()}")
+        logger.info(f"Working directory: {os.getcwd()}")
+        logger.info(f"PYTHONPATH: {os.environ.get('PYTHONPATH', 'Not set')}")
+        
         # Log installed packages
         try:
-            import pkg_resources
-            installed_packages = [f"{pkg.key}=={pkg.version}" for pkg in pkg_resources.working_set]
-            logger.debug(f"Installed packages: {installed_packages}")
-        except Exception as pkg_err:
-            logger.warning(f"Could not log installed packages: {pkg_err}")
-
-        # Get port from environment variable
-        port = int(os.getenv("PORT", "8000"))
-        logger.info(f"Starting server on port {port}")
-
-        # Start the application with uvicorn
-        try:
-            uvicorn.run(
-                "main:app",
-                host="0.0.0.0",
-                port=8000,
-                reload=False,
-                workers=1,
-                timeout_keep_alive=120,  # Keep connections alive for 120 seconds
-                log_level="debug",
-                access_log=True,
-                proxy_headers=True,
-                forwarded_allow_ips="*"
-            )
+            installed_packages = [f"{pkg.key}=={pkg.version}" for pkg in pip.get_installed_distributions()]
+            logger.info(f"Installed packages: {installed_packages}")
         except Exception as e:
-            logger.error(f"Failed to start application: {str(e)}")
-            raise
+            logger.warning(f"Could not log installed packages: {str(e)}")
+
+        logger.info(f"Starting server on port {port}")
+        
+        # Configure uvicorn
+        config = uvicorn.Config(
+            "main:app",
+            host="0.0.0.0",
+            port=port,
+            log_level="debug",
+            timeout_keep_alive=120,
+            timeout_graceful_shutdown=30,
+            proxy_headers=True,
+            forwarded_allow_ips="*",
+            reload=False,
+            workers=1,
+            access_log=True,
+            server_header=False,
+            date_header=False
+        )
+        
+        server = uvicorn.Server(config)
+        server.run()
+        
     except Exception as e:
-        logger.error(f"Failed to start application: {e}")
+        logger.error("Failed to start application", exc_info=True)
         raise
 
 if __name__ == "__main__":
-    logger.info("Starting deployment process...")
-    logger.info("Running startup script...")
-    logger.info(f"Python version: {platform.python_version()}")
-    logger.info(f"Current directory: {os.getcwd()}")
-    logger.info(f"PYTHONPATH: {os.environ.get('PYTHONPATH', 'Not set')}")
-
-    create_directories()
-    check_and_install_dependencies()
-    start_application()
+    try:
+        create_directories()
+        install_dependencies()
+        start_application()
+    except Exception as e:
+        logger.error("Startup failed", exc_info=True)
+        sys.exit(1)
