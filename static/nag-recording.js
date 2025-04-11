@@ -166,19 +166,19 @@ function initializeMediaRecorder(stream) {
         window.nagState.mediaRecorder = mediaRecorder;
         window.nagState.audioChunks = [];
         
-        // Setup event handlers
+        // Setup event handlers with improved chunk collection
         mediaRecorder.ondataavailable = (event) => {
             if (event.data && event.data.size > 0) {
                 window.nagState.audioChunks.push(event.data);
-                window.logDebug(`Audio chunk received: ${event.data.size} bytes`);
+                window.logDebug(`Audio chunk #${window.nagState.audioChunks.length} received: ${event.data.size} bytes`);
             } else {
                 window.logDebug("Received empty audio chunk");
             }
         };
         
-        // Improved onstop handler that ensures we get complete audio
+        // Improved onstop handler to ensure complete audio processing
         mediaRecorder.onstop = () => {
-            window.logDebug("Media recorder stopped");
+            window.logDebug(`MediaRecorder stopped. Processing ${window.nagState.audioChunks.length} chunks...`);
             
             // Process audio if we have any chunks
             if (window.nagState.audioChunks && window.nagState.audioChunks.length > 0) {
@@ -493,6 +493,220 @@ function updateRecordingTimeIndicator() {
     }
 }
 
+// Process audio and send for transcription
+// This is the key function for handling the audio chunks properly
+async function processAudioAndTranscribe() {
+    try {
+        // Update UI to show processing
+        window.nagElements.orb.classList.remove("listening");
+        window.nagElements.orb.classList.add("thinking");
+        window.addStatusMessage("Processing audio...", "info");
+        
+        // Determine correct mime type
+        let mimeType = window.nagState.isSafari ? "audio/mp4" : "audio/webm";
+        if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.mimeType) {
+            mimeType = window.nagState.mediaRecorder.mimeType;
+        }
+        
+        // Log detailed information about the chunks before creating blob
+        window.logDebug(`Preparing to process ${window.nagState.audioChunks.length} audio chunks:`);
+        window.nagState.audioChunks.forEach((chunk, index) => {
+            window.logDebug(`  Chunk ${index+1}: ${chunk.size} bytes, type: ${chunk.type || 'unknown'}`);
+        });
+        
+        // Create blob from chunks - this combines all audio chunks into a single file
+        const audioBlob = new Blob(window.nagState.audioChunks, { type: mimeType });
+        window.logDebug(`Audio blob created: ${audioBlob.size} bytes, type: ${mimeType}`);
+        
+        // Create form data
+        const formData = new FormData();
+        const fileExt = mimeType.includes("webm") ? "webm" : "mp4";
+        formData.append("file", audioBlob, `recording.${fileExt}`);
+        
+        // Add additional info to help server process the audio
+        formData.append("chunk_count", window.nagState.audioChunks.length.toString());
+        formData.append("total_size", audioBlob.size.toString());
+        formData.append("mime_type", mimeType);
+        
+        // Add Safari-specific info if needed
+        if (window.nagState.isSafari || window.nagState.isiOS) {
+            formData.append("browser", "safari");
+        }
+        
+        // Set a timeout to prevent getting stuck
+        const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error("Transcription request timed out")), 15000);
+        });
+        
+        // Send to server
+        window.logDebug("Sending complete audio for transcription...");
+        const fetchPromise = fetch("/transcribe", {
+            method: "POST",
+            body: formData
+        });
+        
+        // Use Promise.race to implement timeout
+        const response = await Promise.race([fetchPromise, timeoutPromise]);
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.detail || "Transcription failed");
+        }
+        
+        const data = await response.json();
+        window.logDebug("Transcription response received");
+        
+        // Process transcription
+        const transcription = data.transcription || data.transcript || "";
+        if (transcription.trim()) {
+            window.logDebug(`Transcription received: "${transcription}"`);
+            // Add user message to UI
+            window.addStatusMessage(transcription, "user");
+            
+            // Send to chat endpoint
+            await sendToChat(transcription);
+        } else {
+            window.logDebug("Empty transcription received");
+            window.addStatusMessage("No speech detected. Please try again.", "info");
+            
+            // Reset UI
+            window.nagElements.orb.classList.remove("thinking");
+            window.nagElements.orb.classList.add("idle");
+        }
+    } catch (error) {
+        console.error("Error processing audio:", error);
+        window.logDebug("Error processing audio: " + error.message);
+        window.addStatusMessage("Error processing audio: " + error.message, "error");
+        
+        // Reset UI
+        window.nagElements.orb.classList.remove("thinking");
+        window.nagElements.orb.classList.add("idle");
+    }
+}
+
+// Send transcription to chat endpoint
+async function sendToChat(message) {
+    try {
+        // Update UI
+        window.nagElements.orb.classList.remove("listening");
+        window.nagElements.orb.classList.add("thinking");
+        window.addStatusMessage("Thinking...", "info");
+        
+        // Set a timeout to prevent getting stuck
+        const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error("Chat request timed out")), 15000);
+        });
+        
+        // Send request
+        window.logDebug("Sending transcribed text to chat endpoint...");
+        const fetchPromise = fetch("/chat", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                message: message,
+                mode: "voice",
+                request_id: Date.now().toString()
+            })
+        });
+        
+        // Use Promise.race to implement timeout
+        const response = await Promise.race([fetchPromise, timeoutPromise]);
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.detail || "Chat response failed");
+        }
+        
+        const data = await response.json();
+        window.logDebug("Chat response received");
+        
+        // Display response message
+        if (data.response) {
+            window.addStatusMessage(data.response, "assistant");
+        }
+        
+        // Play audio if available
+        if (data.audio_url || data.tts_url) {
+            const audioUrl = data.audio_url || data.tts_url;
+            window.logDebug(`Audio URL: ${audioUrl}`);
+            
+            // Update UI
+            window.nagElements.orb.classList.remove("thinking");
+            window.nagElements.orb.classList.add("speaking");
+            
+            // Play audio
+            const audio = window.nagElements.audio;
+            audio.src = audioUrl;
+            
+            // Set up event handlers
+            audio.onloadeddata = () => {
+                window.logDebug("Audio loaded, playing...");
+                audio.play().catch(error => {
+                    console.error("Error playing audio:", error);
+                    window.logDebug("Error playing audio: " + error.message);
+                    
+                    // Reset UI in case of error
+                    window.nagElements.orb.classList.remove("speaking");
+                    window.nagElements.orb.classList.add("idle");
+                });
+            };
+            
+            audio.onended = () => {
+                window.logDebug("Audio playback ended");
+                // Reset UI
+                window.nagElements.orb.classList.remove("speaking");
+                window.nagElements.orb.classList.add("idle");
+                
+                // In continuous mode, start listening again if not paused
+                if (!window.nagState.isWalkieTalkieMode && 
+                    window.nagState.listening && 
+                    !window.nagState.isPaused) {
+                    startRecording();
+                }
+            };
+            
+            audio.onerror = () => {
+                window.logDebug("Audio playback error");
+                // Reset UI
+                window.nagElements.orb.classList.remove("speaking");
+                window.nagElements.orb.classList.add("idle");
+            };
+            
+            // Set a maximum playback timeout
+            const maxPlaytime = setTimeout(() => {
+                if (audio.currentTime > 0 && !audio.paused) {
+                    window.logDebug("Maximum playback time reached");
+                    audio.pause();
+                    
+                    // Reset UI
+                    window.nagElements.orb.classList.remove("speaking");
+                    window.nagElements.orb.classList.add("idle");
+                }
+            }, 120000); // 2 minutes max
+            
+            // Clear timeout when audio ends
+            audio.addEventListener('ended', () => {
+                clearTimeout(maxPlaytime);
+            }, { once: true });
+        } else {
+            window.logDebug("No audio URL in response");
+            // Reset UI
+            window.nagElements.orb.classList.remove("thinking");
+            window.nagElements.orb.classList.add("idle");
+        }
+    } catch (error) {
+        console.error("Error sending to chat:", error);
+        window.logDebug("Error sending to chat: " + error.message);
+        window.addStatusMessage("Error getting response: " + error.message, "error");
+        
+        // Reset UI
+        window.nagElements.orb.classList.remove("thinking");
+        window.nagElements.orb.classList.add("idle");
+    }
+}
+
 // Clean up resources
 function cleanupRecording() {
     // Clear any timeouts
@@ -552,91 +766,6 @@ function cleanupRecording() {
     return true;
 }
 
-// Handle silence detection
-function detectSilence(threshold = 15, duration = 1500) {
-    if (!window.nagState.audioContext || !window.nagState.analyserNode || !window.nagState.volumeDataArray) {
-        return false;
-    }
-    
-    try {
-        // Get current volume
-        window.nagState.analyserNode.getByteFrequencyData(window.nagState.volumeDataArray);
-        const sum = window.nagState.volumeDataArray.reduce((a, b) => a + b, 0);
-        const avg = sum / window.nagState.volumeDataArray.length;
-        
-        // If we don't have a silence start time and volume is below threshold
-        if (!window.nagState.silenceStartTime && avg < threshold) {
-            window.nagState.silenceStartTime = Date.now();
-            window.logDebug(`Silence detected, starting timer (avg: ${avg.toFixed(2)})`);
-        }
-        // If we have a silence start time but volume is above threshold, reset
-        else if (window.nagState.silenceStartTime && avg >= threshold) {
-            window.nagState.silenceStartTime = null;
-            window.logDebug(`Silence ended, resetting timer (avg: ${avg.toFixed(2)})`);
-        }
-        
-        // If silence has continued for the specified duration
-        if (window.nagState.silenceStartTime && (Date.now() - window.nagState.silenceStartTime > duration)) {
-            window.logDebug(`Silence threshold reached after ${duration}ms, stopping recording`);
-            window.nagState.silenceStartTime = null;
-            return true;
-        }
-        
-        return false;
-    } catch (error) {
-        window.logDebug("Error in silence detection: " + error.message);
-        return false;
-    }
-}
-
-// Function to periodically check for silence
-function monitorForSilence() {
-    if (!window.nagState.isMonitoringSilence) return;
-    
-    try {
-        // Only check if we're recording
-        if (window.nagState.mediaRecorder && 
-            window.nagState.mediaRecorder.state === "recording" &&
-            !window.nagState.isWalkieTalkieMode) {
-            
-            // Check if we've been silent for too long
-            if (detectSilence()) {
-                // Stop recording due to extended silence
-                window.logDebug("Extended silence detected, stopping recording");
-                
-                // Update UI to show we're stopping
-                if (window.nagElements.orb) {
-                    window.nagElements.orb.classList.remove("listening");
-                    window.nagElements.orb.classList.add("thinking");
-                }
-                
-                stopRecording();
-                return; // Stop monitoring
-            }
-        }
-        
-        // Continue monitoring
-        requestAnimationFrame(monitorForSilence);
-    } catch (error) {
-        window.logDebug("Error monitoring silence: " + error.message);
-    }
-}
-
-// Start silence monitoring
-function startSilenceMonitoring() {
-    window.nagState.isMonitoringSilence = true;
-    window.nagState.silenceStartTime = null;
-    monitorForSilence();
-    window.logDebug("Silence monitoring started");
-}
-
-// Stop silence monitoring
-function stopSilenceMonitoring() {
-    window.nagState.isMonitoringSilence = false;
-    window.nagState.silenceStartTime = null;
-    window.logDebug("Silence monitoring stopped");
-}
-
 // Make functions globally available
 window.requestMicrophoneAccess = requestMicrophoneAccess;
 window.initializeMediaRecorder = initializeMediaRecorder;
@@ -647,8 +776,7 @@ window.getBestAudioFormat = getBestAudioFormat;
 window.setupVolumeVisualization = setupVolumeVisualization;
 window.resetRecordingUI = resetRecordingUI;
 window.updateRecordingTimeIndicator = updateRecordingTimeIndicator;
-window.detectSilence = detectSilence;
-window.startSilenceMonitoring = startSilenceMonitoring;
-window.stopSilenceMonitoring = stopSilenceMonitoring;
+window.processAudioAndTranscribe = processAudioAndTranscribe;
+window.sendToChat = sendToChat;
 
 console.log("nag-recording.js loaded");
