@@ -1,620 +1,298 @@
-// Nag Digital Twin v2.0.0 - Recording Functions
+// Nag Digital Twin v3.5.0 - Recording Module
+console.log("Loading nag-recording.js");
 
-// Add this at the top of the file
-window.audioContext = null;
-window.audioContextUnlocked = false;
+// Get the best audio format for the browser
+function getBestAudioFormat() {
+    // Safari needs different format prioritization
+    if (window.nagState.isSafari || window.nagState.isiOS) {
+        if (MediaRecorder.isTypeSupported('audio/mp4')) {
+            return 'audio/mp4';
+        }
+    }
+    
+    // Try webm first for other browsers
+    if (MediaRecorder.isTypeSupported('audio/webm')) {
+        return 'audio/webm';
+    }
+    
+    // Fall back to other formats
+    const formats = ['audio/mp4', 'audio/ogg', 'audio/wav'];
+    for (const format of formats) {
+        if (MediaRecorder.isTypeSupported(format)) {
+            return format;
+        }
+    }
+    
+    // Return empty if none supported (MediaRecorder will use default)
+    return '';
+}
 
-// Setup volume visualization for the orb
+// Setup volume visualization
 function setupVolumeVisualization(stream) {
-  try {
-    const volumeBar = window.nagElements.volumeBar;
-    
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    window.nagState.analyserNode = audioContext.createAnalyser();
-    const microphone = audioContext.createMediaStreamSource(stream);
-    
-    window.nagState.analyserNode.fftSize = 256;
-    window.nagState.analyserNode.smoothingTimeConstant = 0.8;
-    microphone.connect(window.nagState.analyserNode);
-    
-    const bufferLength = window.nagState.analyserNode.frequencyBinCount;
-    const dataArray = new Uint8Array(bufferLength);
-    
-    function updateVolume() {
-      if (!window.nagState.analyserNode || !window.nagState.listening) return;
-      
-      window.nagState.analyserNode.getByteFrequencyData(dataArray);
-      
-      let sum = 0;
-      for (let i = 0; i < bufferLength; i++) {
-        sum += dataArray[i];
-      }
-      
-      const average = sum / bufferLength;
-      // Amplify the volume display for better visual feedback
-      const volume = Math.min(100, Math.max(0, average * 2.5));
-      
-      // Safely update volume bar if it exists
-      const volumeBar = document.querySelector('.volume-bar');
-      if (volumeBar) {
-        volumeBar.style.height = `${volume}%`;
-        volumeBar.style.backgroundColor = `hsl(${120 + (volume * 1.2)}, 70%, 50%)`;
-      }
-      
-      // Skip voice activity detection in walkie-talkie mode when not active
-      if (window.nagState.isWalkieTalkieMode && !window.nagState.walkieTalkieActive) {
-        requestAnimationFrame(updateVolume);
-        return;
-      }
-      
-      // Voice activity detection for continuous mode
-      if (!window.nagState.isWalkieTalkieMode) {
-        // Speech threshold - use higher threshold for Safari to avoid false activations
-        const SPEECH_THRESHOLD = window.nagState.isSafari ? 8 : 10; // Lowered threshold for Safari
-        // Silence duration before stopping - longer for Safari
-        const SILENCE_DELAY = window.nagState.isSafari ? 3000 : 1500; // Increased silence delay for Safari
-        
-        if (volume < SPEECH_THRESHOLD) {
-          if (!window.nagState.silenceTimer) {
-            window.nagState.silenceTimer = setTimeout(() => {
-              // Only stop if we detected actual speech before
-              if (window.nagState.mediaRecorder && 
-                  window.nagState.mediaRecorder.state === "recording" && 
-                  window.nagState.speechDetected) {
-                logDebug("🔇 Silence detected, stopping recording");
-                stopRecording();
-              } else if (window.nagState.mediaRecorder && 
-                         window.nagState.mediaRecorder.state === "recording") {
-                // If no speech was detected at all, restart recording
-                logDebug("🔇 No speech detected, restarting recording");
-                stopRecording();
-                // Give a short break before restarting
-                setTimeout(() => {
-                  if (!window.nagState.interrupted && !window.nagState.isPaused) {
-                    startListening();
-                  }
-                }, 500);
-              }
-              window.nagState.silenceTimer = null;
-            }, SILENCE_DELAY);
-          }
-        } else {
-          // Reset the silence timer if we hear something
-          if (volume > SPEECH_THRESHOLD) {
-            window.nagState.speechDetected = true;
-          }
-          if (window.nagState.silenceTimer) {
-            clearTimeout(window.nagState.silenceTimer);
-            window.nagState.silenceTimer = null;
-          }
-        }
-      }
-      
-      requestAnimationFrame(updateVolume);
-    }
-    
-    requestAnimationFrame(updateVolume);
-  } catch (e) {
-    logDebug("⚠️ Volume visualization not available: " + e.message);
-  }
-}
-
-// Improved walkie-talkie setup 
-function setupWalkieTalkieMode() {
-    const orb = window.nagElements.orb;
-    if (!orb) {
-        console.error("Orb element not found for walkie-talkie setup");
-        return;
-    }
-    
-    console.log("Setting up walkie-talkie mode");
-    
-    // Clear any existing handlers to prevent duplicates
-    const oldMouseDown = orb.onmousedown;
-    const oldMouseUp = orb.onmouseup;
-    const oldTouchStart = orb.ontouchstart;
-    const oldTouchEnd = orb.ontouchend;
-    
-    // Mouse events for desktop
-    orb.addEventListener("mousedown", function walkieTalkieDown(e) {
-        if (!window.nagState.isWalkieTalkieMode || 
-            window.nagState.isUploading || 
-            window.nagState.isPaused) return;
-        
-        console.log("Walkie-talkie activated (mouse)");
-        window.nagState.walkieTalkieActive = true;
-        logDebug("🔊 Walkie-talkie active - speak now");
-        orb.classList.add("listening");
-        
-        // Unlock audio context (important for Safari)
-        unlockAudio().then(() => {
-            if (window.nagState.stream) {
-                if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state !== "recording") {
-                    startRecording();
-                }
-            } else {
-                // If no stream exists yet, create one
-                startListening();
-            }
-        });
-    });
-    
-    // Touch events for mobile (crucial for Safari)
-    orb.addEventListener("touchstart", function walkieTalkieTouch(e) {
-        // Must prevent default on Safari to avoid triggering click
-        e.preventDefault();
-        
-        if (!window.nagState.isWalkieTalkieMode || 
-            window.nagState.isUploading || 
-            window.nagState.isPaused) return;
-        
-        console.log("Walkie-talkie activated (touch)");
-        window.nagState.walkieTalkieActive = true;
-        logDebug("🔊 Walkie-talkie active (touch) - speak now");
-        orb.classList.add("listening");
-        
-        // Unlock audio context (important for Safari)
-        unlockAudio().then(() => {
-            if (window.nagState.stream) {
-                if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state !== "recording") {
-                    startRecording();
-                }
-            } else {
-                // If no stream exists yet, create one
-                startListening();
-            }
-        });
-    }, { passive: false }); // passive: false essential for Safari
-    
-    // Handler for ending walkie-talkie mode
-    const endWalkieTalkie = function() {
-        if (!window.nagState.walkieTalkieActive) return;
-        
-        console.log("Walkie-talkie released");
-        window.nagState.walkieTalkieActive = false;
-        logDebug("🔊 Walkie-talkie released");
-        
-        if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state === "recording") {
-            stopRecording();
-        }
-    };
-    
-    // Add all mouse/touch end events
-    orb.addEventListener("mouseup", endWalkieTalkie);
-    orb.addEventListener("mouseleave", endWalkieTalkie);
-    orb.addEventListener("touchend", function(e) {
-        e.preventDefault(); // Essential for Safari
-        endWalkieTalkie();
-    }, { passive: false });
-    orb.addEventListener("touchcancel", function(e) {
-        e.preventDefault(); // Essential for Safari
-        endWalkieTalkie();
-    }, { passive: false });
-    
-    console.log("Walkie-talkie mode setup complete");
-}
-
-// Start recording audio
-async function startRecording() {
     try {
-        if (!window.nagState.mediaRecorder) {
-            throw new Error("MediaRecorder not initialized");
+        if (!window.nagState.audioContext) {
+            window.nagState.audioContext = new (window.AudioContext || window.webkitAudioContext)();
         }
         
-        if (window.nagState.mediaRecorder.state === 'recording') {
-            logDebug("🎤 Already recording");
-            return;
-        }
+        // Create analyzer node
+        const analyser = window.nagState.audioContext.createAnalyser();
+        analyser.fftSize = 256;
         
-        window.nagState.mediaRecorder.start();
-        window.nagState.recording = true;
-        logDebug("🎤 Recording started");
+        // Connect microphone to analyzer
+        const source = window.nagState.audioContext.createMediaStreamSource(stream);
+        source.connect(analyser);
         
-        if (window.updateButtonStates) {
-            window.updateButtonStates();
-        }
-    } catch (e) {
-        logDebug("❌ Error starting recording: " + e.message);
-        if (window.addMessage) {
-            window.addMessage("Error starting recording. Please try again.", true);
-        }
-        window.nagState.recording = false;
-        if (window.updateButtonStates) {
-            window.updateButtonStates();
-        }
-    }
-}
-
-// Stop recording audio
-async function stopRecording() {
-  try {
-    if (!window.nagState.mediaRecorder) {
-      logDebug("⚠️ Cannot stop recording - MediaRecorder not initialized");
-      return;
-    }
-
-    if (window.nagState.mediaRecorder.state !== "recording") {
-      logDebug("⚠️ Cannot stop recording - MediaRecorder not in recording state");
-      return;
-    }
-
-    logDebug("🛑 Attempting to stop MediaRecorder...");
-    
-    // For Safari, request final data before stopping
-    if (window.nagState.isSafari) {
-      // Request data multiple times to ensure we get all chunks
-      for (let i = 0; i < 5; i++) {
-        window.nagState.mediaRecorder.requestData();
-        await new Promise(resolve => setTimeout(resolve, 50));
-      }
-      
-      // Wait a short time to ensure the data is processed
-      await new Promise(resolve => setTimeout(resolve, 300));
-    }
-    
-    // Stop the recorder
-    window.nagState.mediaRecorder.stop();
-    logDebug("✅ MediaRecorder stopped successfully");
-    
-    // Clean up stream if it exists
-    if (window.nagState.stream) {
-      window.nagState.stream.getTracks().forEach(track => track.stop());
-      window.nagState.stream = null;
-    }
-    
-    // Reset state
-    window.nagState.mediaRecorder = null;
-    window.nagState.audioChunks = [];
-    
-  } catch (e) {
-    logDebug("❌ Error stopping recording: " + e.message);
-    logDebug("❌ Error stack: " + e.stack);
-    
-    // Force cleanup in case of error
-    if (window.nagState.stream) {
-      logDebug("🔄 Forcing stream cleanup...");
-      window.nagState.stream.getTracks().forEach(track => {
-        logDebug(`🔄 Stopping ${track.kind} track`);
-        track.stop();
-      });
-      window.nagState.stream = null;
-    }
-    
-    // Reset state
-    window.nagState.mediaRecorder = null;
-    window.nagState.audioChunks = [];
-    
-    // Restart process after error
-    if (!window.nagState.isWalkieTalkieMode && !window.nagState.isPaused && !window.nagState.interrupted) {
-      logDebug("🔄 Scheduling restart after error...");
-      setTimeout(() => startListening(), 1000);
-    }
-  }
-}
-
-// Add this function
-async function initializeAudioContext() {
-    try {
-        if (!window.audioContext) {
-            window.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            logDebug("🎵 AudioContext created");
-        }
+        // Create data array for volume levels
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        window.nagState.volumeDataArray = dataArray;
+        window.nagState.analyserNode = analyser;
         
-        if (window.audioContext.state === 'suspended') {
-            await window.audioContext.resume();
-            logDebug("🎵 AudioContext resumed");
-        }
+        // Start visualization loop
+        updateVolumeVisualization();
         
-        window.audioContextUnlocked = true;
         return true;
-    } catch (e) {
-        logDebug("❌ Error initializing AudioContext: " + e.message);
-        if (window.addMessage) {
-            window.addMessage("Error initializing audio. Please refresh the page and try again.", true);
-        }
+    } catch (error) {
+        console.error("Error setting up volume visualization:", error);
         return false;
     }
 }
 
-// Start listening for audio
-async function startListening() {
+// Update volume visualization
+function updateVolumeVisualization() {
+    // If we're not listening or don't have an analyser, stop
+    if (!window.nagState.listening || !window.nagState.analyserNode) {
+        return;
+    }
+    
     try {
-        if (!window.nagState.audioContext) {
-            await initializeAudioContext();
+        // Get volume data
+        window.nagState.analyserNode.getByteFrequencyData(window.nagState.volumeDataArray);
+        
+        // Calculate average volume
+        const sum = window.nagState.volumeDataArray.reduce((a, b) => a + b, 0);
+        const avg = sum / window.nagState.volumeDataArray.length;
+        
+        // Scale to 0-100%
+        const volume = Math.min(100, Math.max(0, avg * 2));
+        
+        // Update volume bar
+        if (window.nagElements.volumeBar) {
+            window.nagElements.volumeBar.style.width = `${volume}%`;
+            
+            // Change color based on volume
+            if (volume > 60) {
+                window.nagElements.volumeBar.style.backgroundColor = '#dc3545'; // Red
+            } else if (volume > 30) {
+                window.nagElements.volumeBar.style.backgroundColor = '#ffc107'; // Yellow
+            } else {
+                window.nagElements.volumeBar.style.backgroundColor = '#28a745'; // Green
+            }
         }
         
-        if (!window.nagState.audioContext) {
-            throw new Error("Failed to initialize audio context");
+        // Continue updating
+        requestAnimationFrame(updateVolumeVisualization);
+    } catch (error) {
+        console.error("Error updating volume visualization:", error);
+    }
+}
+
+// Request microphone access
+async function requestMicrophoneAccess() {
+    try {
+        if (window.nagState.audioStream) {
+            // Already have a stream
+            return window.nagState.audioStream;
         }
         
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        // Request microphone access
+        window.logDebug("Requesting microphone access...");
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+            audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true
+            } 
+        });
+        
+        window.nagState.audioStream = stream;
+        window.logDebug("Microphone access granted");
+        
+        // Set up volume visualization
+        setupVolumeVisualization(stream);
+        
+        return stream;
+    } catch (error) {
+        console.error("Error accessing microphone:", error);
+        window.logDebug("Microphone access error: " + error.message);
+        window.addStatusMessage("Error accessing microphone. Please check permissions.", "error");
+        return null;
+    }
+}
+
+// Initialize MediaRecorder with provided stream
+function initializeMediaRecorder(stream) {
+    try {
         if (!stream) {
-            throw new Error("Failed to access microphone");
+            throw new Error("No audio stream provided");
         }
         
-        window.nagState.mediaStream = stream;
-        window.nagState.mediaRecorder = new MediaRecorder(stream);
+        // Get the best format for this browser
+        const mimeType = getBestAudioFormat();
+        window.logDebug(`Using audio format: ${mimeType || 'browser default'}`);
+        
+        // Create MediaRecorder with options
+        const options = {
+            audioBitsPerSecond: 128000
+        };
+        
+        if (mimeType) {
+            options.mimeType = mimeType;
+        }
+        
+        const mediaRecorder = new MediaRecorder(stream, options);
+        window.nagState.mediaRecorder = mediaRecorder;
         window.nagState.audioChunks = [];
         
-        window.nagState.mediaRecorder.ondataavailable = (e) => {
-            if (e.data.size > 0) {
-                window.nagState.audioChunks.push(e.data);
+        // Setup event handlers
+        mediaRecorder.ondataavailable = (event) => {
+            if (event.data && event.data.size > 0) {
+                window.nagState.audioChunks.push(event.data);
+                window.logDebug(`Audio chunk received: ${event.data.size} bytes`);
             }
         };
         
-        window.nagState.mediaRecorder.onstop = async () => {
-            const audioBlob = new Blob(window.nagState.audioChunks, { type: 'audio/wav' });
-            const audioUrl = URL.createObjectURL(audioBlob);
-            const audio = new Audio(audioUrl);
-            audio.play();
+        mediaRecorder.onstop = () => {
+            window.logDebug("Media recorder stopped");
+            
+            // Process audio if we have any chunks
+            if (window.nagState.audioChunks && window.nagState.audioChunks.length > 0) {
+                // Calculate total audio size
+                const totalSize = window.nagState.audioChunks.reduce((acc, chunk) => acc + chunk.size, 0);
+                window.logDebug(`Total audio size: ${totalSize} bytes`);
+                
+                if (totalSize > 1000) { // Minimum size threshold (1KB)
+                    if (window.processAudioAndTranscribe) {
+                        window.processAudioAndTranscribe();
+                    }
+                } else {
+                    window.logDebug("Audio too small, not processing");
+                    window.addStatusMessage("Not enough audio recorded. Please try again.", "info");
+                    
+                    // Reset UI state
+                    if (window.nagElements.orb) {
+                        window.nagElements.orb.classList.remove("listening", "thinking");
+                        window.nagElements.orb.classList.add("idle");
+                    }
+                }
+            }
         };
         
-        logDebug("🎤 Microphone access granted");
-        if (window.addMessage) {
-            window.addMessage("Microphone access granted. You can start recording.", false);
-        }
-    } catch (e) {
-        logDebug("❌ Error accessing microphone: " + e.message);
-        if (window.addMessage) {
-            window.addMessage("Error accessing microphone. Please check your permissions and try again.", true);
-        }
+        mediaRecorder.onerror = (event) => {
+            console.error("MediaRecorder error:", event.error);
+            window.logDebug(`MediaRecorder error: ${event.error.name}`);
+        };
+        
+        return mediaRecorder;
+    } catch (error) {
+        console.error("Error initializing MediaRecorder:", error);
+        window.logDebug("MediaRecorder initialization error: " + error.message);
+        return null;
     }
 }
 
-// Stop listening
-async function stopListening() {
-  const orb = window.nagElements.orb;
-  const audio = window.nagElements.audio;
-  const volumeBar = window.nagElements.volumeBar;
-  const pauseBtn = window.nagElements.pauseBtn;
-  
-  window.nagState.interrupted = true;
-  
-  if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state === "recording") {
+// Start recording
+async function startRecording() {
     try {
-      window.nagState.mediaRecorder.stop();
-    } catch (e) {
-      logDebug(`Stop recording error: ${e.message}`);
-    }
-  }
-  
-  if (window.nagState.stream) {
-    window.nagState.stream.getTracks().forEach(track => track.stop());
-  }
-  
-  if (!audio.paused) {
-    audio.pause();
-    audio.currentTime = 0;
-  }
-  
-  if (window.nagState.analyserNode) {
-    window.nagState.analyserNode = null;
-  }
-  
-  volumeBar.style.height = "0%";
-  removePlayButton();
-  pauseBtn.disabled = true;
-  window.nagState.listening = false;
-}
-
-// Initialize MediaRecorder with proper audio format
-function initializeMediaRecorder(stream) {
-  try {
-    // For Safari, we need to use audio/mp4
-    const mimeType = window.nagState.isSafari ? "audio/mp4" : "audio/webm";
-    
-    // Check if the MIME type is supported
-    if (!MediaRecorder.isTypeSupported(mimeType)) {
-      logDebug(`❌ ${mimeType} not supported, trying alternatives...`);
-      // Try other formats
-      const formats = ["audio/mp4", "audio/webm", "audio/mpeg", "audio/ogg;codecs=opus"];
-      for (const format of formats) {
-        if (MediaRecorder.isTypeSupported(format)) {
-          logDebug(`✅ Using alternative format: ${format}`);
-          window.nagState.mediaRecorder = new MediaRecorder(stream, {
-            mimeType: format,
-            audioBitsPerSecond: 128000
-          });
-          break;
+        // Get microphone access
+        const stream = await requestMicrophoneAccess();
+        if (!stream) {
+            throw new Error("Could not access microphone");
         }
-      }
-    } else {
-      window.nagState.mediaRecorder = new MediaRecorder(stream, {
-        mimeType: mimeType,
-        audioBitsPerSecond: 128000
-      });
-    }
-    
-    if (!window.nagState.mediaRecorder) {
-      throw new Error("No supported audio format found");
-    }
-    
-    logDebug(`Using audio format: ${window.nagState.mediaRecorder.mimeType}`);
-    
-    // Set up event handlers
-    window.nagState.mediaRecorder.ondataavailable = function(e) {
-      if (e.data && e.data.size > 0) {
-        window.nagState.audioChunks.push(e.data);
-        logDebug(`🔊 Audio chunk received: ${e.data.size} bytes`);
-      }
-    };
-    
-    window.nagState.mediaRecorder.onstop = async function() {
-      logDebug("✅ MediaRecorder stopped successfully");
-      logDebug(`📊 Audio chunks collected: ${window.nagState.audioChunks.length}`);
-      
-      if (window.nagState.audioChunks.length > 0) {
-        logDebug(`📊 First chunk size: ${window.nagState.audioChunks[0].size} bytes`);
-        logDebug(`📊 Last chunk size: ${window.nagState.audioChunks[window.nagState.audioChunks.length - 1].size} bytes`);
         
-        // Calculate total size
-        const totalSize = window.nagState.audioChunks.reduce((sum, chunk) => sum + chunk.size, 0);
-        logDebug(`📊 Total audio size: ${totalSize} bytes`);
+        // Initialize MediaRecorder if needed
+        if (!window.nagState.mediaRecorder) {
+            initializeMediaRecorder(stream);
+        }
         
-        // Process the audio and transcribe
-        await processAudioAndTranscribe();
-      }
-    };
-    
-    window.nagState.mediaRecorder.onerror = function(e) {
-      logDebug("❌ MediaRecorder error: " + e.error.name);
-    };
-  } catch (e) {
-    logDebug("❌ Error initializing MediaRecorder: " + e.message);
-  }
+        // Start recording if not already recording
+        if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state !== "recording") {
+            window.nagState.audioChunks = []; // Reset chunks
+            window.nagState.mediaRecorder.start();
+            window.logDebug("Recording started");
+            
+            // Update UI
+            if (window.nagElements.orb) {
+                window.nagElements.orb.classList.remove("idle");
+                window.nagElements.orb.classList.add("listening");
+            }
+        }
+        
+        return true;
+    } catch (error) {
+        console.error("Error starting recording:", error);
+        window.logDebug("Error starting recording: " + error.message);
+        window.addStatusMessage("Error starting recording: " + error.message, "error");
+        return false;
+    }
 }
 
-function updateVolume(analyserNode) {
-  if (!analyserNode) return;
-  
-  const dataArray = new Uint8Array(analyserNode.frequencyBinCount);
-  analyserNode.getByteFrequencyData(dataArray);
-  
-  // Calculate average volume
-  const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
-  const volume = Math.min(100, Math.round((average / 255) * 100));
-  
-  // Safely update volume bar if it exists
-  const volumeBar = document.querySelector('.volume-bar');
-  if (volumeBar) {
-    volumeBar.style.width = `${volume}%`;
-    volumeBar.style.backgroundColor = `hsl(${120 + (volume * 1.2)}, 70%, 50%)`;
-  }
-  
-  // Log volume level for debugging
-  logDebug(`Volume level: ${volume}%`);
-  
-  return volume;
+// Stop recording
+function stopRecording() {
+    try {
+        // If we're recording, stop
+        if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state === "recording") {
+            // For Safari, first request data
+            if (window.nagState.isSafari) {
+                window.nagState.mediaRecorder.requestData();
+                
+                // Small delay to ensure data is processed
+                setTimeout(() => {
+                    window.nagState.mediaRecorder.stop();
+                }, 200);
+            } else {
+                window.nagState.mediaRecorder.stop();
+            }
+            
+            window.logDebug("Recording stopped");
+            return true;
+        }
+        
+        return false;
+    } catch (error) {
+        console.error("Error stopping recording:", error);
+        window.logDebug("Error stopping recording: " + error.message);
+        return false;
+    }
 }
 
-// Update volume bar visualization
-function updateVolumeBar(volume) {
-  const volumeBar = document.getElementById('volumeBar');
-  if (!volumeBar) return; // Early return if element doesn't exist
-  
-  // Convert volume to percentage (0-100)
-  const percentage = Math.min(100, Math.max(0, Math.round(volume * 100)));
-  
-  // Update volume bar width
-  volumeBar.style.width = `${percentage}%`;
-  
-  // Update color based on volume level
-  if (percentage > 80) {
-    volumeBar.style.backgroundColor = '#ff4444'; // Red for loud
-  } else if (percentage > 50) {
-    volumeBar.style.backgroundColor = '#ffbb33'; // Yellow for medium
-  } else {
-    volumeBar.style.backgroundColor = '#00C851'; // Green for quiet
-  }
-}
-
-// Stop listening and recording
-window.stopListening = async function() {
-  console.log("Stopping listening...");
-  if (window.logDebug) window.logDebug("⏹️ Stopping listening...");
-  
-  try {
-    // Stop volume visualization
-    if (window.volumeInterval) {
-      clearInterval(window.volumeInterval);
-      window.volumeInterval = null;
+// Clean up resources
+function cleanupRecording() {
+    // Stop any active recordings
+    if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state === "recording") {
+        window.nagState.mediaRecorder.stop();
     }
     
-    // Reset volume bar if it exists
-    const volumeBar = document.getElementById('volumeBar');
-    if (volumeBar) {
-      volumeBar.style.width = '0%';
-      volumeBar.style.backgroundColor = '#00C851';
-    }
-    
-    // Stop media recorder if active
-    if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state === 'recording') {
-      window.nagState.mediaRecorder.stop();
-      window.nagState.mediaRecorder = null;
-    }
-    
-    // Stop audio stream if active
-    if (window.nagState.stream) {
-      window.nagState.stream.getTracks().forEach(track => track.stop());
-      window.nagState.stream = null;
+    // Stop and release audio stream tracks
+    if (window.nagState.audioStream) {
+        window.nagState.audioStream.getTracks().forEach(track => track.stop());
+        window.nagState.audioStream = null;
     }
     
     // Reset state
-    window.nagState.listening = false;
+    window.nagState.mediaRecorder = null;
     window.nagState.audioChunks = [];
+    window.nagState.analyserNode = null;
     
-    // Update UI
-    if (window.nagElements.orb) {
-      window.nagElements.orb.classList.remove('listening', 'speaking', 'thinking');
-      window.nagElements.orb.classList.add('idle');
-    }
-    
-    if (window.nagElements.toggleBtn) {
-      window.nagElements.toggleBtn.textContent = "Start Conversation";
-      window.nagElements.toggleBtn.classList.remove('active');
-    }
-    
-    if (window.updateButtonStates) {
-      window.updateButtonStates();
-    }
-    
-    console.log("Successfully stopped listening");
-    if (window.logDebug) window.logDebug("✅ Successfully stopped listening");
-  } catch (error) {
-    console.error("Error stopping listening:", error);
-    if (window.logDebug) window.logDebug(`❌ Error stopping listening: ${error.message}`);
-  }
-};
-
-async function processAudioAndTranscribe() {
-    try {
-        if (!window.nagState.audioChunks || window.nagState.audioChunks.length === 0) {
-            logDebug("No audio chunks to process");
-            return;
-        }
-
-        // Create a blob from the audio chunks
-        const audioBlob = new Blob(window.nagState.audioChunks, { type: 'audio/wav' });
-        
-        // Create a FormData object to send the audio
-        const formData = new FormData();
-        formData.append('audio', audioBlob, 'recording.wav');
-        
-        // Add any additional data needed for transcription
-        formData.append('mode', window.nagState.isWalkieTalkieMode ? 'walkie-talkie' : 'continuous');
-        
-        logDebug("📤 Sending audio for transcription...");
-        
-        // Send the audio to the server for transcription
-        const response = await fetch('/transcribe', {
-            method: 'POST',
-            body: formData
-        });
-        
-        if (!response.ok) {
-            throw new Error(`Transcription failed: ${response.statusText}`);
-        }
-        
-        const result = await response.json();
-        
-        if (result.text) {
-            logDebug(`📝 Transcription: ${result.text}`);
-            if (window.addMessage) {
-                window.addMessage(result.text, true);
-            }
-            
-            // Process the transcribed text
-            if (window.processTranscribedText) {
-                window.processTranscribedText(result.text);
-            }
-        } else {
-            logDebug("No transcription returned");
-        }
-        
-    } catch (error) {
-        logDebug(`❌ Error processing audio: ${error.message}`);
-        if (window.addMessage) {
-            window.addMessage("Error processing audio. Please try again.", true);
-        }
-    }
+    window.logDebug("Recording resources cleaned up");
 }
+
+// Make functions globally available
+window.requestMicrophoneAccess = requestMicrophoneAccess;
+window.initializeMediaRecorder = initializeMediaRecorder;
+window.startRecording = startRecording;
+window.stopRecording = stopRecording;
+window.cleanupRecording = cleanupRecording;
+window.getBestAudioFormat = getBestAudioFormat;
+window.setupVolumeVisualization = setupVolumeVisualization;
+
+console.log("nag-recording.js loaded");

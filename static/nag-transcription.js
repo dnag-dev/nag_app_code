@@ -164,8 +164,8 @@ async function sendToChat(message) {
     logDebug("📝 Chat response structure: " + JSON.stringify(data));
     
     // Display the AI's text response
-    if (data.message) {
-      addStatusMessage(data.message, 'assistant');
+    if (data.response) {
+      addStatusMessage(data.response, 'assistant');
     }
     
     // Check for different possible response formats

@@ -4,10 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Nag - AI Assistant 3</title>
-  <link rel="stylesheet" href="styles.css"> <!-- Keep if you have external styles -->
-  
-  <!-- Load Button Fixes Script -->
-  <script src="nag-button-fixes.js"></script>
   
   <style>
     :root {
@@ -162,39 +158,41 @@
         width: 100%;
     }
 
-    /* Remove ALL button-related styles */
-    button, .button-like, .control-btn, .control-link {
-        display: none !important;
-        visibility: hidden !important;
-        opacity: 0 !important;
-        pointer-events: none !important;
-        position: absolute !important;
-        width: 0 !important;
-        height: 0 !important;
-        overflow: hidden !important;
+    button, .control-btn {
+        display: inline-block;
+        padding: 8px 16px;
+        border-radius: 4px;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+        transition: background-color 0.2s;
+    }
+    
+    button:hover, .control-btn:hover {
+        background-color: #0056b3;
+    }
+    
+    button:disabled, .control-btn:disabled {
+        background-color: #cccccc;
+        cursor: not-allowed;
     }
 
-    /* Simple span-based controls */
+    /* Simple span-based controls - also styled as buttons */
     .control-span {
-        display: inline-block !important;
+        display: inline-block;
         padding: 8px 16px;
         margin: 5px;
         background: #007bff;
         color: white;
         border-radius: 4px;
         cursor: pointer;
-        pointer-events: auto !important;
-        opacity: 1 !important;
-        visibility: visible !important;
-        position: relative !important;
-        z-index: 1;
-        -webkit-appearance: none !important;
-        appearance: none !important;
-        -webkit-tap-highlight-color: transparent !important;
-        text-align: center !important;
-        user-select: none !important;
-        -webkit-user-select: none !important;
-        touch-action: manipulation !important;
+        border: none;
+        font-size: 14px;
+        font-weight: 500;
+        transition: background-color 0.2s;
     }
 
     .control-span:hover {
@@ -205,44 +203,6 @@
         background: #cccccc;
         cursor: not-allowed;
         pointer-events: none;
-    }
-
-    /* Remove any icon-related attributes */
-    [iconName],
-    [layoutTraits],
-    [src],
-    [data-icon],
-    [data-src],
-    [data-layout] {
-        display: none !important;
-        visibility: hidden !important;
-        opacity: 0 !important;
-        pointer-events: none !important;
-        position: absolute !important;
-        width: 0 !important;
-        height: 0 !important;
-        overflow: hidden !important;
-        content: none !important;
-    }
-
-    /* Ensure orb is clickable */
-    .orb {
-        display: flex !important;
-        justify-content: center !important;
-        align-items: center !important;
-        cursor: pointer !important;
-        pointer-events: auto !important;
-        opacity: 1 !important;
-        visibility: visible !important;
-        position: relative !important;
-        z-index: 1;
-        -webkit-appearance: none !important;
-        appearance: none !important;
-        -webkit-tap-highlight-color: transparent !important;
-        text-align: center !important;
-        user-select: none !important;
-        -webkit-user-select: none !important;
-        touch-action: manipulation !important;
     }
 
     #statusPanel {
@@ -356,22 +316,6 @@
       display: block;
     }
 
-    .status-panel {
-      width: 100%;
-      flex-grow: 1;
-      min-height: 100px;
-      max-height: 30vh;
-      border: 1px solid var(--medium-gray);
-      border-radius: 8px;
-      overflow-y: scroll;
-      padding: 10px;
-      background-color: #ffffff;
-      box-sizing: border-box;
-      display: flex;
-      flex-direction: column-reverse;
-      margin-bottom: 15px;
-    }
-
     .message-container {
       width: 100%;
       max-width: 400px;
@@ -393,40 +337,26 @@
       color: var(--dark-gray);
     }
 
-    .debug-message {
-      padding: 8px 12px;
-      margin-bottom: 8px;
+    .volume-bar {
+      width: 100%;
+      height: 8px;
+      background-color: #e9ecef;
       border-radius: 4px;
-      font-size: 0.8rem;
-      line-height: 1.4;
-      background-color: var(--white);
-      color: var(--text-dark);
-    }
-
-    .control-btn {
-        padding: 8px 16px;
-        border-radius: 4px;
-        background-color: #007bff;
-        color: white;
-        font-size: 14px;
-        font-weight: 500;
-        transition: background-color 0.2s;
+      margin-top: 10px;
+      overflow: hidden;
     }
     
-    .control-btn:hover {
-        background-color: #0056b3;
+    .volume-bar-fill {
+      height: 100%;
+      width: 0%;
+      background-color: #28a745;
+      transition: width 0.1s ease;
     }
-    
-    .control-btn:disabled {
-        background-color: #cccccc;
-        cursor: not-allowed;
-    }
-
   </style>
 </head>
 <body>
   <div class="app-container">
-    <h1>Nag - AI Assistant 2</h1>
+    <h1>Nag - AI Assistant 3</h1>
 
     <div class="orb-container">
       <div id="orb" class="orb idle" role="button" tabindex="0">Click to Start</div>
@@ -437,13 +367,16 @@
     </div>
 
     <div id="modeHint" class="mode-hint">
-      <!-- Mode hint text will be added here dynamically -->
+      Click the orb to start a conversation
     </div>
 
     <div class="controls">
-      <span id="toggleBtn" class="control-span">Start Conversation</span>
-      <span id="pauseBtn" class="control-span disabled">Pause</span>
-      <span id="modeToggle" class="control-span">Switch to Walkie-Talkie</span>
+      <button id="toggleBtn" class="control-span">Start Conversation</button>
+      <button id="pauseBtn" class="control-span disabled">Pause</button>
+      <button id="modeToggle" class="control-span">Switch to Walkie-Talkie</button>
+      <div class="volume-bar">
+        <div id="volumeBar" class="volume-bar-fill"></div>
+      </div>
       <div class="debug-control">
         <input type="checkbox" id="debugToggle" name="debugToggle">
         <label for="debugToggle">Show Debug</label>
@@ -462,9 +395,9 @@
     <audio id="audio" style="display: none;"></audio>
   </div>
 
-  <!-- Nag Initialization and Script Loading -->
+  <!-- Initialize state object -->
   <script>
-    // --- Define Initial State --- 
+    // Define Initial State
     window.nagState = {
       // Core State
       listening: false, 
@@ -484,16 +417,20 @@
 
       // UI/Timing State
       initialized: false, 
-      scriptLoadStatus: {}, // Initialize directly here
+      scriptLoadStatus: {}, 
       modeHintTimeout: null, 
 
       // Configuration/Flags
-      debugEnabled: false, 
+      debugEnabled: false,
+      
+      // Browser detection
+      isiOS: /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1),
+      isSafari: /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
     };
 
     window.nagElements = {}; // To cache DOM elements
-    window.scriptsToLoad = [ // List of scripts needed
-        'nag-button-fixes.js', // Add button fixes first
+    window.scriptsToLoad = [
         'nag-utils.js',
         'nag-audio.js',
         'nag-recording.js',
@@ -501,191 +438,140 @@
         'nag-core.js'
     ];
 
-    // --- Define Loading Functions --- 
-    function checkAllScriptsLoaded() {
-      return window.scriptsToLoad.every(script => window.nagState.scriptLoadStatus[script]);
-    }
-
-    function onScriptLoad(scriptName) {
-      console.log(`${scriptName} loaded.`);
-      // No need for extra checks now if initialization order is guaranteed
-      window.nagState.scriptLoadStatus[scriptName] = true; 
-      
-      if (checkAllScriptsLoaded()) {
-        console.log("All scripts loaded. Initializing app...");
-        if (typeof initializeApp === 'function') {
-          initializeApp(); // Call main initialization function from nag-core.js
-        } else {
-          console.error('Error: initializeApp function not found after loading scripts!');
-          // Use addStatusMessage if it was loaded (from nag-utils.js)
-          if (window.addStatusMessage) {
-             window.addStatusMessage("Core initialization function missing!", "error");
-          } else {
-             console.error("[FATAL] Core initialization function missing AND cannot display status!");
-          }
-        }
-      }
-    }
-
-    function loadScript(src) {
-      return new Promise((resolve, reject) => {
-        const script = document.createElement('script');
-        script.src = src;
-        script.async = false; // Load in order
-        script.onload = () => {
-          onScriptLoad(src);
-          resolve();
-        };
-        script.onerror = () => {
-          const errorMsg = `Failed to load script: ${src}`;
-          console.error(`Error loading script: ${src}`);
-          // Use addStatusMessage if loaded
-          if(window.addStatusMessage) window.addStatusMessage(errorMsg, "error");
-          reject(new Error(`Script load error for ${src}`));
-        };
-        document.body.appendChild(script);
-      });
-    }
-    
-    // --- Temporary Status Message Function (until nag-utils loads) --- 
-    let _tempStatusQueue = [];
-    function _tempAddStatusMessage(message, type = 'info', isDebug = false) {
+    // Function to add status messages
+    function addStatusMessage(message, type = 'info', isDebug = false) {
         const statusPanel = document.getElementById('statusPanel');
-        if (statusPanel) {
-             // If panel exists, flush queue and add directly
-             while(_tempStatusQueue.length > 0) {
-                 const item = _tempStatusQueue.shift();
-                 _addMsgToPanel(statusPanel, item.message, item.type, item.isDebug);
-             }
-             _addMsgToPanel(statusPanel, message, type, isDebug);
+        if (!statusPanel) {
+            console.log(`[${type}]: ${message}`);
+            return;
+        }
+
+        const messageDiv = document.createElement('div');
+        messageDiv.classList.add('status-message');
+        messageDiv.classList.add(type);
+        
+        if (isDebug) {
+            messageDiv.classList.add('debug');
+        }
+        
+        messageDiv.textContent = message;
+        statusPanel.insertBefore(messageDiv, statusPanel.firstChild);
+        
+        if (type === 'error') {
+            console.error(message);
         } else {
-            // Panel not ready, queue message
-            _tempStatusQueue.push({message, type, isDebug});
-            // Try adding later on DOMContentLoaded
-            document.addEventListener('DOMContentLoaded', () => {
-                 const panel = document.getElementById('statusPanel');
-                 if (panel) {
-                     while(_tempStatusQueue.length > 0) {
-                         const item = _tempStatusQueue.shift();
-                         _addMsgToPanel(panel, item.message, item.type, item.isDebug);
-                     }
-                 }
-            }, { once: true });
+            console.log(`[${type}]: ${message}`);
         }
     }
-    function _addMsgToPanel(panel, message, type, isDebug) {
-         const messageDiv = document.createElement('div');
-         messageDiv.classList.add('status-message');
-         messageDiv.classList.add(type);
-         if (isDebug) { messageDiv.classList.add('debug'); }
-         messageDiv.textContent = message;
-         panel.insertBefore(messageDiv, panel.firstChild);
+    window.addStatusMessage = addStatusMessage;
+
+    // Logging function
+    function logDebug(message) {
+        const debugContent = document.querySelector('.debug-content');
+        if (debugContent) {
+            const timestamp = new Date().toISOString().substr(11, 8);
+            const logEntry = document.createElement('div');
+            logEntry.textContent = `[${timestamp}] ${message}`;
+            debugContent.insertBefore(logEntry, debugContent.firstChild);
+        }
+        console.log(`[DEBUG] ${message}`);
+    }
+    window.logDebug = logDebug;
+
+    // Load scripts sequentially
+    function loadScript(src) {
+        return new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = src;
+            script.onload = () => {
+                console.log(`Loaded script: ${src}`);
+                window.nagState.scriptLoadStatus[src] = true;
+                resolve();
+            };
+            script.onerror = () => {
+                console.error(`Failed to load script: ${src}`);
+                reject(new Error(`Failed to load ${src}`));
+            };
+            document.body.appendChild(script);
+        });
     }
 
-    // --- Start Loading --- 
-    _tempAddStatusMessage("Loading application components...", "info");
+    // Check if all scripts are loaded
+    function checkAllScriptsLoaded() {
+        return window.scriptsToLoad.every(script => window.nagState.scriptLoadStatus[script]);
+    }
 
-    window.scriptsToLoad.reduce((promise, scriptSrc) => {
-        return promise.then(() => loadScript(scriptSrc));
-    }, Promise.resolve()).catch(err => {
-        const errorMsg = "Critical error loading application scripts. Please refresh.";
-        console.error("Error during script loading sequence:", err);
-        // Use real addStatusMessage if available, otherwise the temp one
-        if (window.addStatusMessage) {
-             window.addStatusMessage(errorMsg, "error");
-        } else {
-            _tempAddStatusMessage(errorMsg, "error");
+    // Initialize UI elements
+    function cacheElements() {
+        window.nagElements = {
+            orb: document.getElementById('orb'),
+            audio: document.getElementById('audio'),
+            volumeBar: document.getElementById('volumeBar'),
+            toggleBtn: document.getElementById('toggleBtn'),
+            pauseBtn: document.getElementById('pauseBtn'),
+            modeToggle: document.getElementById('modeToggle'),
+            modeHint: document.getElementById('modeHint'),
+            debugPanel: document.getElementById('debugPanel'),
+            statusPanel: document.getElementById('statusPanel'),
+            messageContainer: document.getElementById('messageContainer'),
+            debugToggle: document.getElementById('debugToggle')
+        };
+
+        for (const [key, element] of Object.entries(window.nagElements)) {
+            if (!element) {
+                console.warn(`Missing UI element: ${key}`);
+            }
         }
+    }
+
+    // Initialize everything once DOM is loaded
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log("DOM loaded, initializing application...");
+        
+        // Cache DOM elements
+        cacheElements();
+        
+        // Set up debug toggle
+        const debugToggle = document.getElementById('debugToggle');
+        if (debugToggle) {
+            const showDebug = localStorage.getItem('nagDebugEnabled') === 'true';
+            debugToggle.checked = showDebug;
+            document.body.classList.toggle('show-debug', showDebug);
+            window.nagState.debugEnabled = showDebug;
+            
+            debugToggle.addEventListener('change', function() {
+                const isChecked = this.checked;
+                document.body.classList.toggle('show-debug', isChecked);
+                window.nagState.debugEnabled = isChecked;
+                localStorage.setItem('nagDebugEnabled', isChecked);
+                addStatusMessage(`Debug messages ${isChecked ? 'shown' : 'hidden'}`, 'info');
+            });
+        }
+        
+        // Load scripts sequentially
+        window.scriptsToLoad.reduce((promise, script) => {
+            return promise.then(() => loadScript(script));
+        }, Promise.resolve())
+        .then(() => {
+            console.log("All scripts loaded successfully");
+            addStatusMessage("Application initialized successfully", "info");
+            
+            // Set up temporary click handlers until scripts properly initialize
+            const orb = document.getElementById('orb');
+            if (orb) {
+                orb.addEventListener('click', function() {
+                    if (!window.nagState.initialized && window.initializeApp) {
+                        window.initializeApp();
+                    }
+                    addStatusMessage("Orb clicked, attempting to start", "info");
+                });
+            }
+        })
+        .catch(error => {
+            console.error("Error loading scripts:", error);
+            addStatusMessage("Failed to initialize application. Please refresh the page.", "error");
+        });
     });
-
   </script>
-
-  <!-- Debug Toggle Logic (Runs after DOM is ready) -->
-  <script>
-      document.addEventListener('DOMContentLoaded', () => {
-          const debugCheckbox = document.getElementById('debugToggle');
-          if (debugCheckbox) {
-              const showDebug = localStorage.getItem('nagDebugEnabled') === 'true';
-              debugCheckbox.checked = showDebug;
-              document.body.classList.toggle('show-debug', showDebug);
-              window.nagState.debugEnabled = showDebug; // Sync state
-
-              debugCheckbox.addEventListener('change', () => {
-                  const isChecked = debugCheckbox.checked;
-                  document.body.classList.toggle('show-debug', isChecked);
-                  window.nagState.debugEnabled = isChecked; // Update state
-                  localStorage.setItem('nagDebugEnabled', isChecked); // Persist preference
-                  // Use the real status message function if available (should be by now)
-                  if (window.addStatusMessage) {
-                    window.addStatusMessage(`Debug info ${isChecked ? 'shown' : 'hidden'}.`, 'info');
-                  } else {
-                    console.log(`Debug info ${isChecked ? 'shown' : 'hidden'}.`);
-                  }
-              });
-          } else {
-              console.error("Debug toggle checkbox not found.");
-          }
-      });
-  </script>
-
-  <!-- Debug panel functionality
-  <script>
-    // Debug panel functionality
-    const debugToggle = document.getElementById('debugToggle');
-    const debugPanel = document.getElementById('debugPanel');
-    const debugContent = document.querySelector('.debug-content');
-
-    function toggleDebugPanel() {
-      debugPanel.classList.toggle('visible');
-      if (debugPanel.classList.contains('visible')) {
-        debugContent.scrollTop = debugContent.scrollHeight;
-      }
-    }
-
-    function addDebugMessage(message) {
-      const timestamp = new Date().toISOString();
-      const debugMessage = `[${timestamp}] ${message}\n`;
-      debugContent.textContent += debugMessage;
-      if (debugPanel.classList.contains('visible')) {
-        debugContent.scrollTop = debugContent.scrollHeight;
-      }
-    }
-
-    // Initialize debug panel
-    debugToggle.addEventListener('change', toggleDebugPanel);
-
-    // Add debug message when page loads
-    addDebugMessage('Debug panel initialized');
-  </script> -->
-
-  <script>
-    // Debug panel functionality
-    const debugToggle = document.getElementById('debugToggle');
-    const debugPanel = document.getElementById('debugPanel');
-    const debugContent = document.querySelector('.debug-content');
-
-    function toggleDebugPanel() {
-      debugPanel.classList.toggle('visible');
-      if (debugPanel.classList.contains('visible')) {
-        debugContent.scrollTop = debugContent.scrollHeight;
-      }
-    }
-
-    function addDebugMessage(message) {
-      const timestamp = new Date().toISOString();
-      const debugMessage = `[${timestamp}] ${message}\n`;
-      debugContent.textContent += debugMessage;
-      if (debugPanel.classList.contains('visible')) {
-        debugContent.scrollTop = debugContent.scrollHeight;
-      }
-    }
-
-    // Initialize debug panel
-    debugToggle.addEventListener('change', toggleDebugPanel);
-
-    // Add debug message when page loads
-    addDebugMessage('Debug panel initialized');
-  </script>
-
 </body>
 </html>

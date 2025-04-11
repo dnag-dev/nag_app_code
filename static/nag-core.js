@@ -1,587 +1,267 @@
-// Nag Digital Twin v3.5.0-dev - Core Module
-console.log("Nag Digital Twin v3.5.0-dev loading...");
+// Nag Digital Twin v3.5.0 - Core Module
+console.log("Nag Digital Twin v3.5.0 loading...");
 
-// Initialize logging configuration
-if (typeof LOG_CONFIG === 'undefined') {
-  window.LOG_CONFIG = {
-    showAllLogs: false,
-    keyMessages: [
-      "Nag Digital Twin",
-      "Connected to server",
-      "Disconnected from server",
-      "Error",
-      "Warning",
-      "Failed",
-      "Exception",
-      "Timeout",
-      "Retry",
-      "Reconnect"
-    ]
-  };
-}
-
-// Function to check if a message is a key message
-function isKeyMessage(message) {
-  return LOG_CONFIG.keyMessages.some(keyword => 
-    message.toLowerCase().includes(keyword.toLowerCase())
-  );
-}
-
-// Function to log messages with different levels
-function logMessage(message, level = 'info') {
-  if (!window.nagElements || !window.nagElements.debugBox) return;
-  
-  const debugContent = window.nagElements.debugBox.querySelector('.debug-content');
-  if (!debugContent) return;
-  
-  // Check if we should show this message
-  if (!LOG_CONFIG.showAllLogs && !isKeyMessage(message)) return;
-  
-  // Create log entry
-  const entry = document.createElement('div');
-  entry.className = `log-entry ${level}`;
-  
-  // Add timestamp
-  const timestamp = new Date().toLocaleTimeString();
-  entry.textContent = `[${timestamp}] [${level.toUpperCase()}] ${message}`;
-  
-  // Add to the beginning of the container
-  debugContent.insertBefore(entry, debugContent.firstChild);
-}
-
-// Add global error handler
-window.addEventListener('error', function(event) {
-  console.error('Global error:', event.error);
-  
-  // Add visible error on screen
-  const errorDiv = document.createElement('div');
-  errorDiv.style.position = 'fixed';
-  errorDiv.style.top = '10px';
-  errorDiv.style.left = '10px';
-  errorDiv.style.backgroundColor = 'red';
-  errorDiv.style.color = 'white';
-  errorDiv.style.padding = '10px';
-  errorDiv.style.zIndex = '9999';
-  errorDiv.textContent = 'JavaScript Error: ' + (event.error ? event.error.message : 'Unknown error');
-  document.body.appendChild(errorDiv);
-});
-
-// // Global state object for sharing between modules
-// window.nagState = {
-//   // Recording state
-//   mediaRecorder: null,
-//   audioChunks: [],
-//   stream: null,
-//   listening: false,
-//   isUploading: false,
-//   
-//   // UI state
-//   interrupted: false,
-//   isPaused: false,
-//   
-//   // Mode state
-//   isWalkieTalkieMode: true,
-//   walkieTalkieActive: false,
-//   
-//   // Audio processing
-//   analyserNode: null,
-//   silenceTimer: null,
-//   longRecordingTimer: null,
-//   audioUnlocked: false,
-//   speechDetected: false,
-//   
-//   // Transcription handling
-//   lastTranscription: "",
-//   consecutiveIdenticalTranscriptions: 0,
-//   emptyTranscriptionCount: 0,
-//   
-//   // UI elements cache
-//   currentPlayButton: null,
-//   
-//   // Connection state
-//   isConnected: false,
-//   connectionAttempted: false,
-//   
-//   // Browser detection
-//   isiOS: /iPad|iPhone|iPod/.test(navigator.userAgent) || 
-//     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1),
-//   isSafari: /^((?!chrome|android).)*safari/i.test(navigator.userAgent),
-//   
-//   // Initialization flag
-//   initialized: false
-// };
-
-// DOM references - will be populated once document is loaded
-window.nagElements = {
-  orb: null,
-  audio: null,
-  volumeBar: null,
-  toggleBtn: null,
-  pauseBtn: null,
-  modeToggle: null,
-  modeHint: null,
-  debugBox: null,
-  statusEl: null,
-  messagesContainer: null,
-  debugToggle: null
-};
-
-// Helper to load scripts sequentially with error handling
-function loadScript(url, callback) {
-  const script = document.createElement('script');
-  script.src = url;
-  script.onload = callback;
-  script.onerror = function() {
-    console.error(`Failed to load script: ${url}`);
-    if (window.nagElements.debugBox) {
-      const p = document.createElement("p");
-      p.textContent = `❌ Failed to load: ${url}`;
-      p.style.color = "#ff3333";
-      window.nagElements.debugBox.appendChild(p);
-    }
-  };
-  document.head.appendChild(script);
-}
-
-// Function to update status display
-function updateStatus(message, type = 'info') {
-  const status = document.getElementById('status');
-  if (status) {
-    status.textContent = message;
-    status.className = `status ${type}`;
-  }
-  // Also log status changes
-  logMessage(message, type);
-}
-
-// WebSocket connection with fallback
-let nagWebSocket = null;
-let nagReconnectAttempts = 0;
-const NAG_MAX_RECONNECT_ATTEMPTS = 3;
-
-function connectWebSocket() {
-  // If we already attempted and failed, don't try again
-  if (window.nagState.connectionAttempted && !window.nagState.isConnected) {
-    return;
-  }
-  
-  window.nagState.connectionAttempted = true;
-  
-  try {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/ws`;
-    console.log(`Attempting WebSocket connection to: ${wsUrl}`);
-    
-    nagWebSocket = new WebSocket(wsUrl);
-    
-    nagWebSocket.onopen = () => {
-      console.log('WebSocket connection established');
-      window.nagState.isConnected = true;
-      nagReconnectAttempts = 0;
-      
-      // Update UI to show connected status
-      logDebug('✅ Connected to server successfully');
-      updateStatus('Connected to server', 'success');
-    };
-    
-    nagWebSocket.onclose = () => {
-      window.nagState.isConnected = false;
-      console.log('WebSocket closed');
-      
-      if (nagReconnectAttempts < NAG_MAX_RECONNECT_ATTEMPTS) {
-        nagReconnectAttempts++;
-        logDebug(`🔄 Connection lost. Retrying (${nagReconnectAttempts}/${NAG_MAX_RECONNECT_ATTEMPTS})...`);
-        setTimeout(connectWebSocket, 3000);
-      } else {
-        logDebug('❌ Failed to establish WebSocket connection. Continuing in offline mode.');
-        updateStatus('Operating in offline mode', 'info');
-      }
-    };
-    
-    nagWebSocket.onerror = (error) => {
-      console.error('WebSocket error:', error);
-      logDebug('⚠️ WebSocket connection error. Continuing in offline mode.');
-      updateStatus('Operating in offline mode', 'info');
-    };
-    
-    nagWebSocket.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === 'status') {
-          updateStatus(data.message, data.status || 'info');
-        }
-      } catch (e) {
-        console.error('Error parsing WebSocket message:', e);
-      }
-    };
-  } catch (e) {
-    console.error('WebSocket initialization error:', e);
-    logDebug('⚠️ Could not initialize WebSocket. Continuing in offline mode.');
-    updateStatus('Operating in offline mode', 'info');
-  }
-}
-
-// Function to log debug messages
-function logDebug(message) {
-  if (window.nagElements && window.nagElements.debugBox) {
-    const p = document.createElement("p");
-    p.textContent = message;
-    // Add timestamp
-    const timestamp = new Date().toLocaleTimeString();
-    p.textContent = `[${timestamp}] ${message}`;
-    // Add to the beginning of the container
-    window.nagElements.debugBox.querySelector('.debug-content').insertBefore(p, window.nagElements.debugBox.querySelector('.debug-content').firstChild);
-  }
-}
-
-// Initialize logging toggle
-function initializeLogging() {
-  const showAllLogsCheckbox = document.getElementById('showAllLogs');
-  if (showAllLogsCheckbox) {
-    showAllLogsCheckbox.addEventListener('change', function() {
-      LOG_CONFIG.showAllLogs = this.checked;
-      // Update debug container visibility
-      if (window.nagElements.debugBox) {
-        window.nagElements.debugBox.classList.toggle('visible', this.checked);
-      }
-      // Refresh the log display
-      const debugContent = window.nagElements.debugBox?.querySelector('.debug-content');
-      if (debugContent) {
-        const entries = Array.from(debugContent.children);
-        debugContent.innerHTML = '';
-        entries.forEach(entry => {
-          const message = entry.textContent.split('] ').slice(2).join('] ');
-          const level = entry.className.split(' ')[1];
-          logMessage(message, level);
-        });
-      }
-    });
-  }
-}
-
-// New helper function to ensure all elements are available
-function allElementsAvailable() {
-    return window.nagElements.orb && 
-           window.nagElements.toggleBtn && 
-           window.nagElements.pauseBtn && 
-           window.nagElements.modeToggle;
-}
-
-// New function to cache all DOM elements in one place
-function cacheAllDOMElements() {
-    window.nagElements = {
-        orb: document.getElementById("orb"),
-        audio: document.getElementById("audio"),
-        volumeBar: document.querySelector(".volume-bar"),
-        toggleBtn: document.getElementById("toggle-btn"),
-        pauseBtn: document.getElementById("pause-btn"),
-        modeToggle: document.getElementById("mode-toggle"),
-        modeHint: document.getElementById("mode-hint"),
-        debugBox: document.getElementById("debug"),
-        statusEl: document.getElementById("status"),
-        messagesContainer: document.getElementById("messages"),
-        debugToggle: document.getElementById("showAllLogs"),
-        debugContent: document.querySelector('.debug-content')
-    };
-    
-    // Debug log for all elements
-    console.log("Checking UI elements:", window.nagElements);
-    Object.entries(window.nagElements).forEach(([key, element]) => {
-        console.log(`Element ${key}: ${element ? "Found" : "Not found"}`);
-    });
-}
-
-// Function to initialize app
+// Initialize the application when ready
 function initializeApp() {
-    console.log("Initializing app...");
-    logMessage("Starting app initialization", "info");
+    console.log("Initializing application...");
+    window.logDebug("Starting application initialization");
     
-    // FIRST - Cache all DOM elements
-    cacheAllDOMElements();
+    // Ensure DOM elements are cached
+    cacheElements();
     
-    // SECOND - Initialize logging and UI
-    initializeLogging();
+    // Setup event listeners
+    setupEventListeners();
     
-    // THIRD - Setup all event listeners
-    if (allElementsAvailable()) {
-        setupEventListeners(); 
-        // Only call these if the main setup succeeds
-        if (typeof setupUI === 'function') setupUI();
-        if (typeof setupWalkieTalkieMode === 'function') setupWalkieTalkieMode();
-        if (typeof setupInterruptionHandling === 'function') setupInterruptionHandling();
-    } else {
-        logMessage("Warning: Some UI elements not found. Some features may be disabled.", "warning");
-    }
-    
-    // FOURTH - Log browser capabilities for debugging
-    if (typeof logBrowserInfo === 'function') {
-        logBrowserInfo();
-        logMessage("Browser info logged", "debug");
-    }
-    
-    // FINALLY - Connect WebSocket, but continue if it fails
-    connectWebSocket();
-    
-    logMessage("Nag Digital Twin v3.5.0-dev initialized and ready", "success");
-}
-
-// Function to update all button states based on current state
-function updateButtonStates() {
-  if (!window.nagElements) return;
-  
-  // Update toggle button
-  if (window.nagElements.toggleBtn) {
-    window.nagElements.toggleBtn.textContent = window.nagState.listening ? "Stop Conversation" : "Start Conversation";
-    window.nagElements.toggleBtn.classList.toggle("active", window.nagState.listening);
-  }
-  
-  // Update pause button
-  if (window.nagElements.pauseBtn) {
-    window.nagElements.pauseBtn.textContent = window.nagState.isPaused ? "Resume" : "Pause";
-    window.nagElements.pauseBtn.classList.toggle("paused", window.nagState.isPaused);
-  }
-  
-  // Update mode toggle
-  if (window.nagElements.modeToggle) {
-    window.nagElements.modeToggle.textContent = window.nagState.isWalkieTalkieMode ? 
-      "Switch to continuous mode" : "Switch to walkie-talkie mode";
-  }
-  
-  // Update mode hint
-  if (window.nagElements.modeHint) {
-    window.nagElements.modeHint.textContent = window.nagState.isWalkieTalkieMode ?
-      "Click & hold the orb to use walkie-talkie mode" : "Nag will listen continuously for your voice";
-  }
-}
-
-// Initialize app when DOM is ready
-document.addEventListener('DOMContentLoaded', function() {
-  console.log("DOM loaded, initializing app...");
-  initializeApp();
-});
-
-// Function to safely play audio with Safari checks
-function safePlayAudio(audioElement) {
-  if (!audioElement) return;
-  
-  // Check if we're on mobile Safari
-  const isSafariMobile = /^((?!chrome|android).)*safari/i.test(navigator.userAgent) && 
-                        /iPhone|iPad|iPod/.test(navigator.userAgent);
-  
-  if (isSafariMobile) {
-    // For Safari, ensure we're in a user gesture context
-    audioElement.play().catch(error => {
-      logMessage(`Audio playback error: ${error.message}`, 'error');
-      // Show hint again if audio fails
-      const hint = document.querySelector('.safari-hint');
-      if (hint) {
-        hint.style.display = 'block';
-      }
+    // Try to unlock audio context (especially important for Safari)
+    unlockAudioContext().then(unlocked => {
+        console.log("Audio context unlock attempt:", unlocked ? "success" : "waiting for user interaction");
+        window.logDebug("Audio context unlock: " + (unlocked ? "success" : "waiting for user interaction"));
     });
-  } else {
-    // For other browsers, proceed normally
-    audioElement.play().catch(error => {
-      logMessage(`Audio playback error: ${error.message}`, 'error');
-    });
-  }
-}
-
-// Update the setupWalkieTalkieMode function
-function setupWalkieTalkieMode() {
-  if (!window.nagElements || !window.nagElements.modeToggle) return;
-  
-  const modeToggle = window.nagElements.modeToggle;
-  const modeHint = window.nagElements.modeHint;
-  
-  modeToggle.addEventListener('change', function() {
-    if (this.checked) {
-      modeHint.textContent = "Walkie-Talkie Mode: Hold to speak";
-      modeHint.style.display = "block";
-      
-      // Initialize audio only after user interaction
-      if (window.nagElements.audio) {
-        safePlayAudio(window.nagElements.audio);
-      }
-    } else {
-      modeHint.textContent = "Continuous Mode: Click to start/stop";
-      modeHint.style.display = "block";
+    
+    // Setup WebSocket connection if needed
+    try {
+        connectWebSocket();
+    } catch (error) {
+        console.error("Failed to connect WebSocket:", error);
+        window.logDebug("WebSocket connection error: " + error.message);
     }
-  });
-}
-
-// Update the handleTTSResponse function
-function handleTTSResponse(response) {
-  if (!response || !response.audio_url) {
-    logMessage("No audio URL in TTS response", "error");
-    return;
-  }
-
-  const audio = window.nagElements.audio;
-  if (!audio) {
-    logMessage("Audio element not found", "error");
-    return;
-  }
-
-  audio.src = response.audio_url;
-  audio.onloadeddata = () => {
-    logMessage("TTS audio loaded and ready", "success");
-    updateStatus("Speaking...", "speaking");
-    safePlayAudio(audio);
-  };
-  
-  audio.onended = () => {
-    updateStatus("Ready", "idle");
-    logMessage("TTS playback completed", "info");
-  };
-  
-  audio.onerror = (error) => {
-    logMessage(`TTS playback error: ${error.message}`, "error");
-    updateStatus("Error playing audio", "error");
-  };
-}
-
-// Helper to safely update mode hint text
-function updateModeHint(text) {
-  if (window.nagElements && window.nagElements.modeHint) {
-    window.nagElements.modeHint.textContent = text;
-  } else {
-    console.warn('Mode hint element not initialized yet');
-  }
-}
-
-// Nag Digital Twin v2.0.0 - Core State Management
-
-// Single source of truth for state initialization
-function initializeState() {
-    window.nagState = {
-        // Recording state
-        mediaRecorder: null,
-        audioChunks: [],
-        stream: null,
-        listening: false,
-        isUploading: false,
-        
-        // UI state
-        interrupted: false,
-        isPaused: false,
-        
-        // Mode state
-        isWalkieTalkieMode: false,
-        walkieTalkieActive: false,
-        
-        // Audio processing
-        analyserNode: null,
-        silenceTimer: null,
-        longRecordingTimer: null,
-        audioUnlocked: false,
-        speechDetected: false,
-        
-        // Transcription handling
-        lastTranscription: "",
-        consecutiveIdenticalTranscriptions: 0,
-        emptyTranscriptionCount: 0,
-        
-        // UI elements cache
-        currentPlayButton: null,
-        
-        // Browser detection
-        isiOS: /iPad|iPhone|iPod/.test(navigator.userAgent) || 
-            (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1),
-        isSafari: /^((?!chrome|android).)*safari/i.test(navigator.userAgent),
-        
-        // Initialization flag
-        initialized: false
-    };
+    
+    // Mark as initialized
+    window.nagState.initialized = true;
+    console.log("Application initialized successfully");
+    window.addStatusMessage("Ready to start conversation", "info");
 }
 
 // Function to cache DOM elements
-window.cacheElements = function() {
+function cacheElements() {
+    window.nagElements = {
+        orb: document.getElementById('orb'),
+        audio: document.getElementById('audio'),
+        volumeBar: document.getElementById('volumeBar'),
+        toggleBtn: document.getElementById('toggleBtn'),
+        pauseBtn: document.getElementById('pauseBtn'),
+        modeToggle: document.getElementById('modeToggle'),
+        modeHint: document.getElementById('modeHint'),
+        debugPanel: document.getElementById('debugPanel'),
+        statusPanel: document.getElementById('statusPanel'),
+        messageContainer: document.getElementById('messageContainer'),
+        debugToggle: document.getElementById('debugToggle')
+    };
+    
+    // Verify all required elements
+    const required = ['orb', 'audio', 'toggleBtn', 'pauseBtn', 'modeToggle', 'statusPanel'];
+    const missing = required.filter(id => !window.nagElements[id]);
+    
+    if (missing.length > 0) {
+        console.error("Missing required UI elements:", missing);
+        window.logDebug("Missing required UI elements: " + missing.join(', '));
+    }
+}
+
+// Set up event listeners
+function setupEventListeners() {
+    console.log("Setting up event listeners");
+    
+    const { orb, toggleBtn, pauseBtn, modeToggle } = window.nagElements;
+    
+    // Toggle button controls start/stop conversation
+    if (toggleBtn) {
+        toggleBtn.addEventListener('click', function() {
+            window.logDebug("Toggle button clicked");
+            
+            if (window.nagState.listening) {
+                // Stop listening
+                stopListening();
+                toggleBtn.textContent = "Start Conversation";
+                window.addStatusMessage("Conversation stopped", "info");
+            } else {
+                // Start listening
+                startListening();
+                toggleBtn.textContent = "Stop Conversation";
+                window.addStatusMessage("Conversation started", "info");
+            }
+        });
+    }
+    
+    // Pause button temporarily pauses conversation
+    if (pauseBtn) {
+        pauseBtn.addEventListener('click', function() {
+            window.logDebug("Pause button clicked");
+            
+            if (window.nagState.isPaused) {
+                // Resume conversation
+                window.nagState.isPaused = false;
+                pauseBtn.textContent = "Pause";
+                window.addStatusMessage("Conversation resumed", "info");
+                
+                if (!window.nagState.isWalkieTalkieMode) {
+                    startListening();
+                }
+            } else {
+                // Pause conversation
+                window.nagState.isPaused = true;
+                pauseBtn.textContent = "Resume";
+                window.addStatusMessage("Conversation paused", "info");
+                
+                if (window.nagState.listening) {
+                    stopListening();
+                }
+            }
+        });
+    }
+    
+    // Mode toggle switches between continuous and walkie-talkie modes
+    if (modeToggle) {
+        modeToggle.addEventListener('click', function() {
+            window.logDebug("Mode toggle button clicked");
+            
+            // Toggle mode
+            window.nagState.isWalkieTalkieMode = !window.nagState.isWalkieTalkieMode;
+            
+            // Update UI
+            modeToggle.textContent = window.nagState.isWalkieTalkieMode ? 
+                "Switch to Continuous Mode" : "Switch to Walkie-Talkie Mode";
+            
+            // Update hint
+            if (window.nagElements.modeHint) {
+                window.nagElements.modeHint.textContent = window.nagState.isWalkieTalkieMode ?
+                    "Press and hold the orb to speak" : "Click the orb to start listening";
+            }
+            
+            window.addStatusMessage(
+                window.nagState.isWalkieTalkieMode ? 
+                "Switched to walkie-talkie mode" : "Switched to continuous mode", 
+                "info"
+            );
+        });
+    }
+    
+    // Orb interactions
+    if (orb) {
+        // For walkie-talkie mode: press and hold
+        orb.addEventListener('mousedown', function(e) {
+            if (window.nagState.isWalkieTalkieMode && !window.nagState.isPaused) {
+                e.preventDefault();
+                window.nagState.walkieTalkieActive = true;
+                orb.classList.remove("idle");
+                orb.classList.add("listening");
+                startRecording();
+            }
+        });
+        
+        orb.addEventListener('mouseup', function() {
+            if (window.nagState.isWalkieTalkieMode && window.nagState.walkieTalkieActive) {
+                window.nagState.walkieTalkieActive = false;
+                orb.classList.remove("listening");
+                orb.classList.add("idle");
+                stopRecording();
+            }
+        });
+        
+        // Touch events for mobile
+        orb.addEventListener('touchstart', function(e) {
+            if (window.nagState.isWalkieTalkieMode && !window.nagState.isPaused) {
+                e.preventDefault(); // Important for mobile
+                window.nagState.walkieTalkieActive = true;
+                orb.classList.remove("idle");
+                orb.classList.add("listening");
+                startRecording();
+            }
+        });
+        
+        orb.addEventListener('touchend', function() {
+            if (window.nagState.isWalkieTalkieMode && window.nagState.walkieTalkieActive) {
+                window.nagState.walkieTalkieActive = false;
+                orb.classList.remove("listening");
+                orb.classList.add("idle");
+                stopRecording();
+            }
+        });
+        
+        // For continuous mode: simple click
+        orb.addEventListener('click', function() {
+            if (!window.nagState.isWalkieTalkieMode && !window.nagState.isPaused) {
+                if (window.nagState.listening) {
+                    stopListening();
+                } else {
+                    startListening();
+                }
+            }
+        });
+    }
+}
+
+// WebSocket connection with fallback
+function connectWebSocket() {
     try {
-        window.nagElements = {
-            messageContainer: document.getElementById('messageContainer'),
-            orb: document.getElementById('orb'),
-            toggleBtn: document.getElementById('toggleBtn'),
-            pauseBtn: document.getElementById('pauseBtn'),
-            modeToggle: document.getElementById('modeToggle'),
-            modeHint: document.getElementById('modeHint'),
-            debugPanel: document.getElementById('debugPanel'),
-            debugToggle: document.getElementById('debugToggle'),
-            audio: document.getElementById('audio'),
-            volumeBar: document.getElementById('volumeBar')
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/ws`;
+        console.log(`Attempting WebSocket connection to: ${wsUrl}`);
+        
+        const nagWebSocket = new WebSocket(wsUrl);
+        
+        nagWebSocket.onopen = () => {
+            console.log('WebSocket connection established');
+            window.logDebug('Connected to server successfully');
+            window.addStatusMessage('Connected to server', 'info');
         };
         
-        // Verify all required elements exist
-        const requiredElements = ['messageContainer', 'orb', 'toggleBtn', 'pauseBtn', 'modeToggle', 'modeHint', 'audio'];
-        const missingElements = requiredElements.filter(id => !window.nagElements[id]);
+        nagWebSocket.onclose = () => {
+            console.log('WebSocket closed');
+            window.logDebug('WebSocket connection closed');
+        };
         
-        if (missingElements.length > 0) {
-            console.error("Missing required elements:", missingElements);
-            return false;
-        }
+        nagWebSocket.onerror = (error) => {
+            console.error('WebSocket error:', error);
+            window.logDebug('WebSocket connection error');
+            window.addStatusMessage('Server connection failed', 'info');
+        };
         
-        return true;
-    } catch (error) {
-        console.error("Error caching elements:", error);
-        return false;
+        nagWebSocket.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.type === 'status') {
+                    window.addStatusMessage(data.message, data.status || 'info');
+                }
+            } catch (e) {
+                console.error('Error parsing WebSocket message:', e);
+            }
+        };
+        
+        return nagWebSocket;
+    } catch (e) {
+        console.error('WebSocket initialization error:', e);
+        window.logDebug('Could not initialize WebSocket');
+        window.addStatusMessage('Operating in offline mode', 'info');
+        return null;
     }
-};
+}
 
-// Function to set up event listeners
-window.setupEventListeners = function() {
-    try {
-        // Setup debug toggle
-        if (window.nagElements.debugToggle) {
-            window.nagElements.debugToggle.onclick = function() {
-                window.nagElements.debugPanel.classList.toggle('active');
-            };
-        }
-        
-        // Setup button event listeners
-        if (window.nagElements.toggleBtn) {
-            window.nagElements.toggleBtn.onclick = window.handleToggleClick;
-        }
-        if (window.nagElements.pauseBtn) {
-            window.nagElements.pauseBtn.onclick = window.handlePauseClick;
-        }
-        if (window.nagElements.modeToggle) {
-            window.nagElements.modeToggle.onclick = window.handleModeToggleClick;
-        }
-        
-        // Setup orb interactions
-        if (window.nagElements.orb) {
-            window.setupOrbInteractions(window.nagElements.orb);
-        }
-        
-        return true;
-    } catch (error) {
-        console.error("Error setting up event listeners:", error);
-        return false;
-    }
-};
-
-// Unified Safari audio unlocking
-window.unlockAudioContext = async function() {
-    if (window.nagState.audioUnlocked) return true;
+// Audio context unlocking (important for Safari)
+async function unlockAudioContext() {
+    if (window.nagState.audioContextUnlocked) return true;
     
     try {
-        // Create and immediately suspend an audio context
-        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        // Create audio context if not exists
+        if (!window.nagState.audioContext) {
+            window.nagState.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
         
-        // For Safari, we need to resume the context during a user gesture
-        await audioContext.resume();
+        // Resume context (needed for Safari)
+        if (window.nagState.audioContext.state === 'suspended') {
+            await window.nagState.audioContext.resume();
+        }
         
         // Create and play a silent buffer (crucial for Safari)
-        const buffer = audioContext.createBuffer(1, 1, 22050);
-        const source = audioContext.createBufferSource();
+        const buffer = window.nagState.audioContext.createBuffer(1, 1, 22050);
+        const source = window.nagState.audioContext.createBufferSource();
         source.buffer = buffer;
-        source.connect(audioContext.destination);
-        
+        source.connect(window.nagState.audioContext.destination);
         source.start(0);
         
-        // Also try to play the audio element if it exists
-        if (window.nagElements && window.nagElements.audio) {
+        // Also try to play the audio element (extra safety for Safari)
+        if (window.nagElements.audio) {
             const audio = window.nagElements.audio;
-            
             audio.src = "data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAADQgD///////////////////////////////////////////8AAAA8TEFNRTMuMTAwAQAAAAAAAAAAABSAJAJAQgAAgAAAA0L2YLwAAAAAAAAAAAAAAAAAAAAA//sQZAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//sQZB4P8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAEVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU=";
             
             try {
@@ -593,218 +273,378 @@ window.unlockAudioContext = async function() {
             }
         }
         
-        window.nagState.audioUnlocked = true;
+        window.nagState.audioContextUnlocked = true;
         return true;
     } catch (error) {
-        console.error("Error unlocking audio:", error);
+        console.error("Error unlocking audio context:", error);
         return false;
     }
-};
+}
 
-// Get the best audio format for the browser
-window.getBestAudioFormat = function() {
-    const formats = [
-        'audio/webm;codecs=opus', 
-        'audio/webm', 
-        'audio/mp4', 
-        'audio/mpeg', 
-        'audio/ogg;codecs=opus'
-    ];
-    
-    // Safari needs different format prioritization
-    if (window.nagState.isSafari || window.nagState.isiOS) {
-        formats.unshift('audio/mp4');
-    }
-    
-    for (const format of formats) {
-        try {
-            if (MediaRecorder.isTypeSupported(format)) {
-                console.log(`Using audio format: ${format}`);
-                return format;
-            }
-        } catch (e) {
-            console.error(`Error checking format support for ${format}:`, e);
-        }
-    }
-    
-    return ''; // fallback to browser default
-};
-
-// Master initialization function
-window.initializeApp = function() {
-    console.log("Initializing app...");
-    
+// Start listening for audio
+async function startListening() {
     try {
-        // First initialize state
-        initializeState();
+        // Unlock audio context first
+        await unlockAudioContext();
         
-        // Cache DOM elements
-        const elementsAvailable = window.cacheElements();
+        // Request microphone access
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        window.nagState.audioStream = stream;
         
-        if (!elementsAvailable) {
-            console.error("Critical DOM elements missing. Cannot initialize app.");
-            return;
-        }
+        // Setup recording
+        setupRecording(stream);
         
-        // Set up event listeners
-        window.setupEventListeners();
+        // Update UI
+        window.nagState.listening = true;
+        window.nagElements.orb.classList.remove("idle");
+        window.nagElements.orb.classList.add("listening");
+        window.nagElements.toggleBtn.textContent = "Stop Conversation";
+        window.nagElements.pauseBtn.disabled = false;
         
-        // Try to unlock audio context
-        window.unlockAudioContext().then(unlocked => {
-            console.log("Audio context unlock attempt:", unlocked ? "success" : "waiting for user interaction");
-        });
-        
-        // Add welcome message
-        if (window.addMessage) {
-            window.addMessage("Welcome to Nag. Click the orb to start.", false);
-        }
-        
-        // Log browser capabilities
-        logBrowserInfo();
-        
-        // Mark as initialized
-        window.nagState.initialized = true;
-        console.log("App initialization complete");
+        window.logDebug("Started listening");
+        return true;
     } catch (error) {
-        console.error("Error during app initialization:", error);
-    }
-};
-
-// Function to log browser info
-function logBrowserInfo() {
-    console.log("Browser Info:", {
-        userAgent: navigator.userAgent,
-        platform: navigator.platform,
-        isSafari: window.nagState.isSafari,
-        isiOS: window.nagState.isiOS,
-        audioUnlocked: window.nagState.audioUnlocked
-    });
-}
-
-// Export functions for global use
-window.initializeApp = initializeApp;
-window.initializeState = initializeState;
-window.unlockAudioContext = unlockAudioContext;
-window.getBestAudioFormat = getBestAudioFormat;
-window.cacheElements = cacheElements;
-window.setupEventListeners = setupEventListeners;
-
-// Function to toggle debug panel
-function toggleDebugPanel() {
-    const debugPanel = document.getElementById('debugPanel');
-    if (!debugPanel) {
-        logDebug("Debug panel not found in DOM");
-        return;
-    }
-    
-    const isVisible = debugPanel.style.display === 'block';
-    debugPanel.style.display = isVisible ? 'none' : 'block';
-    
-    // Update debug button text
-    const debugBtn = document.getElementById('debugBtn');
-    if (debugBtn) {
-        debugBtn.textContent = isVisible ? 'Show Debug' : 'Hide Debug';
+        console.error("Error starting listening:", error);
+        window.logDebug("Error starting listening: " + error.message);
+        window.addStatusMessage("Error accessing microphone. Please check permissions.", "error");
+        return false;
     }
 }
 
-// Function to add debug message
-function addDebugMessage(message) {
-    const debugPanel = document.getElementById('debugPanel');
-    if (!debugPanel) {
-        console.log("[Debug] " + message);
-        return;
+// Stop listening
+function stopListening() {
+    try {
+        // Stop all active media
+        if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state === "recording") {
+            window.nagState.mediaRecorder.stop();
+        }
+        
+        if (window.nagState.audioStream) {
+            window.nagState.audioStream.getTracks().forEach(track => track.stop());
+            window.nagState.audioStream = null;
+        }
+        
+        // Reset state
+        window.nagState.listening = false;
+        window.nagState.mediaRecorder = null;
+        window.nagState.audioChunks = [];
+        
+        // Update UI
+        window.nagElements.orb.classList.remove("listening", "thinking", "speaking");
+        window.nagElements.orb.classList.add("idle");
+        window.nagElements.toggleBtn.textContent = "Start Conversation";
+        window.nagElements.pauseBtn.disabled = true;
+        
+        window.logDebug("Stopped listening");
+        return true;
+    } catch (error) {
+        console.error("Error stopping listening:", error);
+        window.logDebug("Error stopping listening: " + error.message);
+        return false;
     }
-    
-    const messageElement = document.createElement('div');
-    messageElement.textContent = message;
-    messageElement.className = 'debug-message';
-    debugPanel.appendChild(messageElement);
-    debugPanel.scrollTop = debugPanel.scrollHeight;
 }
 
-// Function to set up orb interactions
-window.setupOrbInteractions = function(orb) {
-    if (!orb) return;
-    
-    // Mouse events
-    orb.addEventListener('mousedown', function() {
-        if (window.nagState.isWalkieTalkieMode && !window.nagState.isPaused) {
-            window.nagState.walkieTalkieActive = true;
-            orb.classList.remove('idle');
-            orb.classList.add('listening');
-            startListening();
+// Setup recording with the given stream
+function setupRecording(stream) {
+    try {
+        // Determine best MIME type for browser
+        let mimeType = "audio/webm";
+        
+        // For Safari, use audio/mp4
+        if (window.nagState.isSafari) {
+            mimeType = "audio/mp4";
         }
-    });
-    
-    orb.addEventListener('mouseup', function() {
-        if (window.nagState.isWalkieTalkieMode && window.nagState.walkieTalkieActive) {
-            window.nagState.walkieTalkieActive = false;
-            orb.classList.remove('listening');
-            orb.classList.add('idle');
-            stopRecording();
-        }
-    });
-    
-    orb.addEventListener('mouseleave', function() {
-        if (window.nagState.isWalkieTalkieMode && window.nagState.walkieTalkieActive) {
-            window.nagState.walkieTalkieActive = false;
-            orb.classList.remove('listening');
-            orb.classList.add('idle');
-            stopRecording();
-        }
-    });
-    
-    // Touch events
-    orb.addEventListener('touchstart', function(e) {
-        e.preventDefault();
-        if (window.nagState.isWalkieTalkieMode && !window.nagState.isPaused) {
-            window.nagState.walkieTalkieActive = true;
-            orb.classList.remove('idle');
-            orb.classList.add('listening');
-            startListening();
-        }
-    });
-    
-    orb.addEventListener('touchend', function(e) {
-        e.preventDefault();
-        if (window.nagState.isWalkieTalkieMode && window.nagState.walkieTalkieActive) {
-            window.nagState.walkieTalkieActive = false;
-            orb.classList.remove('listening');
-            orb.classList.add('idle');
-            stopRecording();
-        }
-    });
-    
-    // Click event for non-walkie-talkie mode
-    orb.addEventListener('click', function() {
-        if (!window.nagState.isWalkieTalkieMode && !window.nagState.isPaused) {
-            if (window.nagState.listening) {
-                orb.classList.remove('listening');
-                orb.classList.add('idle');
-                stopRecording();
-            } else {
-                orb.classList.remove('idle');
-                orb.classList.add('listening');
-                startListening();
-            }
-        }
-    });
-    
-    // Keyboard accessibility
-    orb.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            if (!window.nagState.isWalkieTalkieMode && !window.nagState.isPaused) {
-                if (window.nagState.listening) {
-                    orb.classList.remove('listening');
-                    orb.classList.add('idle');
-                    stopRecording();
-                } else {
-                    orb.classList.remove('idle');
-                    orb.classList.add('listening');
-                    startListening();
+        
+        // Fall back if not supported
+        if (!MediaRecorder.isTypeSupported(mimeType)) {
+            const supportedTypes = ["audio/webm", "audio/mp4", "audio/ogg", ""];
+            for (const type of supportedTypes) {
+                if (type === "" || MediaRecorder.isTypeSupported(type)) {
+                    mimeType = type;
+                    break;
                 }
             }
         }
-    });
-};
+        
+        // Initialize MediaRecorder
+        window.nagState.mediaRecorder = new MediaRecorder(stream, {
+            mimeType: mimeType || undefined,
+            audioBitsPerSecond: 128000
+        });
+        
+        window.nagState.audioChunks = [];
+        
+        // Handle data availability
+        window.nagState.mediaRecorder.ondataavailable = function(e) {
+            if (e.data && e.data.size > 0) {
+                window.nagState.audioChunks.push(e.data);
+                window.logDebug(`Audio chunk received: ${e.data.size} bytes`);
+            }
+        };
+        
+        // Handle recording stop
+        window.nagState.mediaRecorder.onstop = async function() {
+            window.logDebug("MediaRecorder stopped");
+            
+            // Process audio if we have enough data
+            if (window.nagState.audioChunks.length > 0) {
+                const totalSize = window.nagState.audioChunks.reduce((size, chunk) => size + chunk.size, 0);
+                window.logDebug(`Total audio size: ${totalSize} bytes`);
+                
+                if (totalSize > 1000) { // Minimum size threshold
+                    processAudioAndTranscribe();
+                } else {
+                    window.logDebug("Audio too small to process");
+                    window.addStatusMessage("Not enough audio captured. Please try again.", "info");
+                }
+            }
+        };
+        
+        // Start recording
+        window.nagState.mediaRecorder.start();
+        window.logDebug("Started recording");
+        
+        return true;
+    } catch (error) {
+        console.error("Error setting up recording:", error);
+        window.logDebug("Error setting up recording: " + error.message);
+        return false;
+    }
+}
+
+// Start recording in walkie-talkie mode
+function startRecording() {
+    try {
+        if (!window.nagState.audioContextUnlocked) {
+            unlockAudioContext();
+        }
+        
+        if (!window.nagState.audioStream) {
+            // Get audio stream if not already available
+            navigator.mediaDevices.getUserMedia({ audio: true })
+                .then(stream => {
+                    window.nagState.audioStream = stream;
+                    setupRecording(stream);
+                })
+                .catch(error => {
+                    console.error("Error accessing microphone:", error);
+                    window.logDebug("Microphone access error: " + error.message);
+                    window.addStatusMessage("Error accessing microphone", "error");
+                });
+        } else if (window.nagState.audioStream && !window.nagState.mediaRecorder) {
+            // Stream exists but recorder doesn't
+            setupRecording(window.nagState.audioStream);
+        } else if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state !== "recording") {
+            // Recorder exists but not recording
+            window.nagState.audioChunks = [];
+            window.nagState.mediaRecorder.start();
+            window.logDebug("Started recording (walkie-talkie)");
+        }
+    } catch (error) {
+        console.error("Error starting recording:", error);
+        window.logDebug("Error starting recording: " + error.message);
+    }
+}
+
+// Stop recording in walkie-talkie mode
+function stopRecording() {
+    try {
+        if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state === "recording") {
+            // For Safari, request final data chunk
+            if (window.nagState.isSafari) {
+                window.nagState.mediaRecorder.requestData();
+                // Small delay to ensure data is processed
+                setTimeout(() => {
+                    window.nagState.mediaRecorder.stop();
+                }, 200);
+            } else {
+                window.nagState.mediaRecorder.stop();
+            }
+            window.logDebug("Stopped recording (walkie-talkie)");
+        }
+    } catch (error) {
+        console.error("Error stopping recording:", error);
+        window.logDebug("Error stopping recording: " + error.message);
+    }
+}
+
+// Process audio and send for transcription
+async function processAudioAndTranscribe() {
+    try {
+        // Update UI to show processing
+        window.nagElements.orb.classList.remove("listening");
+        window.nagElements.orb.classList.add("thinking");
+        window.addStatusMessage("Processing audio...", "info");
+        
+        // Determine correct mime type
+        let mimeType = window.nagState.isSafari ? "audio/mp4" : "audio/webm";
+        if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.mimeType) {
+            mimeType = window.nagState.mediaRecorder.mimeType;
+        }
+        
+        // Create blob from chunks
+        const audioBlob = new Blob(window.nagState.audioChunks, { type: mimeType });
+        window.logDebug(`Audio blob created: ${audioBlob.size} bytes, type: ${mimeType}`);
+        
+        // Create form data
+        const formData = new FormData();
+        const fileExt = mimeType.includes("webm") ? "webm" : "mp4";
+        formData.append("file", audioBlob, `recording.${fileExt}`);
+        
+        // Add Safari-specific info if needed
+        if (window.nagState.isSafari) {
+            formData.append("browser", "safari");
+            formData.append("mime_type", mimeType);
+        }
+        
+        // Send to server
+        window.logDebug("Sending audio for transcription...");
+        const response = await fetch("/transcribe", {
+            method: "POST",
+            body: formData
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.detail || "Transcription failed");
+        }
+        
+        const data = await response.json();
+        window.logDebug("Transcription response received");
+        
+        // Process transcription
+        const transcription = data.transcription || data.transcript || "";
+        if (transcription.trim()) {
+            window.logDebug(`Transcription: ${transcription}`);
+            window.addStatusMessage(transcription, "user");
+            
+            // Send to chat endpoint
+            await sendToChat(transcription);
+        } else {
+            window.logDebug("Empty transcription received");
+            window.addStatusMessage("No speech detected. Please try again.", "info");
+            
+            // Reset UI
+            window.nagElements.orb.classList.remove("thinking");
+            window.nagElements.orb.classList.add(window.nagState.listening ? "listening" : "idle");
+        }
+    } catch (error) {
+        console.error("Error processing audio:", error);
+        window.logDebug("Error processing audio: " + error.message);
+        window.addStatusMessage("Error processing audio: " + error.message, "error");
+        
+        // Reset UI
+        window.nagElements.orb.classList.remove("thinking");
+        window.nagElements.orb.classList.add(window.nagState.listening ? "listening" : "idle");
+    }
+}
+
+// Send transcription to chat endpoint
+async function sendToChat(message) {
+    try {
+        // Update UI
+        window.nagElements.orb.classList.remove("listening");
+        window.nagElements.orb.classList.add("thinking");
+        window.addStatusMessage("Thinking...", "info");
+        
+        // Send request
+        window.logDebug("Sending to chat endpoint...");
+        const response = await fetch("/chat", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                message: message,
+                mode: "voice",
+                request_id: Date.now().toString()
+            })
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.detail || "Chat response failed");
+        }
+        
+        const data = await response.json();
+        window.logDebug("Chat response received");
+        
+        // Display response message
+        if (data.message) {
+            window.addStatusMessage(data.message, "assistant");
+        }
+        
+        // Play audio if available
+        if (data.audio_url || data.tts_url) {
+            const audioUrl = data.audio_url || data.tts_url;
+            window.logDebug(`Audio URL: ${audioUrl}`);
+            
+            // Update UI
+            window.nagElements.orb.classList.remove("thinking");
+            window.nagElements.orb.classList.add("speaking");
+            
+            // Play audio
+            const audio = window.nagElements.audio;
+            audio.src = audioUrl;
+            
+            audio.onloadeddata = () => {
+                window.logDebug("Audio loaded, playing...");
+                audio.play().catch(error => {
+                    console.error("Error playing audio:", error);
+                    window.logDebug("Error playing audio: " + error.message);
+                });
+            };
+            
+            audio.onended = () => {
+                window.logDebug("Audio playback ended");
+                // Reset UI
+                window.nagElements.orb.classList.remove("speaking");
+                window.nagElements.orb.classList.add(window.nagState.listening ? "listening" : "idle");
+                
+                // In continuous mode, start listening again if not paused
+                if (!window.nagState.isWalkieTalkieMode && 
+                    window.nagState.listening && 
+                    !window.nagState.isPaused) {
+                    startListening();
+                }
+            };
+            
+            audio.onerror = () => {
+                window.logDebug("Audio playback error");
+                // Reset UI
+                window.nagElements.orb.classList.remove("speaking");
+                window.nagElements.orb.classList.add(window.nagState.listening ? "listening" : "idle");
+            };
+        } else {
+            window.logDebug("No audio URL in response");
+            // Reset UI
+            window.nagElements.orb.classList.remove("thinking");
+            window.nagElements.orb.classList.add(window.nagState.listening ? "listening" : "idle");
+        }
+    } catch (error) {
+        console.error("Error sending to chat:", error);
+        window.logDebug("Error sending to chat: " + error.message);
+        window.addStatusMessage("Error getting response: " + error.message, "error");
+        
+        // Reset UI
+        window.nagElements.orb.classList.remove("thinking");
+        window.nagElements.orb.classList.add(window.nagState.listening ? "listening" : "idle");
+    }
+}
+
+// Make functions globally available
+window.initializeApp = initializeApp;
+window.startListening = startListening;
+window.stopListening = stopListening;
+window.startRecording = startRecording;
+window.stopRecording = stopRecording;
+window.unlockAudioContext = unlockAudioContext;
+window.processAudioAndTranscribe = processAudioAndTranscribe;
+
+// Initialize on document ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeApp);
+} else {
+    // If the page is already loaded, run initialization immediately
+    window.setTimeout(initializeApp, 100);
+}
