@@ -390,45 +390,69 @@ async function unlockAudioContext() {
 
 // Browser detection and capability checks
 function detectBrowserCapabilities() {
-    // Detect browser type
-    const userAgent = navigator.userAgent;
-    const isSafari = /^((?!chrome|android).)*safari/i.test(userAgent);
-    const isIOS = /iPad|iPhone|iPod/.test(userAgent) || 
-        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-    const isChrome = /Chrome/.test(userAgent) && !/Edge/.test(userAgent);
-    const isFirefox = /Firefox/.test(userAgent);
-    const isEdge = /Edg/.test(userAgent);
-    
-    // Store in global state
-    window.nagState.isSafari = isSafari;
-    window.nagState.isiOS = isIOS;
-    window.nagState.isChrome = isChrome;
-    window.nagState.isFirefox = isFirefox;
-    window.nagState.isEdge = isEdge;
-    
-    // Check for MediaRecorder support
-    window.nagState.hasMediaRecorder = typeof MediaRecorder !== 'undefined';
-    
-    // Check for WebRTC support
-    window.nagState.hasWebRTC = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
-    
-    // Check for AudioContext support
-    window.nagState.hasAudioContext = !!(window.AudioContext || window.webkitAudioContext);
-    
-    // Check for advanced audio processing support
-    window.nagState.hasAudioWorklet = !!(window.nagState.hasAudioContext && 
-        window.AudioContext && window.AudioContext.prototype.audioWorklet);
-    
-    // Log capabilities
-    window.logDebug(`Browser detection: ${isSafari ? 'Safari' : isChrome ? 'Chrome' : isFirefox ? 'Firefox' : isEdge ? 'Edge' : 'Other'}`);
-    window.logDebug(`iOS device: ${isIOS}`);
-    window.logDebug(`MediaRecorder support: ${window.nagState.hasMediaRecorder}`);
-    window.logDebug(`WebRTC support: ${window.nagState.hasWebRTC}`);
-    window.logDebug(`AudioContext support: ${window.nagState.hasAudioContext}`);
-    window.logDebug(`AudioWorklet support: ${window.nagState.hasAudioWorklet}`);
-    
-    // Apply browser-specific settings
-    applyBrowserSpecificSettings();
+    try {
+        // Detect browser type
+        const userAgent = navigator.userAgent;
+        const isSafari = /^((?!chrome|android).)*safari/i.test(userAgent);
+        const isIOS = /iPad|iPhone|iPod/.test(userAgent) || 
+            (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        const isChrome = /Chrome/.test(userAgent) && !/Edge/.test(userAgent);
+        const isFirefox = /Firefox/.test(userAgent);
+        const isEdge = /Edg/.test(userAgent);
+        
+        // Store in global state
+        window.nagState.isSafari = isSafari;
+        window.nagState.isiOS = isIOS;
+        window.nagState.isChrome = isChrome;
+        window.nagState.isFirefox = isFirefox;
+        window.nagState.isEdge = isEdge;
+        
+        // Check for MediaRecorder support
+        window.nagState.hasMediaRecorder = typeof MediaRecorder !== 'undefined';
+        
+        // Check for WebRTC support
+        window.nagState.hasWebRTC = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+        
+        // Check for AudioContext support
+        window.nagState.hasAudioContext = !!(window.AudioContext || window.webkitAudioContext);
+        
+        // Safely check for AudioWorklet support - FIXED VERSION
+        let hasAudioWorklet = false;
+        if (window.nagState.hasAudioContext) {
+            try {
+                // Create a temporary context just for feature detection
+                const tempContext = new (window.AudioContext || window.webkitAudioContext)();
+                // Safely check if audioWorklet exists on this instance
+                hasAudioWorklet = !!(tempContext && tempContext.audioWorklet);
+                // Clean up
+                if (tempContext && typeof tempContext.close === 'function') {
+                    tempContext.close().catch(() => {});
+                }
+            } catch (e) {
+                console.error("Error checking AudioWorklet support:", e);
+                hasAudioWorklet = false;
+            }
+        }
+        // Force disable AudioWorklet since we're missing the file
+        window.nagState.hasAudioWorklet = false; // Explicitly disable since file is missing
+        
+        // Log capabilities
+        window.logDebug(`Browser detection: ${isSafari ? 'Safari' : isChrome ? 'Chrome' : isFirefox ? 'Firefox' : isEdge ? 'Edge' : 'Other'}`);
+        window.logDebug(`iOS device: ${isIOS}`);
+        window.logDebug(`MediaRecorder support: ${window.nagState.hasMediaRecorder}`);
+        window.logDebug(`WebRTC support: ${window.nagState.hasWebRTC}`);
+        window.logDebug(`AudioContext support: ${window.nagState.hasAudioContext}`);
+        window.logDebug(`AudioWorklet support: DISABLED (missing file)`);
+        
+        // Apply browser-specific settings
+        applyBrowserSpecificSettings();
+        
+        return true;
+    } catch (error) {
+        console.error("Error in detectBrowserCapabilities:", error);
+        window.logDebug("Browser detection error: " + error.message);
+        return false;
+    }
 }
 
 // Apply browser-specific optimizations
@@ -971,26 +995,23 @@ function setupContinuousMode() {
     const orb = window.nagElements.orb;
     if (!orb) return;
     
-    window.logDebug("Setting up continuous mode...");
-    
-    // Remove any existing click handlers by cloning the orb
-    const newOrb = orb.cloneNode(true);
-    if (orb.parentNode) {
-        orb.parentNode.replaceChild(newOrb, orb);
-    }
-    window.nagElements.orb = newOrb;
-    
-    // Set up the new click handler with proper debouncing
+    // Create a debounced click handler to prevent double-click issues
     let lastClickTime = 0;
     let clickInProgress = false;
     
-    newOrb.addEventListener('click', async function(e) {
+    orb.addEventListener('click', async function(e) {
         // Prevent default to avoid double-triggers
         e.preventDefault();
         
+        // Skip if in walkie-talkie mode or paused
+        if (window.nagState.isWalkieTalkieMode || window.nagState.isPaused) {
+            window.logDebug("Click ignored - in walkie-talkie mode or paused");
+            return;
+        }
+        
         // Implement debounce logic
         const now = Date.now();
-        if (now - lastClickTime < 300 || clickInProgress) {
+        if (now - lastClickTime < 500 || clickInProgress) {
             window.logDebug("Ignoring rapid click or click in progress");
             return;
         }
@@ -999,49 +1020,34 @@ function setupContinuousMode() {
         clickInProgress = true;
         
         try {
-            // Skip if we're in walkie-talkie mode or paused
-            if (window.nagState.isWalkieTalkieMode || window.nagState.isPaused) {
-                window.logDebug("Click ignored - in walkie-talkie mode or paused");
-                clickInProgress = false;
-                return;
-            }
-            
             window.logDebug("Orb clicked in continuous mode");
             
             // Determine the current state based on the orb's class list
-            const isListening = newOrb.classList.contains("listening");
-            const isIdle = newOrb.classList.contains("idle") || 
-                          (!newOrb.classList.contains("listening") && 
-                           !newOrb.classList.contains("thinking") && 
-                           !newOrb.classList.contains("speaking"));
+            const isListening = orb.classList.contains("listening");
             
-            // Action based on current state
             if (isListening) {
                 // We're currently listening, so stop recording
                 window.logDebug("Stopping recording...");
                 
                 // Update UI first for immediate feedback
-                newOrb.classList.remove("listening");
-                newOrb.classList.add("thinking");
+                orb.classList.remove("listening");
+                orb.classList.add("thinking");
                 
                 // Call the appropriate stop function
                 if (typeof window.stopRecording === 'function') {
-                    await window.stopRecording();
+                    window.stopRecording();
                 } else if (typeof window.stopListening === 'function') {
-                    await window.stopListening();
+                    window.stopListening();
                 } else {
                     window.logDebug("Warning: No stop function available!");
-                    // Try to manually reset UI if no function is available
-                    newOrb.classList.remove("thinking");
-                    newOrb.classList.add("idle");
                 }
-            } else if (isIdle) {
-                // We're idle, so start recording
+            } else {
+                // We're idle or in another state, try to start recording
                 window.logDebug("Starting recording...");
                 
                 // Update UI first for immediate feedback
-                newOrb.classList.remove("idle", "thinking", "speaking");
-                newOrb.classList.add("listening");
+                orb.classList.remove("idle", "thinking", "speaking");
+                orb.classList.add("listening");
                 
                 // Try to unlock audio context first
                 if (typeof window.unlockAudioContext === 'function') {
@@ -1050,27 +1056,34 @@ function setupContinuousMode() {
                 
                 // Call the appropriate start function
                 if (typeof window.startRecording === 'function') {
-                    await window.startRecording();
+                    if (!await window.startRecording()) {
+                        // Reset UI if recording failed to start
+                        orb.classList.remove("listening");
+                        orb.classList.add("idle");
+                    }
                 } else if (typeof window.startListening === 'function') {
-                    await window.startListening();
+                    if (!await window.startListening()) {
+                        // Reset UI if listening failed to start
+                        orb.classList.remove("listening");
+                        orb.classList.add("idle");
+                    }
                 } else {
                     window.logDebug("Warning: No start function available!");
                     // Reset UI if we couldn't start
-                    newOrb.classList.remove("listening");
-                    newOrb.classList.add("idle");
+                    orb.classList.remove("listening");
+                    orb.classList.add("idle");
                 }
-            } else {
-                // We're in another state (thinking/speaking) - just log and ignore
-                window.logDebug(`Click ignored - orb in ${Array.from(newOrb.classList).join(', ')} state`);
             }
         } catch (error) {
             window.logDebug("Error handling orb click: " + error.message);
             // Reset UI in case of error
-            newOrb.classList.remove("listening", "thinking", "speaking");
-            newOrb.classList.add("idle");
+            orb.classList.remove("listening", "thinking", "speaking");
+            orb.classList.add("idle");
         } finally {
             // Always release the click lock
-            clickInProgress = false;
+            setTimeout(() => {
+                clickInProgress = false;
+            }, 500);
         }
     });
     

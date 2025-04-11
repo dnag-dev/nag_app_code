@@ -80,10 +80,10 @@ function setupVolumeVisualization(stream) {
             window.nagState.audioContext = new (window.AudioContext || window.webkitAudioContext)();
         }
         
-        // Create analyzer node for volume visualization
+        // Create analyzer node with better FFT size for more precise measurement
         const analyser = window.nagState.audioContext.createAnalyser();
-        analyser.fftSize = 2048;
-        analyser.smoothingTimeConstant = 0.8;
+        analyser.fftSize = 2048; // Larger FFT for more detailed analysis
+        analyser.smoothingTimeConstant = 0.8; // Better smoothing
         
         // Connect microphone to analyzer
         const source = window.nagState.audioContext.createMediaStreamSource(stream);
@@ -94,63 +94,11 @@ function setupVolumeVisualization(stream) {
         window.nagState.volumeDataArray = dataArray;
         window.nagState.analyserNode = analyser;
         
-        // Try to use AudioWorklet if supported, with robust error handling
-        if (window.nagState.audioContext.audioWorklet && !window.nagState.usingWorklet) {
-            window.logDebug("Attempting to load AudioWorklet module...");
-            
-            // Use a safe approach to load the worklet
-            window.nagState.audioContext.audioWorklet.addModule('audioWorklet.js')
-                .then(() => {
-                    try {
-                        // Create the worklet node
-                        const workletNode = new AudioWorkletNode(
-                            window.nagState.audioContext, 
-                            'voice-level-processor'
-                        );
-                        
-                        // Connect the source to the worklet
-                        source.connect(workletNode);
-                        
-                        // Listen for volume messages
-                        workletNode.port.onmessage = (event) => {
-                            if (event.data && event.data.type === 'volume') {
-                                window.nagState.currentVolume = event.data.volume;
-                                
-                                // Update volume bar if it exists
-                                if (window.nagElements.volumeBar) {
-                                    const volume = Math.min(100, Math.max(0, event.data.volume));
-                                    window.nagElements.volumeBar.style.width = `${volume}%`;
-                                    
-                                    // Change color based on volume
-                                    if (volume > 75) {
-                                        window.nagElements.volumeBar.style.backgroundColor = '#dc3545';
-                                    } else if (volume > 40) {
-                                        window.nagElements.volumeBar.style.backgroundColor = '#ffc107';
-                                    } else {
-                                        window.nagElements.volumeBar.style.backgroundColor = '#28a745';
-                                    }
-                                }
-                            }
-                        };
-                        
-                        window.nagState.workletNode = workletNode;
-                        window.nagState.usingWorklet = true;
-                        window.logDebug("AudioWorklet successfully initialized");
-                    } catch (err) {
-                        window.logDebug("Error creating AudioWorkletNode: " + err.message);
-                        window.logDebug("Falling back to AnalyserNode for volume detection");
-                    }
-                })
-                .catch(error => {
-                    window.logDebug("Error loading AudioWorklet module: " + error.message);
-                    window.logDebug("Falling back to AnalyserNode for volume detection");
-                });
-        } else {
-            window.logDebug("AudioWorklet not supported, using AnalyserNode for volume detection");
-        }
+        // IMPORTANT: Skip AudioWorklet loading entirely since we don't have the file
+        window.nagState.usingWorklet = false;
+        window.logDebug("Using analyzer node for volume visualization (AudioWorklet disabled)");
         
-        // Always start the visualization loop regardless of whether we're using AudioWorklet
-        // This ensures we always have volume visualization even if AudioWorklet fails
+        // Start visualization loop
         updateVolumeVisualization();
         
         return true;
