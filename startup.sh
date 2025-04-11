@@ -24,13 +24,6 @@ create_directories() {
     done
 }
 
-# Install dependencies using Azure's default Python
-install_dependencies() {
-    log "Installing Python dependencies (without venv)..."
-    pip install --upgrade pip
-    pip install --no-cache-dir -r /home/site/wwwroot/requirements.txt
-}
-
 # Enable debug logging
 export PYTHONUNBUFFERED=1
 export LOG_LEVEL=DEBUG
@@ -40,16 +33,16 @@ log "Python version: $(python --version)"
 
 # Run initialization steps
 create_directories
-install_dependencies
+
+# 🚫 Removed pip install to avoid conflicts in production
 
 # Start uvicorn in the foreground with additional settings
 log "Starting uvicorn server..."
 exec uvicorn main:app \
     --host 0.0.0.0 \
-    --port 8000 \
+    --port ${PORT:-8000} \
     --log-level debug \
     --timeout-keep-alive 60 \
     --timeout-graceful-shutdown 30 \
     --proxy-headers \
-    --forwarded-allow-ips "*" \
-    --reload
+    --forwarded-allow-ips "*"
