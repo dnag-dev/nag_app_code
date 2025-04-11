@@ -394,271 +394,159 @@ function resetRecordingUI() {
     }
 }
 
-// FIXED: Manual recording mode with user controls
-async function startRecording() {
+// Start recording audio
+function startRecording() {
+  if (!window.nagState.mediaRecorder || window.nagState.mediaRecorder.state === "recording") return;
+  
+  logDebug("🎙️ Starting recording...");
+  window.nagState.audioChunks = [];
+  window.nagState.speechDetected = false;
+  window.nagState.recordingStartTime = Date.now(); // Track when recording started
+  
   try {
-      // First try to unlock audio context
-      try {
-          if (window.unlockAudioContext) {
-              await window.unlockAudioContext();
-          }
-      } catch (e) {
-          window.logDebug("Audio context unlock warning: " + e.message);
-          // Continue anyway - we'll try to record
-      }
+    // Special handling for Safari to use timeslices
+    if (window.nagState.isSafari) {
+      // For Safari, use even shorter timeslices to get more frequent chunks
+      window.nagState.mediaRecorder.start(50); // Reduced from 100ms to 50ms for more chunks
+      logDebug("🎙️ Safari recording with 50ms timeslices");
       
-      // Get microphone access
-      const stream = await requestMicrophoneAccess();
-      if (!stream) {
-          throw new Error("Could not access microphone");
-      }
+      // Add Safari-specific event handler for dataavailable
+      window.nagState.mediaRecorder.ondataavailable = function(e) {
+        if (e.data && e.data.size > 0) {
+          // For Safari, add all non-empty chunks
+          window.nagState.audioChunks.push(e.data);
+          logDebug(`🔊 Audio chunk received: ${e.data.size} bytes`);
+          
+          // Update speech detection based on chunk size
+          if (e.data.size > 500) { // Reduced threshold to 500 bytes
+            window.nagState.speechDetected = true;
+          }
+        }
+      };
       
-      // Initialize MediaRecorder if needed
-      if (!window.nagState.mediaRecorder) {
-          initializeMediaRecorder(stream);
+      // For continuous mode in Safari, enforce minimum recording duration
+      if (!window.nagState.isWalkieTalkieMode) {
+        // Set a minimum recording duration flag (3 seconds)
+        window.nagState.enforceMinRecordingTime = true;
+        window.nagState.minRecordingDuration = 3000; // 3 seconds
+        logDebug("📊 Enforcing minimum 3 second recording for Safari continuous mode");
       }
-      
-      // Start recording if not already recording
-      if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state !== "recording") {
-          window.nagState.audioChunks = []; // Reset chunks
-          window.nagState.forceSafariProcessing = false; // Reset force processing flag
-          
-          // FIXED: Use smaller timeslice for Safari vs other browsers
-          // Safari works better with a smaller timeslice to capture more chunks
-          const isSafari = window.nagState.isSafari || window.nagState.isiOS;
-          const timeslice = isSafari ? 100 : 500; // Use much smaller timeslice for Safari (100ms vs 500ms)
-          
-          window.nagState.mediaRecorder.start(timeslice);
-          window.logDebug(`Recording started with ${timeslice}ms timeslice - optimized for ${isSafari ? 'Safari' : 'standard browser'}`);
-          
-          // Update UI
-          if (window.nagElements.orb) {
-              window.nagElements.orb.classList.remove("idle");
-              window.nagElements.orb.classList.add("listening");
-          }
-          
-          // Set a safety timeout to ensure recordings don't go too long
-          if (window.nagState.recordingTimeout) {
-              clearTimeout(window.nagState.recordingTimeout);
-          }
-          
-          // Reset silence detection state
-          window.nagState.silenceStartTime = null;
-          window.nagState.silenceDetectionEnabled = !isSafari; // Disable silence detection for Safari
-          
-          // FIXED: Adjust max recording time based on browser
-          // Longer for Safari to ensure complete capture
-          const maxRecordingTime = isSafari ? 35000 : 30000; // 35 seconds for Safari, 30 for others
-          
-          // Safety timeout - stop after max recording time
-          window.nagState.recordingTimeout = setTimeout(() => {
-              if (window.nagState.mediaRecorder && 
-                  window.nagState.mediaRecorder.state === "recording") {
-                  window.logDebug(`Maximum recording time reached (${maxRecordingTime/1000} seconds), stopping`);
-                  
-                  // For Safari, set the force processing flag to true 
-                  // This ensures we process the audio even if we don't have multiple chunks
-                  if (isSafari) {
-                      window.nagState.forceSafariProcessing = true;
-                      window.logDebug("Setting forceSafariProcessing=true for timeout scenario");
-                  }
-                  
-                  // First update UI to show we're stopping
-                  if (window.nagElements.orb) {
-                      window.nagElements.orb.classList.remove("listening");
-                      window.nagElements.orb.classList.add("thinking");
-                  }
-                  
-                  stopRecording();
-              }
-          }, maxRecordingTime);
-          
-          // Show recording time indicator
-          window.nagState.recordingStartTime = Date.now();
-          updateRecordingTimeIndicator();
-          
-          // Clear any existing instruction timeouts
-          if (window.nagState.instructionTimeout) {
-              clearTimeout(window.nagState.instructionTimeout);
-          }
-          
-          // Show instruction to click again when done speaking
-          if (window.nagElements.modeHint) {
-              window.nagElements.modeHint.textContent = "Recording... Click orb again when done speaking";
-              
-              // Keep this instruction visible for 5 seconds
-              window.nagState.instructionTimeout = setTimeout(() => {
-                  if (window.nagElements.modeHint && window.nagState.recordingStartTime) {
-                      updateRecordingTimeIndicator(); // Switch to time indicator
-                  }
-              }, 5000);
-          }
-      }
-      
-      return true;
+    } else {
+      // For non-Safari, use 250ms timeslice instead of default
+      window.nagState.mediaRecorder.start(250);
+      logDebug("🎙️ Standard recording with 250ms timeslices");
+    }
+    
+    // Set up UI and state
+    const orb = window.nagElements.orb;
+    if (orb) {
+      orb.classList.remove("idle");
+      orb.classList.add("listening");
+    }
+    
+    return true;
   } catch (error) {
-      console.error("Error starting recording:", error);
-      window.logDebug("Error starting recording: " + error.message);
-      window.addStatusMessage("Error starting recording: " + error.message, "error");
-      
-      // Reset UI in case of error
-      resetRecordingUI();
-      return false;
+    logDebug("❌ Error starting recording: " + error.message);
+    return false;
   }
 }
 
-// FIXED: Manual stop recording with improved reliability
+// Modified stop recording function
 function stopRecording() {
   try {
-      // Clear safety timeout
-      if (window.nagState.recordingTimeout) {
-          clearTimeout(window.nagState.recordingTimeout);
-          window.nagState.recordingTimeout = null;
-      }
+    // Check if we need to enforce minimum recording duration for Safari continuous mode
+    if (window.nagState.isSafari && 
+        window.nagState.enforceMinRecordingTime && 
+        window.nagState.recordingStartTime) {
       
-      // Clear instruction timeout
-      if (window.nagState.instructionTimeout) {
-          clearTimeout(window.nagState.instructionTimeout);
-          window.nagState.instructionTimeout = null;
-      }
+      const elapsedTime = Date.now() - window.nagState.recordingStartTime;
+      const minDuration = window.nagState.minRecordingDuration || 3000;
       
-      // Disable silence detection while stopping
-      window.nagState.silenceDetectionEnabled = false;
-      
-      // Reset recording time indicator
-      window.nagState.recordingStartTime = null;
-      if (window.nagElements.modeHint) {
-          if (window.nagState.isWalkieTalkieMode) {
-              window.nagElements.modeHint.textContent = "Press and hold the orb to speak";
-          } else {
-              window.nagElements.modeHint.textContent = "Click the orb to start recording";
-          }
+      if (elapsedTime < minDuration) {
+        const remainingTime = minDuration - elapsedTime;
+        logDebug(`📊 Enforcing minimum recording time, waiting ${remainingTime}ms more before stopping`);
+        
+        // Update UI to show we're still recording
+        if (window.nagElements.modeHint) {
+          window.nagElements.modeHint.textContent = "Still recording...";
+        }
+        
+        // Delay the actual stop
+        setTimeout(() => {
+          logDebug("📊 Minimum recording time reached, now stopping");
+          actuallyStopRecording();
+        }, remainingTime);
+        
+        return true;
       }
-      
-      // Update UI first to show we're processing
-      if (window.nagElements && window.nagElements.orb) {
-          window.nagElements.orb.classList.remove("listening");
-          window.nagElements.orb.classList.add("thinking");
-      }
-      
-      // If we're recording, stop
-      if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state === "recording") {
-          // Different handling based on browser
-          if (window.nagState.isSafari || window.nagState.isiOS) {
-              // For Safari, we need to be extra careful with timing
-              try {
-                  // First request the current data
-                  window.nagState.mediaRecorder.requestData();
-                  
-                  // Log the current chunks count
-                  window.logDebug(`Stopping Safari recording with ${window.nagState.audioChunks.length} chunks so far`);
-                  
-                  // Only force processing if we have a good amount of data or the flag is set
-                  const totalSize = window.nagState.audioChunks.reduce((acc, chunk) => acc + chunk.size, 0);
-                  if (totalSize > 5000 || window.nagState.forceSafariProcessing) {
-                      window.logDebug(`Safari audio looks good (${totalSize} bytes), proceeding with stop`);
-                  } else {
-                      // Set force flag if we have some data
-                      window.nagState.forceSafariProcessing = (totalSize > 1000);
-                      window.logDebug(`Setting forceSafariProcessing=${window.nagState.forceSafariProcessing} based on data size`);
-                  }
-                  
-                  // FIXED: Chain multiple requestData calls with longer delays
-                  setTimeout(() => {
-                      try {
-                          // Request data again to ensure we get everything
-                          window.nagState.mediaRecorder.requestData();
-                          window.logDebug("Safari: requested data again after delay");
-                          
-                          // Another delay before stopping
-                          setTimeout(() => {
-                              try {
-                                  // Request one final time
-                                  window.nagState.mediaRecorder.requestData();
-                                  window.logDebug("Safari: requested data final time");
-                                  
-                                  // Now stop with one more delay
-                                  setTimeout(() => {
-                                      try {
-                                          window.nagState.mediaRecorder.stop();
-                                          window.logDebug("Safari recording stopped after extended sequence");
-                                      } catch (e) {
-                                          window.logDebug("Error stopping Safari recording: " + e.message);
-                                          // In case of error, try to reset the UI
-                                          resetRecordingUI();
-                                      }
-                                  }, 200); // Final delay
-                                  
-                              } catch (e) {
-                                  window.logDebug("Error in final data request: " + e.message);
-                                  try {
-                                      window.nagState.mediaRecorder.stop();
-                                  } catch (e2) {
-                                      resetRecordingUI();
-                                  }
-                              }
-                          }, 300); // Second delay
-                          
-                      } catch (e) {
-                          window.logDebug("Error in second data request: " + e.message);
-                          try {
-                              window.nagState.mediaRecorder.stop();
-                          } catch (e2) {
-                              resetRecordingUI();
-                          }
-                      }
-                  }, 500); // First delay - increased from 300ms
-              } catch (e) {
-                  window.logDebug("Error in Safari recording stop sequence: " + e.message);
-                  // Try direct stop as fallback
-                  try {
-                      window.nagState.mediaRecorder.stop();
-                  } catch (e2) {
-                      window.logDebug("Fallback stop also failed: " + e2.message);
-                      resetRecordingUI();
-                  }
-              }
-          } else {
-              // For other browsers, simpler approach but still improved
-              try {
-                  // Ensure we get the final chunk of data
-                  window.nagState.mediaRecorder.requestData();
-                  
-                  // Small delay to ensure all data is captured
-                  // ENHANCED: Increased from 100ms to 300ms for better reliability
-                  setTimeout(() => {
-                      try {
-                          window.nagState.mediaRecorder.stop();
-                          window.logDebug("Recording stopped successfully");
-                      } catch (e) {
-                          window.logDebug("Error stopping recording: " + e.message);
-                          resetRecordingUI();
-                      }
-                  }, 300); // Increased from 100ms to 300ms
-              } catch (e) {
-                  window.logDebug("Error in recording stop sequence: " + e.message);
-                  // Try direct stop as fallback
-                  try {
-                      window.nagState.mediaRecorder.stop();
-                  } catch (e2) {
-                      window.logDebug("Fallback stop also failed: " + e2.message);
-                      resetRecordingUI();
-                  }
-              }
-          }
-          
-          window.logDebug("Recording stop sequence initiated");
-          return true;
-      } else {
-          // We weren't recording, reset UI
-          resetRecordingUI();
-          return false;
-      }
+    }
+    
+    return actuallyStopRecording();
   } catch (error) {
-      console.error("Error stopping recording:", error);
-      window.logDebug("Error stopping recording: " + error.message);
-      resetRecordingUI();
+    logDebug("❌ Error in stopRecording: " + error.message);
+    return false;
+  }
+}
+
+// The original stop recording logic moved to a separate function
+function actuallyStopRecording() {
+  try {
+    // Update UI first
+    const orb = window.nagElements.orb;
+    if (orb) {
+      orb.classList.remove("listening");
+      orb.classList.add("thinking");
+    }
+    
+    if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state === "recording") {
+      // For Safari, use enhanced stop sequence
+      if (window.nagState.isSafari) {
+        // First request current data
+        window.nagState.mediaRecorder.requestData();
+        
+        // Multiple staged requests with delays for Safari
+        setTimeout(() => {
+          try {
+            window.nagState.mediaRecorder.requestData();
+            logDebug("📊 Safari: requested additional data");
+            
+            setTimeout(() => {
+              try {
+                window.nagState.mediaRecorder.requestData();
+                logDebug("📊 Safari: requested final data");
+                
+                // Finally stop the recorder
+                setTimeout(() => {
+                  window.nagState.mediaRecorder.stop();
+                  logDebug("📊 Safari recording stopped after enhanced sequence");
+                }, 200);
+              } catch (e) {
+                logDebug("❌ Error in Safari stop sequence: " + e.message);
+                window.nagState.mediaRecorder.stop();
+              }
+            }, 200);
+          } catch (e) {
+            logDebug("❌ Error in Safari data request: " + e.message);
+            window.nagState.mediaRecorder.stop();
+          }
+        }, 300);
+      } else {
+        // For other browsers
+        window.nagState.mediaRecorder.requestData();
+        setTimeout(() => {
+          window.nagState.mediaRecorder.stop();
+        }, 200);
+      }
+      
+      logDebug("📊 Recording stop sequence initiated");
+      return true;
+    } else {
+      logDebug("⚠️ Not recording, nothing to stop");
       return false;
+    }
+  } catch (error) {
+    logDebug("❌ Error stopping recording: " + error.message);
+    return false;
   }
 }
 
