@@ -547,9 +547,24 @@ function stopListening() {
             window.nagElements.toggleBtn.textContent = "Start Conversation";
             window.nagElements.pauseBtn.disabled = true;
             
+            // CRITICAL FIX: Explicitly call processAudioAndTranscribe
+            // This ensures the audio is processed after stopping
+            if (window.nagState.audioChunks && window.nagState.audioChunks.length > 1) {
+                window.logDebug("Explicitly processing audio after stopListening");
+                // Give a small delay to ensure recorder has completely stopped
+                setTimeout(() => {
+                    if (window.processAudioAndTranscribe) {
+                        window.processAudioAndTranscribe();
+                    }
+                }, 200);
+            }
+            
             // Also clean up resources if we have that function
             if (window.cleanupRecording) {
-                window.cleanupRecording();
+                // Delay cleanup to ensure processing completes
+                setTimeout(() => {
+                    window.cleanupRecording();
+                }, 2000);
             }
             
             return result;
