@@ -966,3 +966,113 @@ if (document.readyState === 'loading') {
   // If the page is already loaded, run initialization immediately
   window.setTimeout(initializeApp, 100);
 }
+
+function setupContinuousMode() {
+    const orb = window.nagElements.orb;
+    if (!orb) return;
+    
+    window.logDebug("Setting up continuous mode...");
+    
+    // Remove any existing click handlers by cloning the orb
+    const newOrb = orb.cloneNode(true);
+    if (orb.parentNode) {
+        orb.parentNode.replaceChild(newOrb, orb);
+    }
+    window.nagElements.orb = newOrb;
+    
+    // Set up the new click handler with proper debouncing
+    let lastClickTime = 0;
+    let clickInProgress = false;
+    
+    newOrb.addEventListener('click', async function(e) {
+        // Prevent default to avoid double-triggers
+        e.preventDefault();
+        
+        // Implement debounce logic
+        const now = Date.now();
+        if (now - lastClickTime < 300 || clickInProgress) {
+            window.logDebug("Ignoring rapid click or click in progress");
+            return;
+        }
+        
+        lastClickTime = now;
+        clickInProgress = true;
+        
+        try {
+            // Skip if we're in walkie-talkie mode or paused
+            if (window.nagState.isWalkieTalkieMode || window.nagState.isPaused) {
+                window.logDebug("Click ignored - in walkie-talkie mode or paused");
+                clickInProgress = false;
+                return;
+            }
+            
+            window.logDebug("Orb clicked in continuous mode");
+            
+            // Determine the current state based on the orb's class list
+            const isListening = newOrb.classList.contains("listening");
+            const isIdle = newOrb.classList.contains("idle") || 
+                          (!newOrb.classList.contains("listening") && 
+                           !newOrb.classList.contains("thinking") && 
+                           !newOrb.classList.contains("speaking"));
+            
+            // Action based on current state
+            if (isListening) {
+                // We're currently listening, so stop recording
+                window.logDebug("Stopping recording...");
+                
+                // Update UI first for immediate feedback
+                newOrb.classList.remove("listening");
+                newOrb.classList.add("thinking");
+                
+                // Call the appropriate stop function
+                if (typeof window.stopRecording === 'function') {
+                    await window.stopRecording();
+                } else if (typeof window.stopListening === 'function') {
+                    await window.stopListening();
+                } else {
+                    window.logDebug("Warning: No stop function available!");
+                    // Try to manually reset UI if no function is available
+                    newOrb.classList.remove("thinking");
+                    newOrb.classList.add("idle");
+                }
+            } else if (isIdle) {
+                // We're idle, so start recording
+                window.logDebug("Starting recording...");
+                
+                // Update UI first for immediate feedback
+                newOrb.classList.remove("idle", "thinking", "speaking");
+                newOrb.classList.add("listening");
+                
+                // Try to unlock audio context first
+                if (typeof window.unlockAudioContext === 'function') {
+                    await window.unlockAudioContext();
+                }
+                
+                // Call the appropriate start function
+                if (typeof window.startRecording === 'function') {
+                    await window.startRecording();
+                } else if (typeof window.startListening === 'function') {
+                    await window.startListening();
+                } else {
+                    window.logDebug("Warning: No start function available!");
+                    // Reset UI if we couldn't start
+                    newOrb.classList.remove("listening");
+                    newOrb.classList.add("idle");
+                }
+            } else {
+                // We're in another state (thinking/speaking) - just log and ignore
+                window.logDebug(`Click ignored - orb in ${Array.from(newOrb.classList).join(', ')} state`);
+            }
+        } catch (error) {
+            window.logDebug("Error handling orb click: " + error.message);
+            // Reset UI in case of error
+            newOrb.classList.remove("listening", "thinking", "speaking");
+            newOrb.classList.add("idle");
+        } finally {
+            // Always release the click lock
+            clickInProgress = false;
+        }
+    });
+    
+    window.logDebug("Continuous mode set up with enhanced click handling");
+}
