@@ -248,3 +248,116 @@ window.transcribeAudio = transcribeAudio;
 window.handleTranscriptionResponse = handleTranscriptionResponse;
 window.handleTranscriptionError = handleTranscriptionError;
 window.base64ToBlob = base64ToBlob;
+
+// Process recorded audio and get transcription
+async function processAudioAndTranscribe() {
+  const orb = window.nagElements.orb;
+  
+  try {
+    // Safari-specific debugging and optimization
+    if (window.nagState.isSafari) {
+      logDebug("📊 Safari audio processing - chunks: " + window.nagState.audioChunks.length);
+      
+      // Calculate total size of audio chunks
+      const totalSize = window.nagState.audioChunks.reduce((sum, chunk) => sum + chunk.size, 0);
+      logDebug(`📊 Safari: Total audio size before processing: ${totalSize} bytes`);
+      
+      // FIXED: For Safari, allow processing even with a single large chunk
+      if (window.nagState.audioChunks.length < 2) {
+        if (totalSize < 5000) { // If less than 5KB and only one chunk
+          logDebug("⚠️ Not enough audio data for Safari (single small chunk)");
+          handleTranscriptionError("Not enough audio data. Please try speaking again.");
+          return;
+        } else {
+          // Single chunk but big enough - proceed with processing
+          logDebug("📊 Safari: Single chunk is large enough (>5KB), proceeding");
+        }
+      }
+    }
+    
+    // Get the appropriate MIME type for the blob
+    let mimeType = "";
+    if (window.nagState.mediaRecorder) {
+      mimeType = window.nagState.mediaRecorder.mimeType || "";
+    }
+    
+    // If we don't have a MIME type from the recorder, try to get it from the chunks
+    if (!mimeType && window.nagState.audioChunks.length > 0 && window.nagState.audioChunks[0].type) {
+      mimeType = window.nagState.audioChunks[0].type;
+    }
+    
+    // For Safari, ensure we're using the correct MIME type
+    if (window.nagState.isSafari && !mimeType.includes("mp4")) {
+      mimeType = "audio/mp4";
+      logDebug("📝 Forcing audio/mp4 MIME type for Safari");
+    }
+    
+    // Create blob with appropriate type
+    const blob = new Blob(window.nagState.audioChunks, mimeType ? { type: mimeType } : {});
+    
+    // Log blob size for debugging
+    logDebug(`📊 Final blob size: ${blob.size} bytes`);
+    
+    // Check if we have enough audio data
+    if (blob.size < 1000) { // Less than 1KB is probably just noise
+      logDebug("⚠️ Audio too small to process: " + blob.size + " bytes");
+      handleTranscriptionError("Audio too quiet or too short. Please speak louder or longer.");
+      return;
+    }
+    
+    const formData = new FormData();
+    
+    // Determine file extension based on MIME type
+    let fileExt = "mp4"; // Default to mp4 for Safari
+    if (mimeType.includes("webm")) fileExt = "webm";
+    else if (mimeType.includes("mp4")) fileExt = "mp4";
+    else if (mimeType.includes("ogg")) fileExt = "ogg";
+    
+    // Add file to form data
+    formData.append("file", blob, `input.${fileExt}`);
+    
+    // For Safari, add a flag in the form data
+    if (window.nagState.isSafari) {
+      formData.append("browser", "safari");
+      formData.append("chunk_count", window.nagState.audioChunks.length.toString());
+      formData.append("total_size", blob.size.toString());
+      formData.append("mime_type", mimeType);
+      formData.append("format", "mp4"); // Force MP4 format for Safari
+      formData.append("sample_rate", "44100"); // Add sample rate for Safari
+      formData.append("continuous_mode", !window.nagState.isWalkieTalkieMode ? "true" : "false");
+    }
+
+    // Show uploading state
+    window.nagState.isUploading = true;
+    orb.classList.remove("listening");
+    orb.classList.add("thinking");
+    logDebug("📤 Uploading voice...");
+    
+    // Send to server for transcription
+    const res = await fetch("/transcribe", { 
+      method: "POST", 
+      body: formData 
+    });
+
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(`Server error: ${res.status} - ${errorText}`);
+    }
+    
+    const data = await res.json();
+    
+    // Get transcribed message
+    const transcription = (data.transcription || data.transcript || "").trim();
+    
+    // Validate transcription text
+    if (transcription === '') {
+      throw new Error("Empty transcription received");
+    }
+    
+    console.log("Transcription successful:", transcription);
+    return transcription;
+  } catch (error) {
+    handleTranscriptionError(error);
+    throw error;
+  }
+}
