@@ -18,6 +18,7 @@ from typing import Optional, List
 from fastapi import WebSocketDisconnect
 from elevenlabs.client import ElevenLabs
 import traceback
+import uvicorn
 
 # -------------------- Logging Setup --------------------
 class JSONFormatter(logging.Formatter):
@@ -80,7 +81,13 @@ client = AsyncOpenAI(api_key=api_key, http_client=httpx.AsyncClient(timeout=30.0
 tts_client = ElevenLabs(api_key=os.getenv("ELEVENLABS_API_KEY"))
 
 # -------------------- App Setup --------------------
-app = FastAPI(title="Nag - Digital Twin", version="3.5.0")
+app = FastAPI(
+    title="Nag App API",
+    description="API for Nag App",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc"
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -127,7 +134,8 @@ async def health_check():
     """Health check endpoint for container monitoring"""
     return {
         "status": "healthy",
-        "timestamp": datetime.datetime.utcnow().isoformat()
+        "timestamp": datetime.datetime.utcnow().isoformat(),
+        "version": "1.0.0"
     }
 
 @app.websocket("/ws")
@@ -390,8 +398,20 @@ async def generate_tts(text: str) -> str:
 
 # -------------------- Local Debug --------------------
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)
+    # Configure uvicorn
+    config = uvicorn.Config(
+        "main:app",
+        host="0.0.0.0",
+        port=8000,
+        log_level="debug",
+        timeout_keep_alive=60,
+        timeout_graceful_shutdown=30,
+        proxy_headers=True,
+        forwarded_allow_ips="*",
+        reload=True
+    )
+    server = uvicorn.Server(config)
+    server.run()
 
 # Context management
 DINAKARA_CONTEXT = {}

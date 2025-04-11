@@ -42,9 +42,14 @@ log "Python version: $(python --version)"
 create_directories
 install_dependencies
 
-# Start uvicorn in the foreground
+# Start uvicorn in the foreground with additional settings
 log "Starting uvicorn server..."
-exec uvicorn main:app --host 0.0.0.0 --port 8000 --log-level debug --reload
-
-# Note: Using exec replaces the shell process with uvicorn
-# This ensures proper signal handling and prevents the container from terminating
+exec uvicorn main:app \
+    --host 0.0.0.0 \
+    --port 8000 \
+    --log-level debug \
+    --timeout-keep-alive 60 \
+    --timeout-graceful-shutdown 30 \
+    --proxy-headers \
+    --forwarded-allow-ips "*" \
+    --reload
