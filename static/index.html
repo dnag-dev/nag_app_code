@@ -3,483 +3,102 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Nag - AI Assistant 3</title>
-  
-  <style>
-    :root {
-      --primary-blue: #007bff;
-      --light-gray: #f8f9fa;
-      --medium-gray: #dee2e6;
-      --dark-gray: #6c757d;
-      --text-dark: #212529;
-      --text-light: #ffffff;
-      --error-red: #dc3545;
-      --info-blue: #17a2b8;
-      --debug-purple: #6f42c1;
-      --orb-idle-color: #6c757d; /* Dark Gray */
-      --orb-listening-color: #28a745; /* Green */
-      --orb-thinking-color: #ffc107; /* Yellow */
-      --orb-speaking-color: #17a2b8; /* Info Blue */
-    }
-
-    html, body {
-      height: 100%;
-      margin: 0;
-      padding: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      background-color: var(--light-gray);
-      color: var(--text-dark);
-      overscroll-behavior: none; /* Prevent pull-to-refresh */
-    }
-
-    body {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 20px;
-      box-sizing: border-box;
-    }
-
-    .app-container {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      width: 100%;
-      max-width: 400px; /* Constrain width for portrait feel */
-      flex-grow: 1; /* Allow container to grow */
-      padding-bottom: 20px; /* Space for debug toggle */
-    }
-
-    h1 {
-      font-size: 1.5rem;
-      color: var(--text-dark);
-      margin-top: 0;
-      margin-bottom: 20px;
-      text-align: center;
-    }
-
-    .orb-container {
-      margin-bottom: 30px;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-    }
-
-    /* LARGER ORB - Increased size from 120px to 180px */
-    .orb {
-      width: 180px;
-      height: 180px;
-      border-radius: 50%;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      font-size: 1.1rem;
-      color: var(--text-light);
-      text-align: center;
-      cursor: pointer;
-      transition: all 0.3s ease;
-      user-select: none;
-      -webkit-user-select: none;
-      -webkit-tap-highlight-color: transparent;
-      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-      position: relative;
-      background-color: var(--orb-idle-color);
-      transform: scale(1);
-    }
-
-    /* Orb States */
-    .orb.idle { 
-      background-color: var(--orb-idle-color);
-      color: var(--text-light);
-      transform: scale(1);
-      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-    }
-    .orb.listening { 
-      background-color: var(--orb-listening-color);
-      color: var(--text-light);
-      animation: pulse 1.5s infinite;
-      transform: scale(1.1);
-      box-shadow: 0 0 20px rgba(40, 167, 69, 0.5);
-    }
-    .orb.thinking { 
-      background-color: var(--orb-thinking-color);
-      color: var(--text-dark);
-      animation: spin 2s linear infinite;
-      transform: scale(1.1);
-      box-shadow: 0 0 20px rgba(255, 193, 7, 0.5);
-    }
-    .orb.speaking { 
-      background-color: var(--orb-speaking-color);
-      color: var(--text-light);
-      transform: scale(1.1);
-      box-shadow: 0 0 20px rgba(23, 162, 184, 0.5);
-    }
-
-    @keyframes pulse {
-      0% {
-        transform: scale(1);
-        box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7);
-      }
-      70% {
-        transform: scale(1.1);
-        box-shadow: 0 0 0 15px rgba(40, 167, 69, 0);
-      }
-      100% {
-        transform: scale(1);
-        box-shadow: 0 0 0 0 rgba(40, 167, 69, 0);
-      }
-    }
-
-    @keyframes spin {
-      0% {
-        transform: rotate(0deg) scale(1.1);
-      }
-      100% {
-        transform: rotate(360deg) scale(1.1);
-      }
-    }
-
-    .orb:active {
-      transform: scale(0.95);
-    }
-
-    .controls {
-      display: flex;
-      flex-direction: column; /* Stack button rows */
-      align-items: center;
-      gap: 10px; /* Space between button rows */
-      margin-bottom: 20px;
-      width: 100%;
-    }
-
-    .button-row {
-        display: flex;
-        justify-content: center;
-        gap: 10px; /* Space between buttons in a row */
-        width: 100%;
-    }
-
-    button, .control-btn {
-        display: inline-block;
-        padding: 8px 16px;
-        border-radius: 4px;
-        background-color: #007bff;
-        color: white;
-        border: none;
-        cursor: pointer;
-        font-size: 14px;
-        font-weight: 500;
-        transition: background-color 0.2s;
-    }
-    
-    button:hover, .control-btn:hover {
-        background-color: #0056b3;
-    }
-    
-    button:disabled, .control-btn:disabled {
-        background-color: #cccccc;
-        cursor: not-allowed;
-    }
-
-    /* Simple span-based controls - also styled as buttons */
-    .control-span {
-        display: inline-block;
-        padding: 8px 16px;
-        margin: 5px;
-        background: #007bff;
-        color: white;
-        border-radius: 4px;
-        cursor: pointer;
-        border: none;
-        font-size: 14px;
-        font-weight: 500;
-        transition: background-color 0.2s;
-    }
-
-    .control-span:hover {
-        background: #0056b3;
-    }
-
-    .control-span.disabled {
-        background: #cccccc;
-        cursor: not-allowed;
-        pointer-events: none;
-    }
-
-    #statusPanel {
-      width: 100%;
-      flex-grow: 1; /* Take remaining vertical space */
-      min-height: 100px; /* Minimum height */
-      max-height: 30vh; /* Limit maximum height */
-      border: 1px solid var(--medium-gray);
-      border-radius: 8px;
-      overflow-y: scroll;
-      padding: 10px;
-      background-color: #ffffff;
-      box-sizing: border-box;
-      display: flex;
-      flex-direction: column-reverse; /* Makes new messages appear at top */
-      margin-bottom: 15px;
-    }
-
-    .status-message {
-      padding: 8px 12px;
-      margin-bottom: 8px;
-      border-radius: 4px;
-      font-size: 0.9rem;
-      line-height: 1.4;
-      color: var(--text-dark);
-    }
-
-    .status-message:last-child {
-       margin-bottom: 0; /* No margin for the oldest message */
-    }
-
-    .status-message.user {
-      background-color: var(--primary-blue);
-      color: var(--text-light);
-    }
-
-    .status-message.assistant {
-      background-color: var(--light-gray);
-      color: var(--text-dark);
-      border: 1px solid var(--medium-gray);
-    }
-
-    .status-message.info {
-      background-color: #d1ecf1;
-      color: #0c5460; /* Non-white text */
-    }
-
-    .status-message.error {
-      background-color: #f8d7da;
-      color: #721c24; /* Non-white text */
-      font-weight: bold;
-    }
-
-    .status-message.debug {
-      background-color: #e2d9f3;
-      color: #3d2a70; /* Non-white text */
-      font-size: 0.75rem;
-      display: none; /* Hidden by default */
-    }
-
-    body.show-debug .status-message.debug {
-        display: block; /* Show debug messages when body has class */
-    }
-
-    .debug-control {
-      margin-top: 10px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .debug-control input[type="checkbox"] {
-      width: 16px;
-      height: 16px;
-      margin: 0;
-    }
-
-    .debug-control label {
-      font-size: 14px;
-      color: #666;
-      cursor: pointer;
-    }
-
-    .debug-panel {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      background: rgba(0, 0, 0, 0.9);
-      color: #fff;
-      padding: 10px;
-      font-family: monospace;
-      font-size: 12px;
-      max-height: 200px;
-      overflow-y: auto;
-      display: none;
-      z-index: 1000;
-    }
-
-    .debug-panel h3 {
-      margin: 0 0 10px 0;
-      font-size: 14px;
-      color: #fff;
-    }
-
-    .debug-content {
-      white-space: pre-wrap;
-    }
-
-    .debug-panel.visible {
-      display: block;
-    }
-
-    /* Improved message container styling */
-    .message-container {
-      width: 100%;
-      max-width: 400px;
-      margin: 20px 0;
-      padding: 15px;
-      background-color: var(--light-gray);
-      border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-      max-height: 300px;
-      overflow-y: auto;
-    }
-    
-    /* Message styling */
-    .message {
-      margin-bottom: 15px;
-      padding: 10px;
-      border-radius: 8px;
-      max-width: 80%;
-    }
-    
-    .user-message {
-      background-color: var(--primary-blue);
-      color: white;
-      align-self: flex-end;
-      margin-left: auto;
-    }
-    
-    .assistant-message {
-      background-color: var(--light-gray);
-      border: 1px solid var(--medium-gray);
-      align-self: flex-start;
-    }
-
-    /* Enhanced mode hint with instruction styling */
-    .mode-hint {
-      width: 100%;
-      text-align: center;
-      padding: 10px;
-      margin-bottom: 15px;
-      background-color: var(--primary-blue);
-      color: white;
-      border-radius: 4px;
-      font-size: 1rem;
-      font-weight: 500;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    }
-
-    .volume-bar {
-      width: 100%;
-      height: 8px;
-      background-color: #e9ecef;
-      border-radius: 4px;
-      margin-top: 10px;
-      overflow: hidden;
-    }
-    
-    .volume-bar-fill {
-      height: 100%;
-      width: 0%;
-      background-color: #28a745;
-      transition: width 0.1s ease;
-    }
-
-    /* User instructions box */
-    .instructions-panel {
-      width: 100%;
-      padding: 12px;
-      margin-bottom: 20px;
-      background-color: #fffbea;
-      border: 1px solid #ffeeba;
-      border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-    }
-
-    .instructions-panel h3 {
-      margin-top: 0;
-      margin-bottom: 8px;
-      font-size: 1.1rem;
-      color: #856404;
-    }
-
-    .instructions-panel ul {
-      margin: 0;
-      padding-left: 20px;
-    }
-
-    .instructions-panel li {
-      margin-bottom: 6px;
-    }
-
-    .instructions-panel p {
-      margin: 6px 0;
-    }
-  </style>
+  <title>Voice Assistant</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div class="app-container">
-    <h1>Nag - AI Assistant</h1>
-
-    <!-- New instructions panel -->
-    <div class="instructions-panel">
-      <h3>How to Use</h3>
-      <p><strong>Manual Recording Mode:</strong></p>
-      <ul>
-        <li>Click the orb once to START recording</li>
-        <li>Speak your complete message</li>
-        <li>Click the orb again to STOP recording when finished</li>
-        <li>Wait for response</li>
-      </ul>
-      <p>Recording will automatically stop after 30 seconds if not stopped manually.</p>
+    <!-- Info button in corner -->
+    <div class="info-icon" id="infoButton">
+      <i class="fas fa-info-circle"></i>
     </div>
-
+    
+    <!-- Info modal -->
+    <div class="info-modal" id="infoModal">
+      <div class="info-content">
+        <div class="modal-header">
+          <h2>How to Use</h2>
+          <span class="close-modal" id="closeModalBtn">&times;</span>
+        </div>
+        <div class="modal-body">
+          <h3>Manual Recording Mode:</h3>
+          <ul>
+            <li>Click the orb once to START recording</li>
+            <li>Speak your complete message</li>
+            <li>Click the orb again to STOP recording when finished</li>
+            <li>Wait for response</li>
+          </ul>
+          <p>Recording will automatically stop after 30 seconds if not stopped manually.</p>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Main orb interface -->
     <div class="orb-container">
-      <div id="orb" class="orb idle" role="button" tabindex="0">CLICK to Start<br>CLICK AGAIN to Stop</div>
+      <div id="orb" class="orb idle">
+        <div class="orb-inner">
+          <div class="orb-pulse"></div>
+          <div class="orb-rings">
+            <div class="ring ring1"></div>
+            <div class="ring ring2"></div>
+            <div class="ring ring3"></div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Instruction hint below orb -->
+      <div class="instruction-hint" id="modeHint">
+        Click the orb to start listening
+      </div>
     </div>
-
-    <div id="messageContainer" class="message-container">
-      <!-- Messages will be added here dynamically -->
-    </div>
-
-    <div id="modeHint" class="mode-hint">
-      Click the orb ONCE to start recording.<br>
-      Click AGAIN when done speaking.
-    </div>
-
-    <div class="controls">
-      <button id="toggleBtn" class="control-span">Start Conversation</button>
-      <button id="pauseBtn" class="control-span disabled">Pause</button>
-      <button id="modeToggle" class="control-span">Switch to Walkie-Talkie</button>
-      <div class="volume-bar">
+    
+    <!-- Controls container -->
+    <div class="controls-container">
+      <div class="volume-visualizer">
         <div id="volumeBar" class="volume-bar-fill"></div>
       </div>
-      <div class="debug-control">
-        <input type="checkbox" id="debugToggle" name="debugToggle">
-        <label for="debugToggle">Show Debug</label>
+      
+      <div class="mode-toggle-container">
+        <span>Mode:</span>
+        <div class="toggle-switch">
+          <input type="checkbox" id="modeToggle" class="toggle-input">
+          <label for="modeToggle" class="toggle-label">
+            <span class="toggle-option left">Continuous</span>
+            <span class="toggle-option right">Walkie-Talkie</span>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
       </div>
     </div>
-
-    <div id="statusPanel" class="status-panel">
-      <!-- Status messages will be added here -->
+    
+    <!-- Messages panel with latest messages on top -->
+    <div class="messages-panel">
+      <h2>Conversation</h2>
+      <div class="messages-container" id="statusPanel">
+        <!-- Messages will be added dynamically here -->
+        <div class="status-message assistant">
+          Hello! I'm your voice assistant. How can I help you today?
+        </div>
+        <div class="status-message info">
+          Welcome! Click the orb to start recording.
+        </div>
+      </div>
     </div>
-
-    <div id="debugPanel" class="debug-panel">
-      <h3>Debug Information</h3>
-      <div class="debug-content"></div>
-    </div>
-
+    
+    <!-- Hidden audio element -->
     <audio id="audio" style="display: none;"></audio>
   </div>
 
-  <!-- Initialize state object -->
+  <!-- JavaScript initialization -->
   <script>
-    // Define Initial State
+    // Initialize state object
     window.nagState = {
-      // Core State
       listening: false, 
       isPaused: false, 
       isWalkieTalkieMode: false, 
       walkieTalkieActive: false, 
       interrupted: false, 
-
-      // Audio/Recording State
       mediaRecorder: null,
       audioChunks: [],
       audioStream: null,
@@ -487,22 +106,18 @@
       audioContextUnlocked: false,
       analyserNode: null,
       volumeDataArray: null,
-
-      // UI/Timing State
       initialized: false, 
       scriptLoadStatus: {}, 
       modeHintTimeout: null, 
-
-      // Configuration/Flags
       debugEnabled: false,
-      
-      // Browser detection
       isiOS: /iPad|iPhone|iPod/.test(navigator.userAgent) || 
         (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1),
       isSafari: /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
     };
 
     window.nagElements = {}; // To cache DOM elements
+    
+    // Scripts to load
     window.scriptsToLoad = [
         'nag-utils.js',
         'nag-audio.js',
@@ -510,169 +125,126 @@
         'nag-ui.js',
         'nag-core.js'
     ];
+    
+    // Handle modal info button
+    document.addEventListener('DOMContentLoaded', function() {
+      const infoBtn = document.getElementById('infoButton');
+      const infoModal = document.getElementById('infoModal');
+      const closeBtn = document.getElementById('closeModalBtn');
+      
+      infoBtn.addEventListener('click', function() {
+        infoModal.classList.add('visible');
+      });
+      
+      closeBtn.addEventListener('click', function() {
+        infoModal.classList.remove('visible');
+      });
+      
+      // Close if clicking outside modal content
+      window.addEventListener('click', function(e) {
+        if (e.target === infoModal) {
+          infoModal.classList.remove('visible');
+        }
+      });
+      
+      // Mode toggle handling
+      const modeToggle = document.getElementById('modeToggle');
+      modeToggle.addEventListener('change', function() {
+        window.nagState.isWalkieTalkieMode = this.checked;
+        
+        if (window.nagElements.modeHint) {
+          window.nagElements.modeHint.textContent = this.checked ? 
+            "Press and hold the orb to speak" : 
+            "Click the orb to start listening";
+        }
+        
+        // Call the toggle function if it exists
+        if (typeof window.toggleMode === 'function') {
+          window.toggleMode(this.checked);
+        }
+      });
+    });
 
-    // Function to add messages to the message container
-    function addMessage(text, isUser = false) {
-        const container = document.getElementById('messageContainer');
-        if (!container) return;
-        
-        const messageDiv = document.createElement('div');
-        messageDiv.className = `message ${isUser ? 'user-message' : 'assistant-message'}`;
-        messageDiv.textContent = text;
-        
-        // Add to container
-        container.appendChild(messageDiv);
-        
-        // Scroll to latest message
-        container.scrollTop = container.scrollHeight;
-        
-        return messageDiv;
-    }
-    window.addMessage = addMessage;
-
-    // Function to add status messages
+    // Function to add status messages with newest on top
     function addStatusMessage(message, type = 'info', isDebug = false) {
-        const statusPanel = document.getElementById('statusPanel');
-        if (!statusPanel) {
-            console.log(`[${type}]: ${message}`);
-            return;
-        }
-
-        const messageDiv = document.createElement('div');
-        messageDiv.classList.add('status-message');
-        messageDiv.classList.add(type);
-        
-        if (isDebug) {
-            messageDiv.classList.add('debug');
-        }
-        
-        messageDiv.textContent = message;
-        statusPanel.insertBefore(messageDiv, statusPanel.firstChild);
-        
-        // Also add user and assistant messages to the message container
-        if (type === 'user') {
-            addMessage(message, true);
-        } else if (type === 'assistant') {
-            addMessage(message, false);
-        }
-        
-        if (type === 'error') {
-            console.error(message);
-        } else {
-            console.log(`[${type}]: ${message}`);
-        }
+      const statusPanel = document.getElementById('statusPanel');
+      if (!statusPanel) {
+        console.log(`[${type}]: ${message}`);
+        return;
+      }
+      
+      const messageDiv = document.createElement('div');
+      messageDiv.classList.add('status-message');
+      messageDiv.classList.add(type);
+      
+      if (isDebug) {
+        messageDiv.classList.add('debug');
+      }
+      
+      messageDiv.textContent = message;
+      
+      // Insert at the beginning (latest messages on top)
+      statusPanel.insertBefore(messageDiv, statusPanel.firstChild);
+      
+      return messageDiv;
     }
     window.addStatusMessage = addStatusMessage;
 
-    // Logging function
-    function logDebug(message) {
-        const debugContent = document.querySelector('.debug-content');
-        if (debugContent) {
-            const timestamp = new Date().toISOString().substr(11, 8);
-            const logEntry = document.createElement('div');
-            logEntry.textContent = `[${timestamp}] ${message}`;
-            debugContent.insertBefore(logEntry, debugContent.firstChild);
-        }
-        console.log(`[DEBUG] ${message}`);
-    }
-    window.logDebug = logDebug;
-
     // Load scripts sequentially
     function loadScript(src) {
-        return new Promise((resolve, reject) => {
-            const script = document.createElement('script');
-            script.src = src;
-            script.onload = () => {
-                console.log(`Loaded script: ${src}`);
-                window.nagState.scriptLoadStatus[src] = true;
-                resolve();
-            };
-            script.onerror = () => {
-                console.error(`Failed to load script: ${src}`);
-                reject(new Error(`Failed to load ${src}`));
-            };
-            document.body.appendChild(script);
-        });
-    }
-
-    // Check if all scripts are loaded
-    function checkAllScriptsLoaded() {
-        return window.scriptsToLoad.every(script => window.nagState.scriptLoadStatus[script]);
-    }
-
-    // Initialize UI elements
-    function cacheElements() {
-        window.nagElements = {
-            orb: document.getElementById('orb'),
-            audio: document.getElementById('audio'),
-            volumeBar: document.getElementById('volumeBar'),
-            toggleBtn: document.getElementById('toggleBtn'),
-            pauseBtn: document.getElementById('pauseBtn'),
-            modeToggle: document.getElementById('modeToggle'),
-            modeHint: document.getElementById('modeHint'),
-            debugPanel: document.getElementById('debugPanel'),
-            statusPanel: document.getElementById('statusPanel'),
-            messageContainer: document.getElementById('messageContainer'),
-            debugToggle: document.getElementById('debugToggle')
+      return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = src;
+        script.onload = () => {
+          console.log(`Loaded script: ${src}`);
+          window.nagState.scriptLoadStatus[src] = true;
+          resolve();
         };
-
-        for (const [key, element] of Object.entries(window.nagElements)) {
-            if (!element) {
-                console.warn(`Missing UI element: ${key}`);
-            }
-        }
+        script.onerror = () => {
+          console.error(`Failed to load script: ${src}`);
+          reject(new Error(`Failed to load ${src}`));
+        };
+        document.body.appendChild(script);
+      });
     }
 
-    // Initialize everything once DOM is loaded
+    // Initialize everything
     document.addEventListener('DOMContentLoaded', function() {
-        console.log("DOM loaded, initializing application...");
+      console.log("DOM loaded, initializing application...");
+      
+      // Cache DOM elements
+      window.nagElements = {
+        orb: document.getElementById('orb'),
+        audio: document.getElementById('audio'),
+        volumeBar: document.getElementById('volumeBar'),
+        modeToggle: document.getElementById('modeToggle'),
+        modeHint: document.getElementById('modeHint'),
+        statusPanel: document.getElementById('statusPanel')
+      };
+      
+      // Load scripts sequentially
+      window.scriptsToLoad.reduce((promise, script) => {
+        return promise.then(() => loadScript(script));
+      }, Promise.resolve())
+      .then(() => {
+        console.log("All scripts loaded successfully");
+        window.addStatusMessage("Application initialized successfully", "info");
         
-        // Cache DOM elements
-        cacheElements();
-        
-        // Show initial instruction
-        addStatusMessage("Welcome! Click the orb ONCE to start recording, then click it AGAIN when done speaking.", "info");
-        
-        // Set up debug toggle
-        const debugToggle = document.getElementById('debugToggle');
-        if (debugToggle) {
-            const showDebug = localStorage.getItem('nagDebugEnabled') === 'true';
-            debugToggle.checked = showDebug;
-            document.body.classList.toggle('show-debug', showDebug);
-            window.nagState.debugEnabled = showDebug;
-            
-            debugToggle.addEventListener('change', function() {
-                const isChecked = this.checked;
-                document.body.classList.toggle('show-debug', isChecked);
-                window.nagState.debugEnabled = isChecked;
-                localStorage.setItem('nagDebugEnabled', isChecked);
-                addStatusMessage(`Debug messages ${isChecked ? 'shown' : 'hidden'}`, 'info');
-            });
-        }
-        
-        // Load scripts sequentially
-        window.scriptsToLoad.reduce((promise, script) => {
-            return promise.then(() => loadScript(script));
-        }, Promise.resolve())
-        .then(() => {
-            console.log("All scripts loaded successfully");
-            addStatusMessage("Application initialized successfully", "info");
-            
-            // Set up temporary click handlers until scripts properly initialize
-            const orb = document.getElementById('orb');
-            if (orb) {
-                orb.addEventListener('click', function() {
-                    if (!window.nagState.initialized && window.initializeApp) {
-                        window.initializeApp();
-                    }
-                    addStatusMessage("Orb clicked, attempting to start", "info");
-                });
+        // Setup temporary click handlers until scripts properly initialize
+        const orb = document.getElementById('orb');
+        if (orb && !window.nagState.initialized) {
+          orb.addEventListener('click', function() {
+            if (window.initializeApp) {
+              window.initializeApp();
             }
-        })
-        .catch(error => {
-            console.error("Error loading scripts:", error);
-            addStatusMessage("Failed to initialize application. Please refresh the page.", "error");
-        });
+            window.addStatusMessage("Orb clicked, attempting to start", "info");
+          });
+        }
+      })
+      .catch(error => {
+        console.error("Error loading scripts:", error);
+        window.addStatusMessage("Failed to initialize application. Please refresh the page.", "error");
+      });
     });
   </script>
 </body>
