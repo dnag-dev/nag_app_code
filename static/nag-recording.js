@@ -284,54 +284,47 @@ function initializeMediaRecorder(stream) {
         mediaRecorder.onstop = function() {
             window.logDebug(`MediaRecorder stopped. Processing ${window.nagState.audioChunks.length} chunks...`);
             
-            // IMPORTANT: Make a copy of the audio chunks so they don't get lost
-            const chunksToProcess = [...window.nagState.audioChunks];
+            // Make a copy of the audio chunks to prevent them being lost during cleanup
+            const savedChunks = [...window.nagState.audioChunks];
             
-            // Process audio if we have enough chunks
-            if (chunksToProcess.length > 1) {
-                const totalSize = chunksToProcess.reduce((acc, chunk) => acc + chunk.size, 0);
-                window.logDebug(`Total audio size: ${totalSize} bytes in ${chunksToProcess.length} chunks`);
+            // Process audio if we have any chunks
+            if (savedChunks.length > 0) {
+                // Calculate total audio size
+                const totalSize = savedChunks.reduce((acc, chunk) => acc + chunk.size, 0);
+                window.logDebug(`Total audio size: ${totalSize} bytes in ${savedChunks.length} chunks`);
                 
-                if (window.nagState.isSafari && chunksToProcess.length < 2 && !window.nagState.forceSafariProcessing) {
+                // Check if we have enough chunks (mostly for Safari)
+                if (window.nagState.isSafari && savedChunks.length < 2 && !window.nagState.forceSafariProcessing) {
                     window.logDebug("Safari recording has too few chunks, not processing");
                     window.addStatusMessage("Not enough audio recorded. Please try again and speak longer.", "info");
                     resetRecordingUI();
                     return;
                 }
                 
-                if (totalSize > 1000) {
-                    // CRITICAL: Force processing to happen BEFORE cleanup
-                    window.nagState.processingInProgress = true;
-                    
-                    // IMPORTANT: Use the copied chunks
-                    window.nagState.audioChunks = chunksToProcess;
-                    
-                    // Call processAudioAndTranscribe directly
-                    window.logDebug("Explicitly calling processAudioAndTranscribe");
-                    
-                    if (typeof window.processAudioAndTranscribe === 'function') {
-                        // For Safari, add a small delay
-                        if (window.nagState.isSafari || window.nagState.isiOS) {
-                            setTimeout(() => {
-                                window.processAudioAndTranscribe();
-                            }, 300);
-                        } else {
+                if (totalSize > 1000) { // Minimum size threshold (1KB)
+                    // Ensure audio processing happens AFTER the event completes
+                    setTimeout(function() {
+                        // Put the saved chunks back
+                        window.nagState.audioChunks = savedChunks;
+                        
+                        // CRITICAL FIX: Force audio processing
+                        if (typeof window.processAudioAndTranscribe === 'function') {
+                            window.logDebug("Explicitly calling processAudioAndTranscribe");
                             window.processAudioAndTranscribe();
+                        } else {
+                            window.logDebug("ERROR: processAudioAndTranscribe function not available");
                         }
-                    } else {
-                        window.logDebug("ERROR: processAudioAndTranscribe function not available");
-                        resetRecordingUI();
-                        window.addStatusMessage("Error processing audio: transcription function not found", "error");
-                    }
+                    }, 100); // Small timeout to ensure this runs after the event completes
                     
-                    return true;
+                    // Return here to prevent immediate cleanup
+                    return;
                 } else {
                     window.logDebug("Audio too small, not processing");
                     window.addStatusMessage("Not enough audio recorded. Please try again.", "info");
                     resetRecordingUI();
                 }
             } else {
-                // No audio chunks or empty chunks
+                // No audio chunks
                 window.logDebug("No valid audio chunks recorded");
                 window.addStatusMessage("No audio recorded. Please try again.", "info");
                 resetRecordingUI();
