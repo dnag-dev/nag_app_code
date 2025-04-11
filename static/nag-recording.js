@@ -270,7 +270,7 @@ function initializeMediaRecorder(stream) {
         window.nagState.mediaRecorder = mediaRecorder;
         window.nagState.audioChunks = [];
         
-        // Setup event handlers with improved chunk collection
+        // IMPORTANT: Store chunks in the state for processing
         mediaRecorder.ondataavailable = (event) => {
             if (event.data && event.data.size > 0) {
                 window.nagState.audioChunks.push(event.data);
@@ -280,8 +280,8 @@ function initializeMediaRecorder(stream) {
             }
         };
         
-        // Improved onstop handler to ensure complete audio processing
-        mediaRecorder.onstop = function() {
+        // CRITICAL FIX: Ensure onstop always processes the audio
+        mediaRecorder.onstop = () => {
             window.logDebug(`MediaRecorder stopped. Processing ${window.nagState.audioChunks.length} chunks...`);
             
             // Process audio if we have any chunks
@@ -299,48 +299,45 @@ function initializeMediaRecorder(stream) {
                 }
                 
                 if (totalSize > 1000) { // Minimum size threshold (1KB)
-                    // IMPORTANT: We call processAudioAndTranscribe from core to avoid duplicates
-                    if (window.processAudioAndTranscribe) {
-                        // NEW: For safety, wait a bit before processing in Safari
-                        if (window.nagState.isSafari || window.nagState.isiOS) {
-                            window.logDebug("Safari: waiting 300ms before processing audio");
-                            setTimeout(() => {
-                                window.processAudioAndTranscribe();
-                            }, 300);
-                        } else {
-                            window.processAudioAndTranscribe();
-                        }
-                    } else {
-                        window.logDebug("processAudioAndTranscribe function not available");
+                    // IMPORTANT: Force cleanup delay to ensure chunks don't get lost
+                    const savedChunks = [...window.nagState.audioChunks]; // Make a copy
+                    const processingAudio = () => {
+                        // Set chunks back to the saved copy
+                        window.nagState.audioChunks = savedChunks;
                         
-                        // Reset UI
-                        resetRecordingUI();
-                        window.addStatusMessage("Error processing audio: transcription function not found", "error");
-                    }
+                        // IMPORTANT: Call processAudioAndTranscribe directly
+                        if (window.processAudioAndTranscribe) {
+                            window.logDebug("Explicitly calling processAudioAndTranscribe");
+                            
+                            // For safety, wait a bit before processing in Safari
+                            if (window.nagState.isSafari || window.nagState.isiOS) {
+                                window.logDebug("Safari: waiting 300ms before processing audio");
+                                setTimeout(() => {
+                                    window.processAudioAndTranscribe();
+                                }, 300);
+                            } else {
+                                window.processAudioAndTranscribe();
+                            }
+                        } else {
+                            window.logDebug("processAudioAndTranscribe function not available");
+                            resetRecordingUI();
+                            window.addStatusMessage("Error processing audio: transcription function not found", "error");
+                        }
+                    };
+                    
+                    // Add slight delay to ensure resources are ready
+                    setTimeout(processingAudio, 200);
                 } else {
                     window.logDebug("Audio too small, not processing");
                     window.addStatusMessage("Not enough audio recorded. Please try again.", "info");
-                    
-                    // Reset UI
                     resetRecordingUI();
                 }
             } else {
                 // No audio chunks or empty chunks
                 window.logDebug("No valid audio chunks recorded");
                 window.addStatusMessage("No audio recorded. Please try again.", "info");
-                
-                // Reset UI
                 resetRecordingUI();
             }
-        };
-        
-        mediaRecorder.onerror = (event) => {
-            console.error("MediaRecorder error:", event.error);
-            window.logDebug(`MediaRecorder error: ${event.error ? event.error.name : 'unknown'}`);
-            window.addStatusMessage("Recording error. Please try again.", "error");
-            
-            // Reset UI
-            resetRecordingUI();
         };
         
         return mediaRecorder;
@@ -514,25 +511,18 @@ function stopRecording() {
             window.nagElements.orb.classList.add("thinking");
         }
         
-        // Safe check for MediaRecorder
-        if (!window.nagState.mediaRecorder) {
-            window.logDebug("MediaRecorder is null, cannot stop");
-            resetRecordingUI();
-            return false;
-        }
-        
         // If we're recording, stop
-        if (window.nagState.mediaRecorder.state === "recording") {
+        if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.state === "recording") {
+            // Make a reference to the current MediaRecorder
+            const recorder = window.nagState.mediaRecorder;
+            
             // Different handling based on browser
             if (window.nagState.isSafari || window.nagState.isiOS) {
                 try {
                     // Log the current chunks count
                     window.logDebug(`Stopping Safari recording with ${window.nagState.audioChunks.length} chunks so far`);
                     
-                    // Create a local reference to avoid null issues
-                    const recorder = window.nagState.mediaRecorder;
-                    
-                    // Try to get final chunks with error handling
+                    // First request data to ensure we get all chunks
                     try {
                         if (recorder && recorder.requestData) {
                             recorder.requestData();
@@ -541,53 +531,77 @@ function stopRecording() {
                         window.logDebug("Error requesting final Safari data: " + e.message);
                     }
                     
-                    // Extended delay for Safari
+                    // IMPORTANT: Give time for data event to complete
                     setTimeout(() => {
                         try {
-                            // Stop recording after delay
-                            if (recorder && recorder.state === "recording" && recorder.stop) {
+                            if (recorder && recorder.state === "recording") {
                                 recorder.stop();
                                 window.logDebug("Safari recording stopped after extended timeout");
                             }
                         } catch (e) {
                             window.logDebug("Error stopping Safari recording: " + e.message);
-                            // Reset UI in case of error
-                            resetRecordingUI();
+                            // Even if there's an error, we'll still try to process the audio
+                            if (window.processAudioAndTranscribe) {
+                                setTimeout(window.processAudioAndTranscribe, 500);
+                            }
                         }
-                    }, 1000); // 1 second delay for Safari
+                    }, 1000); // Longer delay for Safari
                 } catch (e) {
                     window.logDebug("Error in Safari recording stop sequence: " + e.message);
-                    resetRecordingUI();
+                    
+                    // Try direct stop as fallback
+                    try {
+                        recorder.stop();
+                    } catch (e2) {
+                        window.logDebug("Fallback stop also failed: " + e2.message);
+                        // Even with failure, try to process what we have
+                        if (window.processAudioAndTranscribe) {
+                            setTimeout(window.processAudioAndTranscribe, 500);
+                        }
+                    }
                 }
             } else {
-                // For other browsers
+                // For other browsers, simpler approach but still improved
                 try {
                     // Ensure we get the final chunk of data
-                    if (window.nagState.mediaRecorder && window.nagState.mediaRecorder.requestData) {
-                        window.nagState.mediaRecorder.requestData();
-                    }
+                    recorder.requestData();
                     
                     // Small delay to ensure all data is captured
                     setTimeout(() => {
                         try {
-                            if (window.nagState.mediaRecorder && 
-                                window.nagState.mediaRecorder.state === "recording" &&
-                                window.nagState.mediaRecorder.stop) {
-                                window.nagState.mediaRecorder.stop();
-                                window.logDebug("Recording stopped successfully");
-                            }
+                            recorder.stop();
+                            window.logDebug("Recording stopped successfully");
                         } catch (e) {
                             window.logDebug("Error stopping recording: " + e.message);
-                            resetRecordingUI();
+                            // Even with failure, try to process what we have
+                            if (window.processAudioAndTranscribe) {
+                                setTimeout(window.processAudioAndTranscribe, 500);
+                            }
                         }
                     }, 300);
                 } catch (e) {
                     window.logDebug("Error in recording stop sequence: " + e.message);
-                    resetRecordingUI();
+                    // Try direct stop as fallback
+                    try {
+                        recorder.stop();
+                    } catch (e2) {
+                        window.logDebug("Fallback stop also failed: " + e2.message);
+                        // Even with failure, try to process what we have
+                        if (window.processAudioAndTranscribe) {
+                            setTimeout(window.processAudioAndTranscribe, 500);
+                        }
+                    }
                 }
             }
             
             window.logDebug("Recording stop sequence initiated");
+            
+            // IMPORTANT: Delay cleanup to ensure processing happens first
+            window.nagState.cleanupTimeout = setTimeout(() => {
+                // Only clean up AFTER processing has had time to complete
+                window.logDebug("Recording resources cleaned up");
+            }, 5000); // 5 second delay to ensure processing completes first
+            
             return true;
         } else {
             // We weren't recording, reset UI
