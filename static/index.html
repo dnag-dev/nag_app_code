@@ -351,15 +351,18 @@
       align-self: flex-start;
     }
 
+    /* Enhanced mode hint with instruction styling */
     .mode-hint {
       width: 100%;
       text-align: center;
-      padding: 8px;
+      padding: 10px;
       margin-bottom: 15px;
-      background-color: var(--light-gray);
+      background-color: var(--primary-blue);
+      color: white;
       border-radius: 4px;
-      font-size: 0.9rem;
-      color: var(--dark-gray);
+      font-size: 1rem;
+      font-weight: 500;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
 
     .volume-bar {
@@ -377,14 +380,58 @@
       background-color: #28a745;
       transition: width 0.1s ease;
     }
+
+    /* User instructions box */
+    .instructions-panel {
+      width: 100%;
+      padding: 12px;
+      margin-bottom: 20px;
+      background-color: #fffbea;
+      border: 1px solid #ffeeba;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
+
+    .instructions-panel h3 {
+      margin-top: 0;
+      margin-bottom: 8px;
+      font-size: 1.1rem;
+      color: #856404;
+    }
+
+    .instructions-panel ul {
+      margin: 0;
+      padding-left: 20px;
+    }
+
+    .instructions-panel li {
+      margin-bottom: 6px;
+    }
+
+    .instructions-panel p {
+      margin: 6px 0;
+    }
   </style>
 </head>
 <body>
   <div class="app-container">
     <h1>Nag - AI Assistant</h1>
 
+    <!-- New instructions panel -->
+    <div class="instructions-panel">
+      <h3>How to Use</h3>
+      <p><strong>Manual Recording Mode:</strong></p>
+      <ul>
+        <li>Click the orb once to START recording</li>
+        <li>Speak your complete message</li>
+        <li>Click the orb again to STOP recording when finished</li>
+        <li>Wait for response</li>
+      </ul>
+      <p>Recording will automatically stop after 30 seconds if not stopped manually.</p>
+    </div>
+
     <div class="orb-container">
-      <div id="orb" class="orb idle" role="button" tabindex="0">Click to Start</div>
+      <div id="orb" class="orb idle" role="button" tabindex="0">CLICK to Start<br>CLICK AGAIN to Stop</div>
     </div>
 
     <div id="messageContainer" class="message-container">
@@ -392,7 +439,8 @@
     </div>
 
     <div id="modeHint" class="mode-hint">
-      Click the orb to start a conversation
+      Click the orb ONCE to start recording.<br>
+      Click AGAIN when done speaking.
     </div>
 
     <div class="controls">
@@ -581,6 +629,9 @@
         
         // Cache DOM elements
         cacheElements();
+        
+        // Show initial instruction
+        addStatusMessage("Welcome! Click the orb ONCE to start recording, then click it AGAIN when done speaking.", "info");
         
         // Set up debug toggle
         const debugToggle = document.getElementById('debugToggle');

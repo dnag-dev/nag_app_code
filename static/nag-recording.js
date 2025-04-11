@@ -89,33 +89,8 @@ function updateVolumeVisualization() {
             }
         }
         
-        // Voice activity detection for silence detection
-        if (!window.nagState.isWalkieTalkieMode) {
-            const SILENCE_THRESHOLD = 5; // Adjusted threshold
-            const SILENCE_DURATION = 2500; // Extended silence threshold for longer recordings (2.5 seconds)
-            
-            if (volume < SILENCE_THRESHOLD) {
-                // If silence is detected and timer isn't running yet
-                if (!window.nagState.silenceTimer && window.nagState.speechDetected) {
-                    window.nagState.silenceTimer = setTimeout(() => {
-                        if (window.nagState.mediaRecorder && 
-                            window.nagState.mediaRecorder.state === "recording") {
-                            window.logDebug("Silence detected, stopping recording");
-                            stopRecording();
-                        }
-                        window.nagState.silenceTimer = null;
-                    }, SILENCE_DURATION);
-                }
-            } else {
-                // Speech detected, clear silence timer and mark speech detected
-                window.nagState.speechDetected = true;
-                if (window.nagState.silenceTimer) {
-                    clearTimeout(window.nagState.silenceTimer);
-                    window.nagState.silenceTimer = null;
-                }
-            }
-        }
-        
+        // NO MORE SILENCE DETECTION - REMOVED COMPLETELY
+
         // Continue updating
         requestAnimationFrame(updateVolumeVisualization);
     } catch (error) {
@@ -181,7 +156,6 @@ function initializeMediaRecorder(stream) {
         const mediaRecorder = new MediaRecorder(stream, options);
         window.nagState.mediaRecorder = mediaRecorder;
         window.nagState.audioChunks = [];
-        window.nagState.speechDetected = false; // Reset speech detection
         
         // Setup event handlers
         mediaRecorder.ondataavailable = (event) => {
@@ -231,7 +205,7 @@ function initializeMediaRecorder(stream) {
     }
 }
 
-// Improved start recording with better timeslice
+// Manual recording mode with user controls
 async function startRecording() {
     try {
         // Get microphone access
@@ -264,7 +238,8 @@ async function startRecording() {
                 clearTimeout(window.nagState.recordingTimeout);
             }
             
-            // INCREASED: Maximum recording time increased to 30 seconds
+            // Change the recording behavior to use MANUAL mode - only stop when told to
+            // or after 30 seconds (safety timeout)
             window.nagState.recordingTimeout = setTimeout(() => {
                 if (window.nagState.mediaRecorder && 
                     window.nagState.mediaRecorder.state === "recording") {
@@ -276,6 +251,23 @@ async function startRecording() {
             // Show recording time indicator
             window.nagState.recordingStartTime = Date.now();
             updateRecordingTimeIndicator();
+            
+            // Clear any existing instruction timeouts
+            if (window.nagState.instructionTimeout) {
+                clearTimeout(window.nagState.instructionTimeout);
+            }
+            
+            // Show instruction to click again when done speaking
+            if (window.nagElements.modeHint) {
+                window.nagElements.modeHint.textContent = "Recording... Click orb again when done speaking";
+                
+                // Keep this instruction visible for 5 seconds
+                window.nagState.instructionTimeout = setTimeout(() => {
+                    if (window.nagElements.modeHint && window.nagState.recordingStartTime) {
+                        updateRecordingTimeIndicator(); // Switch to time indicator
+                    }
+                }, 5000);
+            }
         }
         
         return true;
@@ -299,7 +291,7 @@ function updateRecordingTimeIndicator() {
     
     // Update hint text with recording time
     if (window.nagElements.modeHint) {
-        window.nagElements.modeHint.textContent = `Recording: ${seconds}s`;
+        window.nagElements.modeHint.textContent = `Recording: ${seconds}s (Click orb to stop)`;
     }
     
     // Continue updating
@@ -308,7 +300,7 @@ function updateRecordingTimeIndicator() {
     }
 }
 
-// Improved stop recording with safety checks
+// Manual stop recording with improved reliability
 function stopRecording() {
     try {
         // Clear safety timeout
@@ -317,13 +309,19 @@ function stopRecording() {
             window.nagState.recordingTimeout = null;
         }
         
+        // Clear instruction timeout
+        if (window.nagState.instructionTimeout) {
+            clearTimeout(window.nagState.instructionTimeout);
+            window.nagState.instructionTimeout = null;
+        }
+        
         // Reset recording time indicator
         window.nagState.recordingStartTime = null;
         if (window.nagElements.modeHint) {
             if (window.nagState.isWalkieTalkieMode) {
                 window.nagElements.modeHint.textContent = "Press and hold the orb to speak";
             } else {
-                window.nagElements.modeHint.textContent = "Click the orb to start listening";
+                window.nagElements.modeHint.textContent = "Click the orb to start recording";
             }
         }
         
