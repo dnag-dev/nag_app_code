@@ -49,7 +49,7 @@ function cacheElements() {
     };
     
     // Verify all required elements
-    const required = ['orb', 'audio', 'toggleBtn', 'pauseBtn', 'modeToggle', 'statusPanel'];
+    const required = ['orb', 'audio', 'toggleBtn', 'pauseBtn', 'modeToggle', 'statusPanel', 'messageContainer'];
     const missing = required.filter(id => !window.nagElements[id]);
     
     if (missing.length > 0) {
@@ -516,6 +516,7 @@ async function processAudioAndTranscribe() {
         const transcription = data.transcription || data.transcript || "";
         if (transcription.trim()) {
             window.logDebug(`Transcription: ${transcription}`);
+            // Add user message to UI
             window.addStatusMessage(transcription, "user");
             
             // Send to chat endpoint

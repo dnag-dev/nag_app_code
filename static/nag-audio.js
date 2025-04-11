@@ -28,7 +28,18 @@ async function unlockAudio() {
         
         // Also try to play audio element with silent audio
         const silentAudio = "data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAADQgD///////////////////////////////////////////8AAAA8TEFNRTMuMTAwAQAAAAAAAAAAABSAJAJAQgAAgAAAA0L2YLwAAAAAAAAAAAAAAAAAAAAA//sQZAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//sQZB4P8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAEVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU=";
-        const audio = document.getElementById('audio') || new Audio();
+        
+        // Configure audio element for Safari compatibility
+        const audio = window.nagElements.audio || document.getElementById('audio') || new Audio();
+        
+        // IMPORTANT: Disable default browser controls to prevent Safari errors
+        audio.controls = false;
+        audio.controlsList = "nodownload nofullscreen noremoteplayback";
+        audio.disableRemotePlayback = true; // Disable Airplay
+        audio.setAttribute('playsinline', ''); // Keep playback in element
+        audio.setAttribute('webkit-playsinline', ''); // For older iOS
+        
+        // Set silent audio source
         audio.src = silentAudio;
         
         try {
@@ -63,6 +74,13 @@ async function playAudioResponse(audioUrl) {
         if (!audio) {
             throw new Error("Audio element not found");
         }
+        
+        // Configure audio element for Safari compatibility
+        audio.controls = false;
+        audio.controlsList = "nodownload nofullscreen noremoteplayback";
+        audio.disableRemotePlayback = true; // Disable Airplay
+        audio.setAttribute('playsinline', ''); // Keep playback in element
+        audio.setAttribute('webkit-playsinline', ''); // For older iOS
         
         // Set source
         audio.src = audioUrl;
@@ -172,7 +190,15 @@ function showPlayButton(audioUrl) {
     // Set up click handler
     window.nagState.currentPlayButton.onclick = async () => {
         try {
+            // Create a temporary audio element
             const audio = new Audio(audioUrl);
+            
+            // Configure for Safari
+            audio.controls = false;
+            audio.controlsList = "nodownload nofullscreen noremoteplayback";
+            audio.disableRemotePlayback = true;
+            audio.setAttribute('playsinline', '');
+            audio.setAttribute('webkit-playsinline', '');
             
             // Set up ended handler to clean up button
             audio.onended = () => {
@@ -198,10 +224,41 @@ function removePlayButton() {
     }
 }
 
+// Function to play audio with error catching
+function playAudio(audio) {
+    try {
+        if (!audio) return false;
+        
+        // Safari compatibility
+        audio.controls = false;
+        audio.controlsList = "nodownload nofullscreen noremoteplayback";
+        audio.disableRemotePlayback = true;
+        audio.setAttribute('playsinline', '');
+        audio.setAttribute('webkit-playsinline', '');
+        
+        // Try to play the audio with error handling
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+            playPromise.catch(error => {
+                console.error("Error playing audio:", error);
+                window.logDebug("Error playing audio: " + error.message);
+                // Don't try to handle the error further - just log it
+            });
+            return true;
+        }
+        return false;
+    } catch (error) {
+        console.error("Play audio error:", error);
+        window.logDebug("Play audio error: " + error.message);
+        return false;
+    }
+}
+
 // Make functions globally available
 window.unlockAudio = unlockAudio;
 window.playAudioResponse = playAudioResponse;
 window.showPlayButton = showPlayButton;
 window.removePlayButton = removePlayButton;
+window.playAudio = playAudio;
 
 console.log("nag-audio.js loaded");

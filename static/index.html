@@ -65,14 +65,15 @@
       align-items: center;
     }
 
+    /* LARGER ORB - Increased size from 120px to 180px */
     .orb {
-      width: 120px;
-      height: 120px;
+      width: 180px;
+      height: 180px;
       border-radius: 50%;
       display: flex;
       justify-content: center;
       align-items: center;
-      font-size: 0.9rem;
+      font-size: 1.1rem;
       color: var(--text-light);
       text-align: center;
       cursor: pointer;
@@ -316,6 +317,7 @@
       display: block;
     }
 
+    /* Improved message container styling */
     .message-container {
       width: 100%;
       max-width: 400px;
@@ -324,6 +326,29 @@
       background-color: var(--light-gray);
       border-radius: 8px;
       box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    
+    /* Message styling */
+    .message {
+      margin-bottom: 15px;
+      padding: 10px;
+      border-radius: 8px;
+      max-width: 80%;
+    }
+    
+    .user-message {
+      background-color: var(--primary-blue);
+      color: white;
+      align-self: flex-end;
+      margin-left: auto;
+    }
+    
+    .assistant-message {
+      background-color: var(--light-gray);
+      border: 1px solid var(--medium-gray);
+      align-self: flex-start;
     }
 
     .mode-hint {
@@ -356,7 +381,7 @@
 </head>
 <body>
   <div class="app-container">
-    <h1>Nag - AI Assistant 3</h1>
+    <h1>Nag - AI Assistant</h1>
 
     <div class="orb-container">
       <div id="orb" class="orb idle" role="button" tabindex="0">Click to Start</div>
@@ -438,6 +463,25 @@
         'nag-core.js'
     ];
 
+    // Function to add messages to the message container
+    function addMessage(text, isUser = false) {
+        const container = document.getElementById('messageContainer');
+        if (!container) return;
+        
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${isUser ? 'user-message' : 'assistant-message'}`;
+        messageDiv.textContent = text;
+        
+        // Add to container
+        container.appendChild(messageDiv);
+        
+        // Scroll to latest message
+        container.scrollTop = container.scrollHeight;
+        
+        return messageDiv;
+    }
+    window.addMessage = addMessage;
+
     // Function to add status messages
     function addStatusMessage(message, type = 'info', isDebug = false) {
         const statusPanel = document.getElementById('statusPanel');
@@ -456,6 +500,13 @@
         
         messageDiv.textContent = message;
         statusPanel.insertBefore(messageDiv, statusPanel.firstChild);
+        
+        // Also add user and assistant messages to the message container
+        if (type === 'user') {
+            addMessage(message, true);
+        } else if (type === 'assistant') {
+            addMessage(message, false);
+        }
         
         if (type === 'error') {
             console.error(message);
